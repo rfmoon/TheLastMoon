@@ -264,6 +264,7 @@ async function navigate(menuId) {
   if (menuId === "dashboard") return renderDashboard();
   if (menuId === "user-admin") return renderUserAdmin();
   if (menuId === "settings") return renderSettings();
+  if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -317,6 +318,34 @@ function renderDashboard() {
   $$("[data-quick]").forEach(button => {
     button.addEventListener("click", () => navigate(button.dataset.quick));
   });
+}
+
+async function renderXpayWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
+    $("#pageContent").innerHTML = `
+      <section class="xpay-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">LOCAL DATA CHECKER</span>
+            <h3>Cari Selisih XPAY</h3>
+            <p>${escapeHtml(data.message)} Data file diproses langsung di browser.</p>
+          </div>
+          <span class="xpay-workspace-badge">XPAY • ZONAMAIN • COIN ADMIN</span>
+        </header>
+        <iframe
+          class="xpay-frame"
+          src="/xpay-checker.html?v=10.0.0"
+          title="Cari Selisih XPAY"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
 }
 
 async function renderModule(menu) {
