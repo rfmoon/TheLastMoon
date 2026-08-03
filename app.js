@@ -3,7 +3,11 @@ const state = {
   menus: [],
   currentMenu: "dashboard",
   users: [],
-  backgroundUrl: "",
+  appearance: {
+    backgroundUrl: "",
+    overlay: 68,
+    blur: 0
+  },
   pendingConfirm: null
 };
 
@@ -64,16 +68,36 @@ function bindEvents() {
 async function loadPublicSettings() {
   try {
     const data = await api("/api/public-settings", { anonymous: true });
-    state.backgroundUrl = data.backgroundUrl || "";
-    applyBackground(state.backgroundUrl);
+    state.appearance = normalizeAppearance(data);
+    applyAppearance(state.appearance);
   } catch (error) {
-    console.warn("Background settings:", error.message);
+    console.warn("Appearance settings:", error.message);
   }
 }
 
-function applyBackground(url) {
+function normalizeAppearance(value = {}) {
+  return {
+    backgroundUrl: String(value.backgroundUrl || ""),
+    overlay: Math.min(90, Math.max(20, Number(value.overlay ?? 68))),
+    blur: Math.min(20, Math.max(0, Number(value.blur ?? 0)))
+  };
+}
+
+function applyAppearance(value) {
+  const appearance = normalizeAppearance(value);
+  state.appearance = appearance;
+
+  document.documentElement.style.setProperty(
+    "--background-overlay",
+    String(appearance.overlay / 100)
+  );
+  document.documentElement.style.setProperty(
+    "--background-blur",
+    `${appearance.blur}px`
+  );
+
   const image = $("#siteBackground");
-  if (!url) {
+  if (!appearance.backgroundUrl) {
     image.removeAttribute("src");
     image.classList.remove("active");
     return;
@@ -81,7 +105,7 @@ function applyBackground(url) {
 
   image.onload = () => image.classList.add("active");
   image.onerror = () => image.classList.remove("active");
-  image.src = url;
+  image.src = appearance.backgroundUrl;
 }
 
 async function restoreSession() {
@@ -434,99 +458,175 @@ async function renderSettings() {
 
   try {
     const data = await api("/api/settings/background");
-    state.backgroundUrl = data.backgroundUrl || "";
+    state.appearance = normalizeAppearance(data);
 
     $("#pageContent").innerHTML = `
       <section class="settings-grid">
         <article class="setting-card glass">
-          <span class="kicker">APPEARANCE</span>
+          <span class="kicker">APPEARANCE CONTROL</span>
           <h3>Background dari link gambar</h3>
-          <p>Tempel link gambar HTTPS. Background akan berlaku pada login dan dashboard seluruh akun.</p>
+          <p>Satu link ini akan dipakai pada halaman login dan seluruh halaman dashboard. Master dapat menggantinya kapan saja.</p>
 
           <form id="backgroundForm">
-            <label>Link gambar background
+            <label>Link gambar HTTPS
               <input id="backgroundInput" type="url" maxlength="2000"
-                     placeholder="https://domain.com/gambar.jpg"
-                     value="${escapeAttribute(state.backgroundUrl)}">
+                     placeholder="https://domain.com/background.jpg"
+                     value="${escapeAttribute(state.appearance.backgroundUrl)}">
             </label>
 
-            <div class="setting-actions">
-              <button id="previewBackground" class="btn btn-secondary" type="button">Lihat preview</button>
-              <button id="saveBackground" class="btn btn-primary" type="submit">Simpan background</button>
-              <button id="resetBackground" class="btn btn-ghost" type="button">Pakai bawaan</button>
+            <div class="range-group">
+              <div class="range-row">
+                <header>
+                  <strong>Kegelapan overlay</strong>
+                  <span id="overlayValue">${state.appearance.overlay}%</span>
+                </header>
+                <input id="overlayInput" type="range" min="20" max="90" step="1"
+                       value="${state.appearance.overlay}">
+              </div>
+
+              <div class="range-row">
+                <header>
+                  <strong>Blur background</strong>
+                  <span id="blurValue">${state.appearance.blur}px</span>
+                </header>
+                <input id="blurInput" type="range" min="0" max="20" step="1"
+                       value="${state.appearance.blur}">
+              </div>
             </div>
+
+            <div class="setting-actions">
+              <button id="previewBackground" class="btn btn-secondary" type="button">Terapkan preview</button>
+              <button id="saveBackground" class="btn btn-primary" type="submit">Simpan untuk semua akun</button>
+              <button id="resetBackground" class="btn btn-ghost" type="button">Kembali ke bawaan</button>
+            </div>
+
             <div id="backgroundMessage" class="message hidden"></div>
           </form>
         </article>
 
         <article class="setting-card glass">
-          <span class="kicker">PREVIEW</span>
-          <h3>Pratinjau gambar</h3>
-          <p>Gunakan link yang langsung membuka file JPG, PNG, WEBP, atau GIF.</p>
-          <div class="preview-box">
+          <span class="kicker">LIVE PREVIEW</span>
+          <h3>Pratinjau tampilan</h3>
+          <p>Preview menggunakan link, overlay, dan blur yang sedang dipilih.</p>
+
+          <div id="backgroundPreviewBox" class="preview-box"
+               style="--preview-overlay:${state.appearance.overlay / 100};--preview-blur:${state.appearance.blur}px">
             <img id="backgroundPreview" alt="Preview background" referrerpolicy="no-referrer"
-                 ${state.backgroundUrl ? `src="${escapeAttribute(state.backgroundUrl)}"` : ""}>
-            <span id="previewLabel">${state.backgroundUrl ? "Background tersimpan" : "Belum ada gambar"}</span>
+                 ${state.appearance.backgroundUrl ? `src="${escapeAttribute(state.appearance.backgroundUrl)}"` : ""}>
+            <span id="previewLabel">${state.appearance.backgroundUrl ? "Background aktif" : "Menggunakan background bawaan"}</span>
           </div>
 
           <div class="help-list">
-            <div class="help-item"><b>1</b><div><strong>Harus HTTPS</strong><small>Link HTTP ditolak agar website tetap aman.</small></div></div>
-            <div class="help-item"><b>2</b><div><strong>Link langsung</strong><small>Bukan halaman Pinterest, Google Images, atau halaman preview.</small></div></div>
-            <div class="help-item"><b>3</b><div><strong>Hotlink</strong><small>Beberapa situs memblokir gambar ketika dipakai website lain.</small></div></div>
+            <div class="help-item"><b>1</b><div><strong>Gunakan link langsung</strong><small>Link harus membuka gambar, bukan halaman website.</small></div></div>
+            <div class="help-item"><b>2</b><div><strong>Gunakan HTTPS</strong><small>Link HTTP akan ditolak oleh sistem.</small></div></div>
+            <div class="help-item"><b>3</b><div><strong>Berlaku untuk semua</strong><small>Setelah disimpan, login dan dashboard semua akun ikut berubah.</small></div></div>
           </div>
         </article>
       </section>`;
 
-    $("#previewBackground").addEventListener("click", previewBackground);
-    $("#backgroundForm").addEventListener("submit", saveBackground);
-    $("#resetBackground").addEventListener("click", resetBackground);
+    $("#previewBackground").addEventListener("click", previewAppearance);
+    $("#backgroundForm").addEventListener("submit", saveAppearance);
+    $("#resetBackground").addEventListener("click", resetAppearance);
+
+    $("#overlayInput").addEventListener("input", updatePreviewControls);
+    $("#blurInput").addEventListener("input", updatePreviewControls);
   } catch (error) {
     $("#pageContent").innerHTML = errorHtml(error.message);
   }
 }
 
-function previewBackground() {
-  const url = $("#backgroundInput").value.trim();
-  if (!url) {
-    showMessage("#backgroundMessage", "Masukkan link gambar terlebih dahulu.");
-    return;
-  }
-
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") throw new Error();
-  } catch (_) {
-    showMessage("#backgroundMessage", "Link harus valid dan menggunakan HTTPS.");
-    return;
-  }
-
-  const preview = $("#backgroundPreview");
-  preview.onerror = () => {
-    showMessage("#backgroundMessage", "Gambar tidak dapat dimuat. Coba link langsung dari hosting lain.");
-    $("#previewLabel").textContent = "Preview gagal";
-  };
-  preview.onload = () => {
-    hideMessage("#backgroundMessage");
-    $("#previewLabel").textContent = "Preview berhasil";
-  };
-  preview.src = url;
-  applyBackground(url);
+function appearanceFromForm() {
+  return normalizeAppearance({
+    backgroundUrl: $("#backgroundInput").value.trim(),
+    overlay: Number($("#overlayInput").value),
+    blur: Number($("#blurInput").value)
+  });
 }
 
-async function saveBackground(event) {
+function updatePreviewControls() {
+  const overlay = Number($("#overlayInput").value);
+  const blur = Number($("#blurInput").value);
+  $("#overlayValue").textContent = `${overlay}%`;
+  $("#blurValue").textContent = `${blur}px`;
+
+  const box = $("#backgroundPreviewBox");
+  box.style.setProperty("--preview-overlay", String(overlay / 100));
+  box.style.setProperty("--preview-blur", `${blur}px`);
+}
+
+function validateAppearanceUrl(url) {
+  if (!url) return;
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    throw new Error("Link background tidak valid.");
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error("Link background wajib menggunakan HTTPS.");
+  }
+}
+
+function previewAppearance() {
+  try {
+    const appearance = appearanceFromForm();
+    validateAppearanceUrl(appearance.backgroundUrl);
+
+    const preview = $("#backgroundPreview");
+    const label = $("#previewLabel");
+
+    if (!appearance.backgroundUrl) {
+      preview.removeAttribute("src");
+      label.textContent = "Menggunakan background bawaan";
+      applyAppearance(appearance);
+      hideMessage("#backgroundMessage");
+      return;
+    }
+
+    preview.onerror = () => {
+      showMessage(
+        "#backgroundMessage",
+        "Gambar tidak dapat dimuat. Gunakan link gambar langsung dari hosting lain."
+      );
+      label.textContent = "Preview gagal";
+    };
+
+    preview.onload = () => {
+      hideMessage("#backgroundMessage");
+      label.textContent = "Preview berhasil";
+    };
+
+    preview.src = appearance.backgroundUrl;
+    applyAppearance(appearance);
+  } catch (error) {
+    showMessage("#backgroundMessage", error.message);
+  }
+}
+
+async function saveAppearance(event) {
   event.preventDefault();
   const button = $("#saveBackground");
   setBusy(button, true, "Menyimpan...");
 
   try {
+    const appearance = appearanceFromForm();
+    validateAppearanceUrl(appearance.backgroundUrl);
+
     const data = await api("/api/settings/background", {
       method: "PUT",
-      body: { backgroundUrl: $("#backgroundInput").value.trim() }
+      body: appearance
     });
-    state.backgroundUrl = data.backgroundUrl || "";
-    applyBackground(state.backgroundUrl);
-    showMessage("#backgroundMessage", "Background berhasil disimpan.", true);
-    toast("Background diperbarui untuk seluruh akun.", "ok");
+
+    state.appearance = normalizeAppearance(data);
+    applyAppearance(state.appearance);
+    showMessage(
+      "#backgroundMessage",
+      "Tampilan berhasil disimpan dan berlaku untuk seluruh akun.",
+      true
+    );
+    toast("Background dan efek kaca berhasil diperbarui.", "ok");
   } catch (error) {
     showMessage("#backgroundMessage", error.message);
   } finally {
@@ -534,18 +634,24 @@ async function saveBackground(event) {
   }
 }
 
-async function resetBackground() {
+async function resetAppearance() {
   try {
     const data = await api("/api/settings/background", {
       method: "PUT",
-      body: { backgroundUrl: "" }
+      body: { backgroundUrl: "", overlay: 68, blur: 0 }
     });
-    state.backgroundUrl = "";
+
+    state.appearance = normalizeAppearance(data);
     $("#backgroundInput").value = "";
+    $("#overlayInput").value = "68";
+    $("#blurInput").value = "0";
+    $("#overlayValue").textContent = "68%";
+    $("#blurValue").textContent = "0px";
     $("#backgroundPreview").removeAttribute("src");
-    $("#previewLabel").textContent = "Belum ada gambar";
-    applyBackground("");
-    showMessage("#backgroundMessage", "Background dikembalikan ke tampilan bawaan.", true);
+    $("#previewLabel").textContent = "Menggunakan background bawaan";
+    updatePreviewControls();
+    applyAppearance(state.appearance);
+    showMessage("#backgroundMessage", "Tampilan dikembalikan ke bawaan.", true);
   } catch (error) {
     showMessage("#backgroundMessage", error.message);
   }

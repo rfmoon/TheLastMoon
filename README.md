@@ -1,30 +1,48 @@
-# TheLastMoon V6 Stable
+# TheLastMoon V7 Aurora Glass
 
-Versi ini memperbaiki proses inisialisasi D1:
+V7 memperbaiki error menu Settings dan mengganti desain luar/dalam.
 
-- Schema dibuat satu per satu, bukan `DB.batch()`.
-- Nama kolom pengaturan dibuat lebih aman: `setting_key` dan `setting_value`.
-- Ada endpoint diagnostik yang menunjukkan tahap error.
-- Password master wajib minimal 8 karakter.
-- Pesan error sekarang menunjukkan tahap yang gagal.
-- Tersedia `schema.sql` untuk pemasangan manual bila diperlukan.
+## Penyebab menu Settings gagal
 
-## File repository
+Versi awal pernah membuat tabel:
 
 ```text
-index.html
-styles.css
-app.js
-_headers
-schema.sql
-functions/
-└── api/
-    └── [[path]].js
+site_settings
+- key
+- value
 ```
 
-## Cara update
+Versi berikutnya mencoba membaca kolom:
 
-Timpa file berikut:
+```text
+setting_key
+setting_value
+```
+
+`CREATE TABLE IF NOT EXISTS` tidak mengubah struktur tabel lama, sehingga halaman Settings gagal saat menjalankan query.
+
+V7 menggunakan tabel baru:
+
+```text
+app_settings
+- name
+- value
+```
+
+Background lama akan dicoba dipindahkan otomatis dari kedua bentuk tabel lama.
+
+## Fitur tampilan
+
+- Desain login baru.
+- Dashboard, sidebar, kartu, tabel, dan modal baru.
+- Glassmorphism lebih jelas.
+- Master dapat mengganti link background HTTPS.
+- Master dapat mengatur kegelapan overlay.
+- Master dapat mengatur blur background.
+- Pengaturan berlaku pada login dan dashboard semua akun.
+- Background disimpan di D1.
+
+## File yang harus ditimpa
 
 ```text
 index.html
@@ -32,12 +50,30 @@ styles.css
 app.js
 _headers
 README.md
+schema.sql
 functions/api/[[path]].js
 ```
 
-`schema.sql` boleh ikut di-upload. File itu tidak dieksekusi otomatis dan hanya sebagai cadangan.
+## Cara memasang
 
-## Tes setelah deployment
+1. Ekstrak ZIP V7.
+2. Upload dan timpa file root di GitHub:
+   - `index.html`
+   - `styles.css`
+   - `app.js`
+   - `_headers`
+   - `README.md`
+   - `schema.sql`
+3. Buka `functions/api/[[path]].js` di GitHub.
+4. Hapus seluruh kode lama.
+5. Tempel seluruh kode file V7 dengan nama yang sama.
+6. Commit ke branch `main`.
+7. Tunggu deployment Cloudflare selesai.
+8. Tekan `Ctrl + Shift + R`.
+
+Tidak perlu menghapus database atau membuat akun master ulang.
+
+## Tes
 
 ```text
 https://thelastmoon.pages.dev/api/health
@@ -46,39 +82,27 @@ https://thelastmoon.pages.dev/api/diagnostics
 https://thelastmoon.pages.dev/api/public-settings
 ```
 
-`/api/diagnostics` yang berhasil akan menampilkan:
+Hasil public settings awal:
 
 ```json
 {
-  "ok": true,
-  "version": "v6-stable",
-  "dbPing": true,
-  "schemaReady": true,
-  "users": 1,
-  "masterReady": true,
-  "masterUsername": "Rfxfly",
-  "masterActive": true
+  "backgroundUrl": "",
+  "overlay": 68,
+  "blur": 0
 }
 ```
 
-## Password master
+## Mengganti background
 
-V6 mengharuskan `MASTER_PASSWORD` minimal 8 karakter. Bila secret sekarang kurang dari 8 karakter, ganti di:
+Login sebagai master:
 
 ```text
-Cloudflare Pages → thelastmoon
-→ Settings → Variables and secrets
+Settings
+→ masukkan link HTTPS
+→ atur overlay
+→ atur blur
+→ Terapkan preview
+→ Simpan untuk semua akun
 ```
 
-Kemudian deploy ulang.
-
-## Pemasangan schema manual
-
-Hanya lakukan bila endpoint masih menyebut tahap `schema-*`:
-
-1. Buka Cloudflare → D1 SQL Database.
-2. Pilih `thelastmoon-users`.
-3. Buka Console.
-4. Salin isi `schema.sql`.
-5. Tempel dan jalankan.
-6. Deploy ulang atau buka `/api/session` kembali.
+Gunakan link yang langsung membuka gambar.

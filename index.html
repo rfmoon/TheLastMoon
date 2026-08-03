@@ -3,36 +3,56 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#07101f">
-  <title>TheLastMoon Control Panel</title>
-  <link rel="stylesheet" href="/styles.css?v=6.0.0">
+  <meta name="theme-color" content="#07111f">
+  <title>TheLastMoon — Control Center</title>
+  <link rel="stylesheet" href="/styles.css?v=7.0.0">
 </head>
 <body>
   <img id="siteBackground" class="site-background" alt="" referrerpolicy="no-referrer">
   <div class="background-shade"></div>
-  <div class="aurora aurora-a"></div>
-  <div class="aurora aurora-b"></div>
+  <div class="ambient-grid"></div>
+  <div class="aurora aurora-one"></div>
+  <div class="aurora aurora-two"></div>
+  <div class="aurora aurora-three"></div>
 
   <main id="loginView" class="login-page">
     <section class="login-card glass">
       <div class="login-intro">
-        <div class="logo-box">◐</div>
-        <span class="kicker">SECURE CONTROL CENTER</span>
-        <h1>TheLastMoon</h1>
-        <p>Kelola akun, hak akses, dan seluruh menu operasional melalui satu panel.</p>
+        <div class="intro-top">
+          <div class="logo-box">◐</div>
+          <div>
+            <span class="mini-label">THELASTMOON</span>
+            <strong>Secure Workspace</strong>
+          </div>
+        </div>
+
+        <div class="intro-copy">
+          <span class="kicker">CONTROL CENTER</span>
+          <h1>Satu panel untuk seluruh operasional.</h1>
+          <p>Login aman, pembagian akses menu, manajemen pengguna, dan tampilan yang dapat diubah menggunakan link background.</p>
+        </div>
 
         <div class="intro-points">
-          <div><span>✓</span> Password disimpan sebagai hash</div>
-          <div><span>✓</span> Hak akses diperiksa oleh server</div>
-          <div><span>✓</span> Background dapat diganti melalui link</div>
+          <div><span>01</span><p><strong>Server-side access</strong><small>Hak akses diperiksa oleh Cloudflare Function.</small></p></div>
+          <div><span>02</span><p><strong>Flexible appearance</strong><small>Background, overlay, dan blur dapat diganti master.</small></p></div>
+          <div><span>03</span><p><strong>Secure accounts</strong><small>Password tersimpan dalam bentuk hash.</small></p></div>
+        </div>
+
+        <div class="intro-footer">
+          <span class="live-dot"></span>
+          <span>Cloud workspace online</span>
         </div>
       </div>
 
       <div class="login-form-panel">
-        <div class="mobile-logo"><span class="logo-box small">◐</span><strong>TheLastMoon</strong></div>
-        <span class="kicker">SELAMAT DATANG</span>
+        <div class="mobile-brand">
+          <span class="logo-box small">◐</span>
+          <div><strong>TheLastMoon</strong><small>Control Center</small></div>
+        </div>
+
+        <span class="kicker">WELCOME BACK</span>
         <h2>Masuk ke panel</h2>
-        <p class="muted">Gunakan akun yang sudah didaftarkan.</p>
+        <p class="muted">Gunakan akun yang sudah didaftarkan oleh master.</p>
 
         <form id="loginForm">
           <label>
@@ -62,7 +82,10 @@
           </button>
         </form>
 
-        <p class="login-note">🔒 Sesi menggunakan cookie aman HttpOnly.</p>
+        <div class="login-security">
+          <span>⌾</span>
+          <p><strong>Sesi aman</strong><small>Cookie HttpOnly • Secure • SameSite</small></p>
+        </div>
       </div>
     </section>
   </main>
@@ -71,15 +94,16 @@
     <aside id="sidebar" class="sidebar glass">
       <div class="side-brand">
         <span class="logo-box small">◐</span>
-        <div><strong>TheLastMoon</strong><small>Control Panel</small></div>
+        <div><strong>TheLastMoon</strong><small>Control Center</small></div>
         <button id="closeSidebar" class="icon-btn mobile-only" type="button">×</button>
       </div>
 
+      <div class="side-section-label">WORKSPACE</div>
       <nav id="menuList" class="menu-list"></nav>
 
       <div class="side-footer">
         <div id="sideUser"></div>
-        <button id="logoutButton" class="btn btn-ghost btn-full" type="button">Keluar</button>
+        <button id="logoutButton" class="btn btn-ghost btn-full" type="button">Keluar dari panel</button>
       </div>
     </aside>
 
@@ -89,10 +113,10 @@
       <header class="topbar glass">
         <div class="top-left">
           <button id="openSidebar" class="icon-btn mobile-only" type="button">☰</button>
-          <div><span class="kicker">THELASTMOON SYSTEM</span><h2 id="pageTitle">Dashboard</h2></div>
+          <div><span class="kicker">THELASTMOON WORKSPACE</span><h2 id="pageTitle">Dashboard</h2></div>
         </div>
         <div class="top-actions">
-          <span class="online"><i></i> Online</span>
+          <span class="online"><i></i> System Online</span>
           <button id="accountButton" class="account-button" type="button"></button>
         </div>
       </header>
@@ -154,7 +178,7 @@
   <div id="passwordModal" class="modal hidden">
     <section class="modal-card glass">
       <header class="modal-head">
-        <div><span class="kicker">KEAMANAN</span><h3>Ganti password</h3></div>
+        <div><span class="kicker">ACCOUNT SECURITY</span><h3>Ganti password</h3></div>
         <button class="icon-btn" type="button" data-close-modal="passwordModal">×</button>
       </header>
 
@@ -184,6 +208,6 @@
   </div>
 
   <div id="toastArea" class="toast-area"></div>
-  <script src="/app.js?v=6.0.0" defer></script>
+  <script src="/app.js?v=7.0.0" defer></script>
 </body>
 </html>
