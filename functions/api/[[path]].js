@@ -11,7 +11,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v6-stable";
+const VERSION = "v7-aurora-glass";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -86,14 +86,13 @@ async function routeRequest(request, env, url) {
       users: Number(userCount?.total || 0),
       masterReady: Boolean(master),
       masterUsername: master?.username || null,
-      masterActive: master ? Number(master.active) === 1 : false
+      masterActive: master ? Number(master.active) === 1 : false,
+      appearance: await readAppearance(env.DB)
     });
   }
 
   if (url.pathname === "/api/public-settings" && request.method === "GET") {
-    return json({
-      backgroundUrl: (await readSetting(env.DB, "background_url")) || ""
-    });
+    return json(await readAppearance(env.DB));
   }
 
   if (url.pathname === "/api/session" && request.method === "GET") {
@@ -141,9 +140,7 @@ async function routeRequest(request, env, url) {
 
   if (url.pathname === "/api/settings/background" && request.method === "GET") {
     requireMaster(user);
-    return json({
-      backgroundUrl: (await readSetting(env.DB, "background_url")) || ""
-    });
+    return json(await readAppearance(env.DB));
   }
 
   if (url.pathname === "/api/settings/background" && request.method === "PUT") {
@@ -186,9 +183,9 @@ async function initializeDatabase(env) {
         expires_at INTEGER NOT NULL,
         created_at INTEGER NOT NULL
       )`,
-      `CREATE TABLE IF NOT EXISTS site_settings (
-        setting_key TEXT PRIMARY KEY,
-        setting_value TEXT NOT NULL,
+      `CREATE TABLE IF NOT EXISTS app_settings (
+        name TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
         updated_at INTEGER NOT NULL,
         updated_by INTEGER
       )`,
@@ -202,6 +199,7 @@ async function initializeDatabase(env) {
       });
     }
 
+    await migrateLegacySettings(env.DB);
     schemaReady = true;
   }
 
@@ -537,9 +535,38 @@ async function deleteUser(db, master, targetId) {
   return json({ success: true });
 }
 
+async function migrateLegacySettings(db) {
+  const current = await readAppSetting(db, "background_url");
+  if (current) return;
+
+  let legacyValue = "";
+
+  try {
+    const legacy = await db.prepare(
+      "SELECT value FROM site_settings WHERE key = 'background_url' LIMIT 1"
+    ).first();
+    legacyValue = String(legacy?.value || "");
+  } catch (_) {
+    try {
+      const legacy = await db.prepare(
+        "SELECT setting_value FROM site_settings WHERE setting_key = 'background_url' LIMIT 1"
+      ).first();
+      legacyValue = String(legacy?.setting_value || "");
+    } catch (_) {
+      legacyValue = "";
+    }
+  }
+
+  if (legacyValue) {
+    await upsertAppSetting(db, "background_url", legacyValue, null);
+  }
+}
+
 async function updateBackground(request, db, user) {
   const body = await readJson(request);
   const backgroundUrl = String(body.backgroundUrl || "").trim();
+  const overlay = clampInteger(body.overlay, 20, 90, 68);
+  const blur = clampInteger(body.blur, 0, 20, 0);
 
   if (backgroundUrl.length > 2000) {
     throw new AppError(400, "Link background terlalu panjang.", "background-length");
@@ -558,28 +585,57 @@ async function updateBackground(request, db, user) {
     }
   }
 
-  await db.prepare(`
-    INSERT INTO site_settings
-      (setting_key, setting_value, updated_at, updated_by)
-    VALUES ('background_url', ?, ?, ?)
-    ON CONFLICT(setting_key) DO UPDATE SET
-      setting_value = excluded.setting_value,
-      updated_at = excluded.updated_at,
-      updated_by = excluded.updated_by
-  `).bind(backgroundUrl, Date.now(), user.id).run();
+  await upsertAppSetting(db, "background_url", backgroundUrl, user.id);
+  await upsertAppSetting(db, "appearance_overlay", String(overlay), user.id);
+  await upsertAppSetting(db, "appearance_blur", String(blur), user.id);
 
-  return json({ success: true, backgroundUrl });
+  return json({ success: true, backgroundUrl, overlay, blur });
 }
 
-async function readSetting(db, key) {
-  const row = await db.prepare(`
-    SELECT setting_value
-    FROM site_settings
-    WHERE setting_key = ?
-    LIMIT 1
-  `).bind(key).first();
+async function readAppearance(db) {
+  const backgroundUrl = await readAppSetting(db, "background_url");
+  const overlay = clampInteger(
+    await readAppSetting(db, "appearance_overlay"),
+    20,
+    90,
+    68
+  );
+  const blur = clampInteger(
+    await readAppSetting(db, "appearance_blur"),
+    0,
+    20,
+    0
+  );
 
-  return row?.setting_value || "";
+  return { backgroundUrl, overlay, blur };
+}
+
+async function readAppSetting(db, name) {
+  const row = await db.prepare(`
+    SELECT value
+    FROM app_settings
+    WHERE name = ?
+    LIMIT 1
+  `).bind(name).first();
+
+  return String(row?.value || "");
+}
+
+async function upsertAppSetting(db, name, value, userId) {
+  await db.prepare(`
+    INSERT INTO app_settings (name, value, updated_at, updated_by)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(name) DO UPDATE SET
+      value = excluded.value,
+      updated_at = excluded.updated_at,
+      updated_by = excluded.updated_by
+  `).bind(name, String(value), Date.now(), userId).run();
+}
+
+function clampInteger(value, minimum, maximum, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.round(number)));
 }
 
 function openModule(user, menuId) {
