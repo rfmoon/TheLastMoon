@@ -4,12 +4,17 @@ const state = {
   currentMenu: "dashboard",
   users: [],
   appearance: {
+    backgroundUrls: [],
     backgroundUrl: "",
-    overlay: 68,
-    blur: 0
+    overlay: 58,
+    blur: 2,
+    slideSeconds: 8
   },
   pendingConfirm: null
 };
+
+let backgroundTimer = null;
+let backgroundIndex = 0;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -76,10 +81,18 @@ async function loadPublicSettings() {
 }
 
 function normalizeAppearance(value = {}) {
+  const rawList = Array.isArray(value.backgroundUrls)
+    ? value.backgroundUrls
+    : String(value.backgroundUrl || "").split(/\n|,/).map(item => item.trim()).filter(Boolean);
+
+  const backgroundUrls = [...new Set(rawList.filter(Boolean))].slice(0, 20);
+
   return {
-    backgroundUrl: String(value.backgroundUrl || ""),
-    overlay: Math.min(90, Math.max(20, Number(value.overlay ?? 68))),
-    blur: Math.min(20, Math.max(0, Number(value.blur ?? 0)))
+    backgroundUrls,
+    backgroundUrl: backgroundUrls[0] || "",
+    overlay: Math.min(90, Math.max(20, Number(value.overlay ?? 58))),
+    blur: Math.min(20, Math.max(0, Number(value.blur ?? 2))),
+    slideSeconds: Math.min(60, Math.max(3, Number(value.slideSeconds ?? 8)))
   };
 }
 
@@ -87,25 +100,43 @@ function applyAppearance(value) {
   const appearance = normalizeAppearance(value);
   state.appearance = appearance;
 
-  document.documentElement.style.setProperty(
-    "--background-overlay",
-    String(appearance.overlay / 100)
-  );
-  document.documentElement.style.setProperty(
-    "--background-blur",
-    `${appearance.blur}px`
-  );
+  document.documentElement.style.setProperty("--background-overlay", String(appearance.overlay / 100));
+  document.documentElement.style.setProperty("--background-blur", `${appearance.blur}px`);
 
+  renderBackgroundFrame();
+  restartBackgroundRotation();
+}
+
+function renderBackgroundFrame() {
   const image = $("#siteBackground");
-  if (!appearance.backgroundUrl) {
+  const urls = state.appearance.backgroundUrls;
+
+  if (!urls.length) {
     image.removeAttribute("src");
     image.classList.remove("active");
     return;
   }
 
+  const url = urls[backgroundIndex % urls.length];
+  image.classList.remove("active");
   image.onload = () => image.classList.add("active");
   image.onerror = () => image.classList.remove("active");
-  image.src = appearance.backgroundUrl;
+  image.src = url;
+}
+
+function restartBackgroundRotation() {
+  if (backgroundTimer) {
+    clearInterval(backgroundTimer);
+    backgroundTimer = null;
+  }
+
+  const urls = state.appearance.backgroundUrls;
+  if (urls.length <= 1) return;
+
+  backgroundTimer = setInterval(() => {
+    backgroundIndex = (backgroundIndex + 1) % urls.length;
+    renderBackgroundFrame();
+  }, state.appearance.slideSeconds * 1000);
 }
 
 async function restoreSession() {
@@ -246,7 +277,7 @@ function renderDashboard() {
       <div>
         <span class="kicker">WELCOME BACK</span>
         <h1>Halo, ${escapeHtml(state.user.username)} 👋</h1>
-        <p>Semua menu yang terlihat sudah mengikuti hak akses dari akun kamu. Background halaman dapat diatur oleh master.</p>
+        <p>Semua menu yang terlihat sudah mengikuti hak akses dari akun kamu. Background halaman dapat dibuat slideshow oleh master menggunakan beberapa link gambar.</p>
       </div>
     </section>
 
@@ -462,64 +493,40 @@ async function renderSettings() {
 
     $("#pageContent").innerHTML = `
       <section class="settings-grid">
-        <article class="setting-card glass">
-          <span class="kicker">APPEARANCE CONTROL</span>
-          <h3>Background dari link gambar</h3>
-          <p>Satu link ini akan dipakai pada halaman login dan seluruh halaman dashboard. Master dapat menggantinya kapan saja.</p>
-
+        <article class="setting-card">
+          <span class="eyebrow">LIQUID GLASS APPEARANCE</span>
+          <h3>Multi background slideshow</h3>
+          <p>Tempel banyak link gambar sekaligus. Satu link per baris. Semua gambar akan dipakai sebagai slideshow untuk halaman login dan seluruh halaman dalam.</p>
           <form id="backgroundForm">
-            <label>Link gambar HTTPS
-              <input id="backgroundInput" type="url" maxlength="2000"
-                     placeholder="https://domain.com/background.jpg"
-                     value="${escapeAttribute(state.appearance.backgroundUrl)}">
+            <label>Daftar link gambar HTTPS <small class="subtext">Satu link per baris • maksimal 20 link</small>
+              <textarea id="backgroundLinks" placeholder="https://domain.com/1.jpg&#10;https://domain.com/2.jpg&#10;https://domain.com/3.jpg">${escapeHtml(state.appearance.backgroundUrls.join("\n"))}</textarea>
             </label>
-
             <div class="range-group">
-              <div class="range-row">
-                <header>
-                  <strong>Kegelapan overlay</strong>
-                  <span id="overlayValue">${state.appearance.overlay}%</span>
-                </header>
-                <input id="overlayInput" type="range" min="20" max="90" step="1"
-                       value="${state.appearance.overlay}">
-              </div>
-
-              <div class="range-row">
-                <header>
-                  <strong>Blur background</strong>
-                  <span id="blurValue">${state.appearance.blur}px</span>
-                </header>
-                <input id="blurInput" type="range" min="0" max="20" step="1"
-                       value="${state.appearance.blur}">
-              </div>
+              <div class="range-row"><header><strong>Kegelapan overlay</strong><span id="overlayValue">${state.appearance.overlay}%</span></header><input id="overlayInput" type="range" min="20" max="90" step="1" value="${state.appearance.overlay}"></div>
+              <div class="range-row"><header><strong>Blur background</strong><span id="blurValue">${state.appearance.blur}px</span></header><input id="blurInput" type="range" min="0" max="20" step="1" value="${state.appearance.blur}"></div>
+              <div class="range-row"><header><strong>Kecepatan slideshow</strong><span id="slideValue">${state.appearance.slideSeconds} detik</span></header><input id="slideInput" type="range" min="3" max="60" step="1" value="${state.appearance.slideSeconds}"></div>
             </div>
-
             <div class="setting-actions">
-              <button id="previewBackground" class="btn btn-secondary" type="button">Terapkan preview</button>
+              <button id="previewBackground" class="btn btn-secondary" type="button">Preview sekarang</button>
               <button id="saveBackground" class="btn btn-primary" type="submit">Simpan untuk semua akun</button>
               <button id="resetBackground" class="btn btn-ghost" type="button">Kembali ke bawaan</button>
             </div>
-
             <div id="backgroundMessage" class="message hidden"></div>
           </form>
         </article>
-
-        <article class="setting-card glass">
-          <span class="kicker">LIVE PREVIEW</span>
-          <h3>Pratinjau tampilan</h3>
-          <p>Preview menggunakan link, overlay, dan blur yang sedang dipilih.</p>
-
-          <div id="backgroundPreviewBox" class="preview-box"
-               style="--preview-overlay:${state.appearance.overlay / 100};--preview-blur:${state.appearance.blur}px">
-            <img id="backgroundPreview" alt="Preview background" referrerpolicy="no-referrer"
-                 ${state.appearance.backgroundUrl ? `src="${escapeAttribute(state.appearance.backgroundUrl)}"` : ""}>
-            <span id="previewLabel">${state.appearance.backgroundUrl ? "Background aktif" : "Menggunakan background bawaan"}</span>
+        <article class="setting-card">
+          <span class="eyebrow">LIVE PREVIEW</span>
+          <h3>Preview liquid glass</h3>
+          <p>Preview menggunakan gambar pertama dari daftar link. Setelah disimpan, seluruh gambar akan berganti otomatis sesuai interval slideshow.</p>
+          <div id="backgroundPreviewBox" class="preview-box" style="--preview-overlay:${state.appearance.overlay / 100};--preview-blur:${state.appearance.blur}px">
+            <img id="backgroundPreview" alt="Preview background" referrerpolicy="no-referrer" ${state.appearance.backgroundUrls[0] ? `src="${escapeAttribute(state.appearance.backgroundUrls[0])}"` : ""}>
+            <span class="preview-badge" id="previewCount">${state.appearance.backgroundUrls.length} gambar</span>
+            <div class="preview-center"><strong id="previewLabel">${state.appearance.backgroundUrls.length ? "Preview aktif" : "Belum ada gambar"}</strong><small id="previewSubtext">${state.appearance.backgroundUrls.length ? `${state.appearance.slideSeconds} detik per slide` : "Menggunakan background bawaan"}</small></div>
           </div>
-
           <div class="help-list">
-            <div class="help-item"><b>1</b><div><strong>Gunakan link langsung</strong><small>Link harus membuka gambar, bukan halaman website.</small></div></div>
-            <div class="help-item"><b>2</b><div><strong>Gunakan HTTPS</strong><small>Link HTTP akan ditolak oleh sistem.</small></div></div>
-            <div class="help-item"><b>3</b><div><strong>Berlaku untuk semua</strong><small>Setelah disimpan, login dan dashboard semua akun ikut berubah.</small></div></div>
+            <div class="help-item"><b>1</b><div><strong>Gunakan link langsung</strong><small>Link harus langsung membuka file gambar, bukan halaman website biasa.</small></div></div>
+            <div class="help-item"><b>2</b><div><strong>Bisa banyak gambar</strong><small>Masukkan beberapa link sekaligus. Sistem akan memutar slideshow otomatis.</small></div></div>
+            <div class="help-item"><b>3</b><div><strong>Berlaku untuk semua</strong><small>Login page dan halaman dashboard seluruh akun ikut menggunakan tampilan ini.</small></div></div>
           </div>
         </article>
       </section>`;
@@ -527,78 +534,67 @@ async function renderSettings() {
     $("#previewBackground").addEventListener("click", previewAppearance);
     $("#backgroundForm").addEventListener("submit", saveAppearance);
     $("#resetBackground").addEventListener("click", resetAppearance);
-
     $("#overlayInput").addEventListener("input", updatePreviewControls);
     $("#blurInput").addEventListener("input", updatePreviewControls);
+    $("#slideInput").addEventListener("input", updatePreviewControls);
+    $("#backgroundLinks").addEventListener("input", updatePreviewControls);
   } catch (error) {
     $("#pageContent").innerHTML = errorHtml(error.message);
   }
 }
 
+function parseBackgroundLinks(text) {
+  return [...new Set(String(text || "").split(/\n|,/).map(item => item.trim()).filter(Boolean))].slice(0, 20);
+}
+
 function appearanceFromForm() {
+  const backgroundUrls = parseBackgroundLinks($("#backgroundLinks").value);
   return normalizeAppearance({
-    backgroundUrl: $("#backgroundInput").value.trim(),
+    backgroundUrls,
     overlay: Number($("#overlayInput").value),
-    blur: Number($("#blurInput").value)
+    blur: Number($("#blurInput").value),
+    slideSeconds: Number($("#slideInput").value)
   });
 }
 
 function updatePreviewControls() {
-  const overlay = Number($("#overlayInput").value);
-  const blur = Number($("#blurInput").value);
-  $("#overlayValue").textContent = `${overlay}%`;
-  $("#blurValue").textContent = `${blur}px`;
-
-  const box = $("#backgroundPreviewBox");
-  box.style.setProperty("--preview-overlay", String(overlay / 100));
-  box.style.setProperty("--preview-blur", `${blur}px`);
+  const appearance = appearanceFromForm();
+  $("#overlayValue").textContent = `${appearance.overlay}%`;
+  $("#blurValue").textContent = `${appearance.blur}px`;
+  $("#slideValue").textContent = `${appearance.slideSeconds} detik`;
+  $("#backgroundPreviewBox").style.setProperty("--preview-overlay", String(appearance.overlay / 100));
+  $("#backgroundPreviewBox").style.setProperty("--preview-blur", `${appearance.blur}px`);
+  $("#previewCount").textContent = `${appearance.backgroundUrls.length} gambar`;
+  $("#previewSubtext").textContent = appearance.backgroundUrls.length ? `${appearance.slideSeconds} detik per slide` : "Menggunakan background bawaan";
 }
 
-function validateAppearanceUrl(url) {
-  if (!url) return;
-
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch (_) {
-    throw new Error("Link background tidak valid.");
-  }
-
-  if (parsed.protocol !== "https:") {
-    throw new Error("Link background wajib menggunakan HTTPS.");
+function validateAppearance(value) {
+  for (const url of value.backgroundUrls) {
+    let parsed;
+    try { parsed = new URL(url); } catch (_) { throw new Error(`Link background tidak valid: ${url}`); }
+    if (parsed.protocol !== "https:") throw new Error(`Link wajib HTTPS: ${url}`);
   }
 }
 
 function previewAppearance() {
   try {
     const appearance = appearanceFromForm();
-    validateAppearanceUrl(appearance.backgroundUrl);
-
+    validateAppearance(appearance);
     const preview = $("#backgroundPreview");
-    const label = $("#previewLabel");
-
-    if (!appearance.backgroundUrl) {
+    const first = appearance.backgroundUrls[0] || "";
+    if (!first) {
       preview.removeAttribute("src");
-      label.textContent = "Menggunakan background bawaan";
-      applyAppearance(appearance);
+      $("#previewLabel").textContent = "Belum ada gambar";
+      $("#previewSubtext").textContent = "Menggunakan background bawaan";
       hideMessage("#backgroundMessage");
+      backgroundIndex = 0;
+      applyAppearance(appearance);
       return;
     }
-
-    preview.onerror = () => {
-      showMessage(
-        "#backgroundMessage",
-        "Gambar tidak dapat dimuat. Gunakan link gambar langsung dari hosting lain."
-      );
-      label.textContent = "Preview gagal";
-    };
-
-    preview.onload = () => {
-      hideMessage("#backgroundMessage");
-      label.textContent = "Preview berhasil";
-    };
-
-    preview.src = appearance.backgroundUrl;
+    preview.onerror = () => { showMessage("#backgroundMessage", "Salah satu preview gagal dimuat. Gunakan link gambar langsung dari hosting yang mengizinkan hotlink."); $("#previewLabel").textContent = "Preview gagal"; };
+    preview.onload = () => { hideMessage("#backgroundMessage"); $("#previewLabel").textContent = "Preview aktif"; };
+    preview.src = first;
+    backgroundIndex = 0;
     applyAppearance(appearance);
   } catch (error) {
     showMessage("#backgroundMessage", error.message);
@@ -609,24 +605,16 @@ async function saveAppearance(event) {
   event.preventDefault();
   const button = $("#saveBackground");
   setBusy(button, true, "Menyimpan...");
-
   try {
     const appearance = appearanceFromForm();
-    validateAppearanceUrl(appearance.backgroundUrl);
-
-    const data = await api("/api/settings/background", {
-      method: "PUT",
-      body: appearance
-    });
-
+    validateAppearance(appearance);
+    const data = await api("/api/settings/background", { method: "PUT", body: appearance });
     state.appearance = normalizeAppearance(data);
+    backgroundIndex = 0;
     applyAppearance(state.appearance);
-    showMessage(
-      "#backgroundMessage",
-      "Tampilan berhasil disimpan dan berlaku untuk seluruh akun.",
-      true
-    );
-    toast("Background dan efek kaca berhasil diperbarui.", "ok");
+    showMessage("#backgroundMessage", "Tampilan liquid glass dan slideshow background berhasil disimpan.", true);
+    toast("Background slideshow berhasil diperbarui.", "ok");
+    updatePreviewControls();
   } catch (error) {
     showMessage("#backgroundMessage", error.message);
   } finally {
@@ -636,22 +624,18 @@ async function saveAppearance(event) {
 
 async function resetAppearance() {
   try {
-    const data = await api("/api/settings/background", {
-      method: "PUT",
-      body: { backgroundUrl: "", overlay: 68, blur: 0 }
-    });
-
+    const data = await api("/api/settings/background", { method: "PUT", body: { backgroundUrls: [], overlay: 58, blur: 2, slideSeconds: 8 } });
     state.appearance = normalizeAppearance(data);
-    $("#backgroundInput").value = "";
-    $("#overlayInput").value = "68";
-    $("#blurInput").value = "0";
-    $("#overlayValue").textContent = "68%";
-    $("#blurValue").textContent = "0px";
+    backgroundIndex = 0;
+    $("#backgroundLinks").value = "";
+    $("#overlayInput").value = String(state.appearance.overlay);
+    $("#blurInput").value = String(state.appearance.blur);
+    $("#slideInput").value = String(state.appearance.slideSeconds);
     $("#backgroundPreview").removeAttribute("src");
-    $("#previewLabel").textContent = "Menggunakan background bawaan";
+    $("#previewLabel").textContent = "Belum ada gambar";
     updatePreviewControls();
     applyAppearance(state.appearance);
-    showMessage("#backgroundMessage", "Tampilan dikembalikan ke bawaan.", true);
+    showMessage("#backgroundMessage", "Tampilan dikembalikan ke bawaan sistem.", true);
   } catch (error) {
     showMessage("#backgroundMessage", error.message);
   }
