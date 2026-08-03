@@ -11,7 +11,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v7-aurora-glass";
+const VERSION = "v8-liquid-slides";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -536,78 +536,68 @@ async function deleteUser(db, master, targetId) {
 }
 
 async function migrateLegacySettings(db) {
-  const current = await readAppSetting(db, "background_url");
-  if (current) return;
+  const currentList = await readAppSetting(db, "background_urls");
+  if (currentList) return;
 
-  let legacyValue = "";
+  let singleValue = await readAppSetting(db, "background_url");
 
-  try {
-    const legacy = await db.prepare(
-      "SELECT value FROM site_settings WHERE key = 'background_url' LIMIT 1"
-    ).first();
-    legacyValue = String(legacy?.value || "");
-  } catch (_) {
+  if (!singleValue) {
     try {
-      const legacy = await db.prepare(
-        "SELECT setting_value FROM site_settings WHERE setting_key = 'background_url' LIMIT 1"
-      ).first();
-      legacyValue = String(legacy?.setting_value || "");
+      const legacy = await db.prepare("SELECT value FROM site_settings WHERE key = 'background_url' LIMIT 1").first();
+      singleValue = String(legacy?.value || "");
     } catch (_) {
-      legacyValue = "";
+      try {
+        const legacy = await db.prepare("SELECT setting_value FROM site_settings WHERE setting_key = 'background_url' LIMIT 1").first();
+        singleValue = String(legacy?.setting_value || "");
+      } catch (_) {
+        singleValue = "";
+      }
     }
   }
 
-  if (legacyValue) {
-    await upsertAppSetting(db, "background_url", legacyValue, null);
+  const list = normalizeBackgroundUrls(singleValue ? [singleValue] : []);
+  if (list.length) {
+    await upsertAppSetting(db, "background_urls", JSON.stringify(list), null);
   }
 }
 
 async function updateBackground(request, db, user) {
   const body = await readJson(request);
-  const backgroundUrl = String(body.backgroundUrl || "").trim();
-  const overlay = clampInteger(body.overlay, 20, 90, 68);
-  const blur = clampInteger(body.blur, 0, 20, 0);
+  const backgroundUrls = normalizeBackgroundUrls(body.backgroundUrls || body.backgroundUrl || []);
+  const overlay = clampInteger(body.overlay, 20, 90, 58);
+  const blur = clampInteger(body.blur, 0, 20, 2);
+  const slideSeconds = clampInteger(body.slideSeconds, 3, 60, 8);
 
-  if (backgroundUrl.length > 2000) {
-    throw new AppError(400, "Link background terlalu panjang.", "background-length");
-  }
-
-  if (backgroundUrl) {
-    let parsed;
-    try {
-      parsed = new URL(backgroundUrl);
-    } catch (_) {
-      throw new AppError(400, "Format link background tidak valid.", "background-url");
-    }
-
-    if (parsed.protocol !== "https:") {
-      throw new AppError(400, "Link background wajib menggunakan HTTPS.", "background-protocol");
-    }
-  }
-
-  await upsertAppSetting(db, "background_url", backgroundUrl, user.id);
+  await upsertAppSetting(db, "background_urls", JSON.stringify(backgroundUrls), user.id);
   await upsertAppSetting(db, "appearance_overlay", String(overlay), user.id);
   await upsertAppSetting(db, "appearance_blur", String(blur), user.id);
+  await upsertAppSetting(db, "background_slide_seconds", String(slideSeconds), user.id);
 
-  return json({ success: true, backgroundUrl, overlay, blur });
+  return json({ success: true, backgroundUrls, backgroundUrl: backgroundUrls[0] || "", overlay, blur, slideSeconds });
 }
 
 async function readAppearance(db) {
-  const backgroundUrl = await readAppSetting(db, "background_url");
-  const overlay = clampInteger(
-    await readAppSetting(db, "appearance_overlay"),
-    20,
-    90,
-    68
-  );
-  const blur = clampInteger(
-    await readAppSetting(db, "appearance_blur"),
-    0,
-    20,
-    0
-  );
+  let backgroundUrls = [];
+  const rawList = await readAppSetting(db, "background_urls");
 
-  return { backgroundUrl, overlay, blur };
+  if (rawList) {
+    try {
+      backgroundUrls = normalizeBackgroundUrls(JSON.parse(rawList));
+    } catch (_) {
+      backgroundUrls = normalizeBackgroundUrls(String(rawList).split(/\n|,/));
+    }
+  }
+
+  if (!backgroundUrls.length) {
+    const single = await readAppSetting(db, "background_url");
+    if (single) backgroundUrls = normalizeBackgroundUrls([single]);
+  }
+
+  const overlay = clampInteger(await readAppSetting(db, "appearance_overlay"), 20, 90, 58);
+  const blur = clampInteger(await readAppSetting(db, "appearance_blur"), 0, 20, 2);
+  const slideSeconds = clampInteger(await readAppSetting(db, "background_slide_seconds"), 3, 60, 8);
+
+  return { backgroundUrls, backgroundUrl: backgroundUrls[0] || "", overlay, blur, slideSeconds };
 }
 
 async function readAppSetting(db, name) {
@@ -617,7 +607,6 @@ async function readAppSetting(db, name) {
     WHERE name = ?
     LIMIT 1
   `).bind(name).first();
-
   return String(row?.value || "");
 }
 
@@ -630,6 +619,23 @@ async function upsertAppSetting(db, name, value, userId) {
       updated_at = excluded.updated_at,
       updated_by = excluded.updated_by
   `).bind(name, String(value), Date.now(), userId).run();
+}
+
+function normalizeBackgroundUrls(input) {
+  const values = Array.isArray(input) ? input : String(input || "").split(/\n|,/);
+  const seen = new Set();
+  const result = [];
+  for (const raw of values) {
+    const value = String(raw || "").trim();
+    if (!value || seen.has(value)) continue;
+    let parsed;
+    try { parsed = new URL(value); } catch (_) { throw new AppError(400, `Format link background tidak valid: ${value}`, "background-url"); }
+    if (parsed.protocol !== "https:") throw new AppError(400, `Link background wajib menggunakan HTTPS: ${value}`, "background-protocol");
+    seen.add(value);
+    result.push(value);
+    if (result.length >= 20) break;
+  }
+  return result;
 }
 
 function clampInteger(value, minimum, maximum, fallback) {
