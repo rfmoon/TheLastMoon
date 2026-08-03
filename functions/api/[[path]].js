@@ -1,6 +1,7 @@
 const MENUS = Object.freeze([
   { id: "dashboard", label: "Dashboard", icon: "▦", always: true },
   { id: "checker", label: "Checker", icon: "✓", assignable: true },
+  { id: "xpay-diff", label: "Cari Selisih XPAY", icon: "≠", assignable: true },
   { id: "pencairan", label: "Pencairan", icon: "⇄", assignable: true },
   { id: "biaya", label: "Biaya", icon: "◈", assignable: true },
   { id: "list-data", label: "List Data", icon: "☷", assignable: true },
@@ -11,7 +12,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v8-liquid-slides";
+const VERSION = "v10-xpay-workspace";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
