@@ -11,36 +11,44 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
+const VERSION = "v6-stable";
 const COOKIE_NAME = "thelastmoon_session";
-const SESSION_TTL = 12 * 60 * 60 * 1000;
-const PBKDF2_ITERATIONS = 120000;
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const PASSWORD_ITERATIONS = 60000;
 const MAX_JSON_BYTES = 32 * 1024;
+
+let schemaReady = false;
 
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
 
   try {
-    return await handleApi(request, env, url);
+    return await routeRequest(request, env, url);
   } catch (error) {
     console.error("TheLastMoon API error:", error);
 
-    if (error instanceof HttpError) {
-      return json({ error: error.message }, error.status);
+    if (error instanceof AppError) {
+      return json({
+        error: error.message,
+        stage: error.stage || undefined,
+        version: VERSION
+      }, error.status);
     }
 
     return json({
       error: "Terjadi kesalahan pada server.",
-      version: "v5-fixed"
+      detail: safeErrorMessage(error),
+      version: VERSION
     }, 500);
   }
 }
 
-async function handleApi(request, env, url) {
+async function routeRequest(request, env, url) {
   if (url.pathname === "/api/health" && request.method === "GET") {
     return json({
       ok: true,
-      version: "v5-fixed",
+      version: VERSION,
       dbBound: Boolean(env.DB),
       masterUsernameConfigured: Boolean(env.MASTER_USERNAME),
       masterPasswordConfigured: Boolean(env.MASTER_PASSWORD)
@@ -48,42 +56,57 @@ async function handleApi(request, env, url) {
   }
 
   if (!env.DB) {
-    return json({
-      error: "Binding database belum ditemukan. Tambahkan D1 binding dengan nama DB."
-    }, 500);
+    throw new AppError(
+      500,
+      "Binding database belum ditemukan. Tambahkan D1 binding dengan nama DB.",
+      "binding"
+    );
   }
 
   if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) {
     const origin = request.headers.get("Origin");
     if (origin && origin !== url.origin) {
-      return json({ error: "Permintaan lintas situs ditolak." }, 403);
+      throw new AppError(403, "Permintaan lintas situs ditolak.", "origin");
     }
   }
 
-  await ensureSchema(env.DB);
-  const setupReady = await ensureMaster(env);
+  await initializeDatabase(env);
+
+  if (url.pathname === "/api/diagnostics" && request.method === "GET") {
+    const userCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM users").first();
+    const master = await env.DB.prepare(
+      "SELECT id, username, active FROM users WHERE is_master = 1 LIMIT 1"
+    ).first();
+
+    return json({
+      ok: true,
+      version: VERSION,
+      dbPing: true,
+      schemaReady: true,
+      users: Number(userCount?.total || 0),
+      masterReady: Boolean(master),
+      masterUsername: master?.username || null,
+      masterActive: master ? Number(master.active) === 1 : false
+    });
+  }
 
   if (url.pathname === "/api/public-settings" && request.method === "GET") {
-    const backgroundUrl = await readSetting(env.DB, "background_url");
-    return json({ backgroundUrl: backgroundUrl || "" });
+    return json({
+      backgroundUrl: (await readSetting(env.DB, "background_url")) || ""
+    });
   }
 
   if (url.pathname === "/api/session" && request.method === "GET") {
-    const user = await sessionUser(request, env.DB);
+    const user = await getSessionUser(request, env.DB);
     return json({
       authenticated: Boolean(user),
-      setupReady,
+      setupReady: true,
       user: user ? publicUser(user) : null,
       menus: user ? menusForUser(user) : []
     });
   }
 
   if (url.pathname === "/api/login" && request.method === "POST") {
-    if (!setupReady) {
-      return json({
-        error: "Akun master belum siap. Periksa MASTER_USERNAME dan MASTER_PASSWORD."
-      }, 503);
-    }
     return login(request, env.DB);
   }
 
@@ -91,8 +114,10 @@ async function handleApi(request, env, url) {
     return logout(request, env.DB);
   }
 
-  const user = await sessionUser(request, env.DB);
-  if (!user) return json({ error: "Sesi login habis. Silakan masuk kembali." }, 401);
+  const user = await getSessionUser(request, env.DB);
+  if (!user) {
+    throw new AppError(401, "Sesi login habis. Silakan masuk kembali.", "session");
+  }
 
   if (url.pathname === "/api/change-password" && request.method === "POST") {
     return changePassword(request, env.DB, user);
@@ -106,37 +131,46 @@ async function handleApi(request, env, url) {
     return createUser(request, env.DB, user);
   }
 
-  const userRoute = url.pathname.match(/^\/api\/users\/(\d+)$/);
-  if (userRoute && request.method === "PUT") {
-    return updateUser(request, env.DB, user, Number(userRoute[1]));
+  const userMatch = url.pathname.match(/^\/api\/users\/(\d+)$/);
+  if (userMatch && request.method === "PUT") {
+    return updateUser(request, env.DB, user, Number(userMatch[1]));
   }
-  if (userRoute && request.method === "DELETE") {
-    return deleteUser(env.DB, user, Number(userRoute[1]));
+  if (userMatch && request.method === "DELETE") {
+    return deleteUser(env.DB, user, Number(userMatch[1]));
   }
 
   if (url.pathname === "/api/settings/background" && request.method === "GET") {
-    if (!isMaster(user)) return forbidden();
-    return json({ backgroundUrl: (await readSetting(env.DB, "background_url")) || "" });
+    requireMaster(user);
+    return json({
+      backgroundUrl: (await readSetting(env.DB, "background_url")) || ""
+    });
   }
 
   if (url.pathname === "/api/settings/background" && request.method === "PUT") {
-    if (!isMaster(user)) return forbidden();
+    requireMaster(user);
     return updateBackground(request, env.DB, user);
   }
 
-  const moduleRoute = url.pathname.match(/^\/api\/module\/([a-z0-9-]+)$/);
-  if (moduleRoute && request.method === "GET") {
-    return openModule(user, moduleRoute[1]);
+  const moduleMatch = url.pathname.match(/^\/api\/module\/([a-z0-9-]+)$/);
+  if (moduleMatch && request.method === "GET") {
+    return openModule(user, moduleMatch[1]);
   }
 
-  return json({ error: "Endpoint tidak ditemukan." }, 404);
+  throw new AppError(404, "Endpoint tidak ditemukan.", "routing");
 }
 
-async function ensureSchema(db) {
-  await db.batch([
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+async function initializeDatabase(env) {
+  if (!schemaReady) {
+    await runSetupStep("db-ping", async () => {
+      const ping = await env.DB.prepare("SELECT 1 AS ok").first();
+      if (Number(ping?.ok) !== 1) {
+        throw new Error("Database tidak merespons SELECT 1.");
+      }
+    });
+
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
         username TEXT NOT NULL,
         username_norm TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
@@ -145,67 +179,120 @@ async function ensureSchema(db) {
         active INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
-      )
-    `),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS sessions (
+      )`,
+      `CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
         expires_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS site_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS site_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL,
         updated_at INTEGER NOT NULL,
         updated_by INTEGER
-      )
-    `),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at)`)
-  ]);
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at)`
+    ];
+
+    for (let index = 0; index < statements.length; index += 1) {
+      await runSetupStep(`schema-${index + 1}`, async () => {
+        await env.DB.prepare(statements[index]).run();
+      });
+    }
+
+    schemaReady = true;
+  }
+
+  await ensureMaster(env);
 }
 
 async function ensureMaster(env) {
-  const existingMaster = await env.DB.prepare(`
-    SELECT id FROM users WHERE is_master = 1 LIMIT 1
-  `).first();
+  const existingMaster = await runSetupStep("master-check", () =>
+    env.DB.prepare("SELECT id FROM users WHERE is_master = 1 LIMIT 1").first()
+  );
 
-  if (existingMaster) return true;
+  if (existingMaster) return;
 
   const username = String(env.MASTER_USERNAME || "").trim();
   const password = String(env.MASTER_PASSWORD || "");
 
-  if (!validUsername(username) || password.length < 6) return false;
-
-  const usernameNorm = normalizeUsername(username);
-  const passwordHash = await hashPassword(password);
-  const now = Date.now();
-  const permissions = JSON.stringify(assignableMenuIds());
-
-  const existingUser = await env.DB.prepare(`
-    SELECT id FROM users WHERE username_norm = ? LIMIT 1
-  `).bind(usernameNorm).first();
-
-  if (existingUser) {
-    await env.DB.prepare(`
-      UPDATE users
-      SET username = ?, password_hash = ?, permissions = ?,
-          is_master = 1, active = 1, updated_at = ?
-      WHERE id = ?
-    `).bind(username, passwordHash, permissions, now, existingUser.id).run();
-  } else {
-    await env.DB.prepare(`
-      INSERT INTO users
-        (username, username_norm, password_hash, permissions, is_master, active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 1, 1, ?, ?)
-    `).bind(username, usernameNorm, passwordHash, permissions, now, now).run();
+  if (!validUsername(username)) {
+    throw new AppError(
+      500,
+      "MASTER_USERNAME tidak valid. Gunakan 3–40 karakter: huruf, angka, titik, garis bawah, atau minus.",
+      "master-username"
+    );
   }
 
-  return true;
+  if (password.length < 8 || password.length > 128) {
+    throw new AppError(
+      500,
+      "MASTER_PASSWORD harus 8–128 karakter.",
+      "master-password"
+    );
+  }
+
+  const passwordHash = await runSetupStep(
+    "master-password-hash",
+    () => hashPassword(password)
+  );
+
+  const now = Date.now();
+  const usernameNorm = normalizeUsername(username);
+  const permissions = JSON.stringify(assignableMenuIds());
+
+  const existingUser = await runSetupStep("master-user-check", () =>
+    env.DB.prepare(
+      "SELECT id FROM users WHERE username_norm = ? LIMIT 1"
+    ).bind(usernameNorm).first()
+  );
+
+  if (existingUser) {
+    await runSetupStep("master-promote", () =>
+      env.DB.prepare(`
+        UPDATE users
+        SET username = ?, password_hash = ?, permissions = ?,
+            is_master = 1, active = 1, updated_at = ?
+        WHERE id = ?
+      `).bind(
+        username,
+        passwordHash,
+        permissions,
+        now,
+        existingUser.id
+      ).run()
+    );
+  } else {
+    await runSetupStep("master-create", () =>
+      env.DB.prepare(`
+        INSERT INTO users
+          (username, username_norm, password_hash, permissions,
+           is_master, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, 1, ?, ?)
+      `).bind(
+        username,
+        usernameNorm,
+        passwordHash,
+        permissions,
+        now,
+        now
+      ).run()
+    );
+  }
+}
+
+async function runSetupStep(stage, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw new AppError(
+      500,
+      `Gagal menyiapkan sistem pada tahap ${stage}: ${safeErrorMessage(error)}`,
+      stage
+    );
+  }
 }
 
 async function login(request, db) {
@@ -214,27 +301,31 @@ async function login(request, db) {
   const password = String(body.password || "");
 
   if (!username || !password) {
-    return json({ error: "Username dan password wajib diisi." }, 400);
+    throw new AppError(400, "Username dan password wajib diisi.", "login-input");
   }
 
-  const user = await db.prepare(`
-    SELECT * FROM users WHERE username_norm = ? LIMIT 1
-  `).bind(normalizeUsername(username)).first();
+  const user = await db.prepare(
+    "SELECT * FROM users WHERE username_norm = ? LIMIT 1"
+  ).bind(normalizeUsername(username)).first();
 
-  const valid = user
-    && Number(user.active) === 1
-    && await verifyPassword(password, user.password_hash);
+  const valid = Boolean(
+    user &&
+    Number(user.active) === 1 &&
+    await verifyPassword(password, user.password_hash)
+  );
 
   if (!valid) {
-    return json({ error: "Username atau password salah." }, 401);
+    throw new AppError(401, "Username atau password salah.", "login-auth");
   }
 
   const rawToken = randomToken(32);
   const tokenHash = await sha256(rawToken);
   const now = Date.now();
-  const expiresAt = now + SESSION_TTL;
+  const expiresAt = now + SESSION_TTL_MS;
 
-  await db.prepare("DELETE FROM sessions WHERE expires_at <= ?").bind(now).run();
+  await db.prepare("DELETE FROM sessions WHERE expires_at <= ?")
+    .bind(now).run();
+
   await db.prepare(`
     INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
     VALUES (?, ?, ?, ?)
@@ -243,12 +334,12 @@ async function login(request, db) {
   return json(
     { user: publicUser(user), menus: menusForUser(user) },
     200,
-    { "Set-Cookie": sessionCookie(rawToken, Math.floor(SESSION_TTL / 1000)) }
+    { "Set-Cookie": sessionCookie(rawToken, Math.floor(SESSION_TTL_MS / 1000)) }
   );
 }
 
 async function logout(request, db) {
-  const token = cookieValue(request.headers.get("Cookie"), COOKIE_NAME);
+  const token = readCookie(request.headers.get("Cookie"), COOKIE_NAME);
 
   if (token) {
     await db.prepare("DELETE FROM sessions WHERE token_hash = ?")
@@ -262,8 +353,8 @@ async function logout(request, db) {
   );
 }
 
-async function sessionUser(request, db) {
-  const token = cookieValue(request.headers.get("Cookie"), COOKIE_NAME);
+async function getSessionUser(request, db) {
+  const token = readCookie(request.headers.get("Cookie"), COOKIE_NAME);
   if (!token) return null;
 
   return await db.prepare(`
@@ -283,22 +374,22 @@ async function changePassword(request, db, user) {
   const newPassword = String(body.newPassword || "");
 
   if (newPassword.length < 8 || newPassword.length > 128) {
-    return json({ error: "Password baru harus 8–128 karakter." }, 400);
+    throw new AppError(400, "Password baru harus 8–128 karakter.", "password-input");
   }
 
   if (!await verifyPassword(currentPassword, user.password_hash)) {
-    return json({ error: "Password sekarang salah." }, 400);
+    throw new AppError(400, "Password sekarang salah.", "password-check");
   }
 
-  await db.prepare(`
-    UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?
-  `).bind(await hashPassword(newPassword), Date.now(), user.id).run();
+  await db.prepare(
+    "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?"
+  ).bind(await hashPassword(newPassword), Date.now(), user.id).run();
 
   return json({ success: true });
 }
 
 async function listUsers(db, user) {
-  if (!isMaster(user)) return forbidden();
+  requireMaster(user);
 
   const result = await db.prepare(`
     SELECT id, username, permissions, is_master, active, created_at, updated_at
@@ -320,7 +411,7 @@ async function listUsers(db, user) {
 }
 
 async function createUser(request, db, master) {
-  if (!isMaster(master)) return forbidden();
+  requireMaster(master);
 
   const body = await readJson(request);
   const username = String(body.username || "").trim();
@@ -329,13 +420,15 @@ async function createUser(request, db, master) {
   const active = body.active === false ? 0 : 1;
 
   if (!validUsername(username)) {
-    return json({
-      error: "Username harus 3–40 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau minus."
-    }, 400);
+    throw new AppError(
+      400,
+      "Username harus 3–40 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau minus.",
+      "create-user-username"
+    );
   }
 
   if (password.length < 6 || password.length > 128) {
-    return json({ error: "Password harus 6–128 karakter." }, 400);
+    throw new AppError(400, "Password harus 6–128 karakter.", "create-user-password");
   }
 
   const now = Date.now();
@@ -343,7 +436,8 @@ async function createUser(request, db, master) {
   try {
     const result = await db.prepare(`
       INSERT INTO users
-        (username, username_norm, password_hash, permissions, is_master, active, created_at, updated_at)
+        (username, username_norm, password_hash, permissions,
+         is_master, active, created_at, updated_at)
       VALUES (?, ?, ?, ?, 0, ?, ?, ?)
     `).bind(
       username,
@@ -357,22 +451,25 @@ async function createUser(request, db, master) {
 
     return json({ success: true, id: result.meta?.last_row_id }, 201);
   } catch (error) {
-    if (String(error.message || error).toLowerCase().includes("unique")) {
-      return json({ error: "Username tersebut sudah digunakan." }, 409);
+    if (safeErrorMessage(error).toLowerCase().includes("unique")) {
+      throw new AppError(409, "Username tersebut sudah digunakan.", "create-user-duplicate");
     }
     throw error;
   }
 }
 
 async function updateUser(request, db, master, targetId) {
-  if (!isMaster(master)) return forbidden();
+  requireMaster(master);
 
-  const target = await db.prepare("SELECT * FROM users WHERE id = ? LIMIT 1")
-    .bind(targetId).first();
+  const target = await db.prepare(
+    "SELECT * FROM users WHERE id = ? LIMIT 1"
+  ).bind(targetId).first();
 
-  if (!target) return json({ error: "Akun tidak ditemukan." }, 404);
+  if (!target) {
+    throw new AppError(404, "Akun tidak ditemukan.", "update-user-not-found");
+  }
   if (Number(target.is_master) === 1) {
-    return json({ error: "Akun master tidak dapat diedit melalui menu ini." }, 403);
+    throw new AppError(403, "Akun master tidak dapat diedit dari menu ini.", "update-master");
   }
 
   const body = await readJson(request);
@@ -382,11 +479,10 @@ async function updateUser(request, db, master, targetId) {
   const active = body.active === false ? 0 : 1;
 
   if (!validUsername(username)) {
-    return json({ error: "Format username tidak valid." }, 400);
+    throw new AppError(400, "Format username tidak valid.", "update-user-username");
   }
-
   if (password && (password.length < 6 || password.length > 128)) {
-    return json({ error: "Password harus 6–128 karakter." }, 400);
+    throw new AppError(400, "Password harus 6–128 karakter.", "update-user-password");
   }
 
   try {
@@ -406,34 +502,37 @@ async function updateUser(request, db, master, targetId) {
     ).run();
 
     if (!active) {
-      await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(targetId).run();
+      await db.prepare("DELETE FROM sessions WHERE user_id = ?")
+        .bind(targetId).run();
     }
 
     return json({ success: true });
   } catch (error) {
-    if (String(error.message || error).toLowerCase().includes("unique")) {
-      return json({ error: "Username tersebut sudah digunakan." }, 409);
+    if (safeErrorMessage(error).toLowerCase().includes("unique")) {
+      throw new AppError(409, "Username tersebut sudah digunakan.", "update-user-duplicate");
     }
     throw error;
   }
 }
 
 async function deleteUser(db, master, targetId) {
-  if (!isMaster(master)) return forbidden();
+  requireMaster(master);
 
-  const target = await db.prepare(`
-    SELECT is_master FROM users WHERE id = ? LIMIT 1
-  `).bind(targetId).first();
+  const target = await db.prepare(
+    "SELECT is_master FROM users WHERE id = ? LIMIT 1"
+  ).bind(targetId).first();
 
-  if (!target) return json({ error: "Akun tidak ditemukan." }, 404);
+  if (!target) {
+    throw new AppError(404, "Akun tidak ditemukan.", "delete-user-not-found");
+  }
   if (Number(target.is_master) === 1) {
-    return json({ error: "Akun master tidak dapat dihapus." }, 403);
+    throw new AppError(403, "Akun master tidak dapat dihapus.", "delete-master");
   }
 
-  await db.batch([
-    db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(targetId),
-    db.prepare("DELETE FROM users WHERE id = ?").bind(targetId)
-  ]);
+  await db.prepare("DELETE FROM sessions WHERE user_id = ?")
+    .bind(targetId).run();
+  await db.prepare("DELETE FROM users WHERE id = ?")
+    .bind(targetId).run();
 
   return json({ success: true });
 }
@@ -443,7 +542,7 @@ async function updateBackground(request, db, user) {
   const backgroundUrl = String(body.backgroundUrl || "").trim();
 
   if (backgroundUrl.length > 2000) {
-    return json({ error: "Link background terlalu panjang." }, 400);
+    throw new AppError(400, "Link background terlalu panjang.", "background-length");
   }
 
   if (backgroundUrl) {
@@ -451,19 +550,20 @@ async function updateBackground(request, db, user) {
     try {
       parsed = new URL(backgroundUrl);
     } catch (_) {
-      return json({ error: "Format link background tidak valid." }, 400);
+      throw new AppError(400, "Format link background tidak valid.", "background-url");
     }
 
     if (parsed.protocol !== "https:") {
-      return json({ error: "Link background wajib menggunakan HTTPS." }, 400);
+      throw new AppError(400, "Link background wajib menggunakan HTTPS.", "background-protocol");
     }
   }
 
   await db.prepare(`
-    INSERT INTO site_settings (key, value, updated_at, updated_by)
+    INSERT INTO site_settings
+      (setting_key, setting_value, updated_at, updated_by)
     VALUES ('background_url', ?, ?, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      value = excluded.value,
+    ON CONFLICT(setting_key) DO UPDATE SET
+      setting_value = excluded.setting_value,
       updated_at = excluded.updated_at,
       updated_by = excluded.updated_by
   `).bind(backgroundUrl, Date.now(), user.id).run();
@@ -473,21 +573,25 @@ async function updateBackground(request, db, user) {
 
 async function readSetting(db, key) {
   const row = await db.prepare(`
-    SELECT value FROM site_settings WHERE key = ? LIMIT 1
+    SELECT setting_value
+    FROM site_settings
+    WHERE setting_key = ?
+    LIMIT 1
   `).bind(key).first();
 
-  return row?.value || "";
+  return row?.setting_value || "";
 }
 
 function openModule(user, menuId) {
   const menu = MENUS.find(item => item.id === menuId);
-  if (!menu) return json({ error: "Menu tidak ditemukan." }, 404);
+  if (!menu) {
+    throw new AppError(404, "Menu tidak ditemukan.", "module-not-found");
+  }
 
   if (!isMaster(user)) {
     const permissions = safePermissions(user.permissions);
-
     if (menu.masterOnly || (menu.assignable && !permissions.includes(menuId))) {
-      return forbidden();
+      throw new AppError(403, "Kamu tidak memiliki izin membuka menu ini.", "module-permission");
     }
   }
 
@@ -498,11 +602,16 @@ function openModule(user, menuId) {
   });
 }
 
+function requireMaster(user) {
+  if (!isMaster(user)) {
+    throw new AppError(403, "Fitur ini hanya dapat diakses master.", "master-required");
+  }
+}
+
 function menusForUser(user) {
   if (isMaster(user)) return MENUS.map(publicMenu);
 
   const permissions = safePermissions(user.permissions);
-
   return MENUS
     .filter(menu => menu.always || (menu.assignable && permissions.includes(menu.id)))
     .map(publicMenu);
@@ -525,18 +634,14 @@ function isMaster(user) {
   return Number(user?.is_master) === 1;
 }
 
-function forbidden() {
-  return json({ error: "Kamu tidak memiliki izin untuk membuka fitur ini." }, 403);
-}
-
 function assignableMenuIds() {
   return MENUS.filter(menu => menu.assignable).map(menu => menu.id);
 }
 
 function sanitizePermissions(value) {
   const allowed = new Set(assignableMenuIds());
-  const permissions = Array.isArray(value) ? value : [];
-  return [...new Set(permissions.filter(permission => allowed.has(permission)))];
+  const list = Array.isArray(value) ? value : [];
+  return [...new Set(list.filter(item => allowed.has(item)))];
 }
 
 function safePermissions(value) {
@@ -552,44 +657,40 @@ function validUsername(username) {
 }
 
 function normalizeUsername(username) {
-  return username.trim().toLocaleLowerCase("en-US");
+  return username.trim().toLowerCase();
 }
 
 async function readJson(request) {
   const length = Number(request.headers.get("Content-Length") || 0);
   if (length > MAX_JSON_BYTES) {
-    throw new HttpError(413, "Data terlalu besar.");
+    throw new AppError(413, "Data terlalu besar.", "request-size");
   }
 
   try {
     return await request.json();
   } catch (_) {
-    throw new HttpError(400, "Format data tidak valid.");
+    throw new AppError(400, "Format data tidak valid.", "request-json");
   }
 }
 
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const derived = await derivePassword(password, salt, PBKDF2_ITERATIONS);
-
-  return `pbkdf2-sha256$${PBKDF2_ITERATIONS}$${toBase64(salt)}$${toBase64(derived)}`;
+  const derived = await derivePassword(password, salt, PASSWORD_ITERATIONS);
+  return `pbkdf2-sha256$${PASSWORD_ITERATIONS}$${toBase64(salt)}$${toBase64(derived)}`;
 }
 
 async function verifyPassword(password, storedHash) {
   try {
-    const [algorithm, iterationText, saltText, hashText] = String(storedHash).split("$");
-
+    const [algorithm, iterationsText, saltText, hashText] = String(storedHash).split("$");
     if (algorithm !== "pbkdf2-sha256") return false;
 
-    const iterations = Number(iterationText);
+    const iterations = Number(iterationsText);
     if (!Number.isInteger(iterations) || iterations < 10000 || iterations > 1000000) {
       return false;
     }
 
-    const salt = fromBase64(saltText);
     const expected = fromBase64(hashText);
-    const actual = await derivePassword(password, salt, iterations);
-
+    const actual = await derivePassword(password, fromBase64(saltText), iterations);
     return constantTimeEqual(actual, expected);
   } catch (_) {
     return false;
@@ -621,7 +722,6 @@ function constantTimeEqual(left, right) {
   for (let index = 0; index < left.length; index += 1) {
     difference |= left[index] ^ right[index];
   }
-
   return difference === 0;
 }
 
@@ -630,12 +730,12 @@ function randomToken(size) {
 }
 
 async function sha256(value) {
-  const result = await crypto.subtle.digest(
+  const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(value)
   );
 
-  return [...new Uint8Array(result)]
+  return [...new Uint8Array(digest)]
     .map(byte => byte.toString(16).padStart(2, "0"))
     .join("");
 }
@@ -651,22 +751,29 @@ function fromBase64(value) {
 }
 
 function toBase64Url(bytes) {
-  return toBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return toBase64(bytes)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
-function cookieValue(header, name) {
+function readCookie(header, name) {
   if (!header) return null;
 
   for (const part of header.split(";")) {
     const [key, ...rest] = part.trim().split("=");
     if (key === name) return rest.join("=");
   }
-
   return null;
 }
 
 function sessionCookie(token, maxAge) {
   return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function safeErrorMessage(error) {
+  const text = String(error?.message || error || "Unknown error");
+  return text.replace(/\s+/g, " ").slice(0, 300);
 }
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -681,9 +788,10 @@ function json(data, status = 200, extraHeaders = {}) {
   });
 }
 
-class HttpError extends Error {
-  constructor(status, message) {
+class AppError extends Error {
+  constructor(status, message, stage = "") {
     super(message);
     this.status = status;
+    this.stage = stage;
   }
 }
