@@ -269,3 +269,65 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
   .xpay-workspace-head{align-items:flex-start;flex-direction:column}
   .xpay-frame{height:calc(100vh - 125px);min-height:680px}
 }
+
+
+.menu-group {
+  display: grid;
+  gap: 4px;
+}
+
+.submenu {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  margin: -1px 0 4px 21px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255,255,255,.16);
+}
+
+.submenu-item {
+  position: relative;
+  width: 100%;
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: rgba(244,248,255,.78);
+  background: rgba(255,255,255,.025);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.submenu-item:hover {
+  color: #fff;
+  background: rgba(255,255,255,.07);
+}
+
+.submenu-item.active {
+  color: #fff;
+  border-color: rgba(142,107,255,.36);
+  background: linear-gradient(110deg,rgba(142,107,255,.27),rgba(87,165,255,.09));
+  box-shadow: inset 2px 0 0 rgba(186,170,255,.9);
+}
+
+.submenu-item .mi {
+  width: 18px;
+  text-align: center;
+}
+
+.submenu-line {
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  width: 12px;
+  height: 1px;
+  background: rgba(255,255,255,.16);
+}
+
+.pencairan-xpay-frame {
+  min-height: 880px;
+}

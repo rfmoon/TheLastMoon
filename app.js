@@ -238,14 +238,33 @@ function renderIdentity() {
 }
 
 function renderMenu() {
-  $("#menuList").innerHTML = state.menus.map(menu => `
-    <button class="menu-item" type="button" data-menu="${escapeHtml(menu.id)}">
-      <span class="mi">${escapeHtml(menu.icon)}</span>
-      <span>${escapeHtml(menu.label)}</span>
-    </button>
-  `).join("");
+  const roots = state.menus.filter(menu => !menu.parentId);
 
-  $$(".menu-item").forEach(button => {
+  $("#menuList").innerHTML = roots.map(menu => {
+    const children = state.menus.filter(child => child.parentId === menu.id);
+
+    return `
+      <div class="menu-group">
+        <button class="menu-item" type="button" data-menu="${escapeHtml(menu.id)}">
+          <span class="mi">${escapeHtml(menu.icon)}</span>
+          <span>${escapeHtml(menu.label)}</span>
+        </button>
+
+        ${children.length ? `
+          <div class="submenu">
+            ${children.map(child => `
+              <button class="submenu-item" type="button" data-menu="${escapeHtml(child.id)}">
+                <span class="submenu-line"></span>
+                <span class="mi">${escapeHtml(child.icon)}</span>
+                <span>${escapeHtml(child.label)}</span>
+              </button>
+            `).join("")}
+          </div>
+        ` : ""}
+      </div>`;
+  }).join("");
+
+  $$("[data-menu]").forEach(button => {
     button.addEventListener("click", () => navigate(button.dataset.menu));
   });
 }
@@ -256,7 +275,7 @@ async function navigate(menuId) {
 
   state.currentMenu = menuId;
   $("#pageTitle").textContent = menu.label;
-  $$(".menu-item").forEach(button => {
+  $$("[data-menu]").forEach(button => {
     button.classList.toggle("active", button.dataset.menu === menuId);
   });
   closeSidebar();
@@ -265,6 +284,7 @@ async function navigate(menuId) {
   if (menuId === "user-admin") return renderUserAdmin();
   if (menuId === "settings") return renderSettings();
   if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
+  if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -309,7 +329,11 @@ function renderDashboard() {
         ${accessible.map(menu => `
           <button class="quick-card" type="button" data-quick="${escapeHtml(menu.id)}">
             <span class="qi">${escapeHtml(menu.icon)}</span>
-            <span><strong>${escapeHtml(menu.label)}</strong><small>Buka modul →</small></span>
+            <span><strong>${escapeHtml(
+        menu.parentId
+          ? `${state.menus.find(parent => parent.id === menu.parentId)?.label || "Menu"} › ${menu.label}`
+          : menu.label
+      )}</strong><small>Buka modul →</small></span>
           </button>
         `).join("") || `<div class="content-card" style="padding:20px">Belum ada menu tambahan untuk akun ini.</div>`}
       </div>
@@ -339,6 +363,37 @@ async function renderXpayWorkspace(menu) {
           class="xpay-frame"
           src="/xpay-checker.html?v=10.0.0"
           title="Cari Selisih XPAY"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
+
+
+async function renderPencairanXpayWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="xpay-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">PENCAIRAN WORKSPACE</span>
+            <h3>Pencairan XPAY</h3>
+            <p>${escapeHtml(data.message)} Database rekening disimpan lokal pada browser ini.</p>
+          </div>
+          <span class="xpay-workspace-badge">DATABASE • REKENING • KONVERSI</span>
+        </header>
+
+        <iframe
+          class="xpay-frame pencairan-xpay-frame"
+          src="/pencairan-xpay.html?v=11.0.0"
+          title="Pencairan XPAY"
           loading="eager"
           referrerpolicy="same-origin">
         </iframe>
