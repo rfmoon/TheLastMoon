@@ -13,7 +13,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v12-shared-pencairan-db";
+const VERSION = "v13-sync-status-fix";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -687,24 +687,33 @@ function clampInteger(value, minimum, maximum, fallback) {
 
 
 async function listPayoutAccounts(db) {
-  const result = await db.prepare(`
-    SELECT
-      id,
-      bank_code AS bankCode,
-      bank_name AS bankName,
-      account_name AS name,
-      account,
-      created_at AS createdAt,
-      updated_at AS updatedAt
-    FROM payout_accounts
-    ORDER BY bank_name ASC, account_name ASC, account ASC
-  `).all();
+  try {
+    const result = await db.prepare(`
+      SELECT
+        id,
+        bank_code AS bankCode,
+        bank_name AS bankName,
+        account_name AS name,
+        account,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM payout_accounts
+      ORDER BY bank_name ASC, account_name ASC, account ASC
+    `).all();
 
-  return json({
-    accounts: result.results || [],
-    total: (result.results || []).length,
-    shared: true
-  });
+    return json({
+      accounts: result.results || [],
+      total: (result.results || []).length,
+      shared: true,
+      version: VERSION
+    });
+  } catch (error) {
+    throw new AppError(
+      500,
+      `Gagal membaca database Pencairan XPAY: ${safeErrorMessage(error)}`,
+      "payout-accounts-list"
+    );
+  }
 }
 
 async function upsertPayoutAccounts(request, db, user) {
