@@ -66,6 +66,8 @@ let database = [];
 let processedRows = [];
 let syncTimer = null;
 let loadingDatabase = false;
+let syncFailureCount = 0;
+let lastSyncAt = null;
 
 function normalize(value){
   return String(value ?? "")
@@ -133,30 +135,95 @@ function loadLegacyDatabase(){
 }
 
 async function api(path, options={}){
-  const response=await fetch(path,{
-    method:options.method || "GET",
-    credentials:"same-origin",
-    cache:"no-store",
-    headers:options.body ? {"Content-Type":"application/json"} : {},
-    body:options.body ? JSON.stringify(options.body) : undefined
-  });
+  const method=options.method || "GET";
+  const maxAttempts=method==="GET" ? 2 : 1;
+  let lastError=null;
 
-  const text=await response.text();
-  let data={};
-
-  if(text){
+  for(let attempt=1;attempt<=maxAttempts;attempt++){
     try{
-      data=JSON.parse(text);
-    }catch{
-      throw new Error(`Respons API tidak valid (HTTP ${response.status}).`);
+      const response=await fetch(path,{
+        method,
+        credentials:"same-origin",
+        cache:"no-store",
+        headers:options.body ? {"Content-Type":"application/json"} : {},
+        body:options.body ? JSON.stringify(options.body) : undefined
+      });
+
+      const text=await response.text();
+      let data={};
+
+      if(text){
+        try{
+          data=JSON.parse(text);
+        }catch{
+          throw new Error(`Respons API tidak valid (HTTP ${response.status}).`);
+        }
+      }
+
+      if(!response.ok){
+        const parts=[
+          data.error || `Terjadi kesalahan API (HTTP ${response.status}).`,
+          data.stage ? `Tahap: ${data.stage}` : "",
+          data.detail ? `Detail: ${data.detail}` : ""
+        ].filter(Boolean);
+
+        const error=new Error(parts.join(" • "));
+        error.status=response.status;
+        throw error;
+      }
+
+      return data;
+    }catch(error){
+      lastError=error;
+
+      const retryable=
+        method==="GET" &&
+        attempt<maxAttempts &&
+        (!error.status || error.status>=500);
+
+      if(!retryable) throw error;
+      await new Promise(resolve=>setTimeout(resolve,450));
     }
   }
 
-  if(!response.ok){
-    throw new Error(data.error || `Terjadi kesalahan API (HTTP ${response.status}).`);
-  }
+  throw lastError || new Error("API tidak dapat diakses.");
+}
 
-  return data;
+function syncStatusText(total){
+  const time=lastSyncAt
+    ? lastSyncAt.toLocaleTimeString("id-ID",{
+        hour:"2-digit",
+        minute:"2-digit",
+        second:"2-digit"
+      })
+    : "-";
+
+  return `Database bersama aktif • ${total} rekening • terakhir sinkron ${time}`;
+}
+
+function markSyncSuccess(total){
+  syncFailureCount=0;
+  lastSyncAt=new Date();
+
+  setMessage(
+    $("dbMessage"),
+    syncStatusText(total),
+    "ok"
+  );
+}
+
+function markSyncFailure(error,{silent=false}={}){
+  syncFailureCount+=1;
+
+  // Error sementara dari auto-sync tidak langsung mengganti status hijau.
+  // Baru tampil merah setelah dua kegagalan berurutan.
+  if(silent && syncFailureCount<2) return;
+
+  setMessage(
+    $("dbMessage"),
+    error.message || "Gagal menyinkronkan database bersama.",
+    "error"
+  );
 }
 
 async function loadSharedDatabase({silent=false,migrate=true}={}){
@@ -165,7 +232,7 @@ async function loadSharedDatabase({silent=false,migrate=true}={}){
 
   try{
     if(!silent){
-      setMessage($("dbMessage"),"Memuat database bersama dari server...");
+      setMessage($("dbMessage"),"Memuat database bersama dari Cloudflare D1...");
     }
 
     if(migrate && localStorage.getItem(MIGRATION_KEY)!=="1"){
@@ -185,17 +252,11 @@ async function loadSharedDatabase({silent=false,migrate=true}={}){
     database=Array.isArray(data.accounts) ? data.accounts : [];
     renderDatabase();
 
-    if(!silent){
-      setMessage(
-        $("dbMessage"),
-        `${database.length} rekening tersinkron. Database ini dipakai bersama oleh semua user.`,
-        "ok"
-      );
-    }
+    // Selalu ganti error lama setelah sinkronisasi berhasil,
+    // termasuk sinkronisasi silent setelah import.
+    markSyncSuccess(database.length);
   }catch(error){
-    if(!silent){
-      setMessage($("dbMessage"),error.message || "Gagal memuat database.","error");
-    }
+    markSyncFailure(error,{silent});
   }finally{
     loadingDatabase=false;
   }
@@ -280,8 +341,9 @@ async function deleteDatabase(id){
   try{
     await api(`${API_BASE}/${encodeURIComponent(id)}`,{method:"DELETE"});
     await loadSharedDatabase({silent:true,migrate:false});
+    markSyncSuccess(database.length);
     setMessage(
-      $("dbMessage"),
+      $("bulkMessage"),
       "Data rekening berhasil dihapus dan perubahan tersinkron ke semua user.",
       "ok"
     );
@@ -387,6 +449,7 @@ async function importDatabase(){
     });
 
     await loadSharedDatabase({silent:true,migrate:false});
+    markSyncSuccess(database.length);
 
     setMessage(
       $("bulkMessage"),
@@ -688,6 +751,7 @@ $("clearDbBtn").addEventListener("click",async()=>{
     const result=await api(API_BASE,{method:"DELETE"});
     database=[];
     renderDatabase();
+    markSyncSuccess(0);
     setMessage(
       $("bulkMessage"),
       `${result.deleted} rekening dihapus dari database bersama.`,

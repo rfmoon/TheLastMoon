@@ -1,41 +1,39 @@
-# TheLastMoon V12 — Shared Pencairan XPAY Database
+# TheLastMoon V13 — Pencairan XPAY Sync Status Fix
 
-Perbaikan utama:
+Penyebab tulisan merah dapat tetap terlihat:
 
-- Database rekening tidak lagi memakai localStorage sebagai database utama.
-- Database disimpan di Cloudflare D1.
-- Rekening yang ditambah oleh satu user akan tersedia untuk semua user.
-- Sinkronisasi otomatis setiap 15 detik.
-- Sinkronisasi ulang saat tab dibuka kembali atau browser kembali fokus.
-- Tersedia tombol **Sinkronkan Sekarang**.
-- Database localStorage versi lama otomatis dipindahkan ke D1 satu kali.
+- sinkronisasi sebelumnya pernah gagal;
+- sinkronisasi berikutnya berhasil secara silent;
+- tabel sudah terisi, tetapi pesan error lama tidak dibersihkan.
+
+V13 memperbaiki hal tersebut.
+
+## Perubahan
+
+- Error lama otomatis hilang setelah sinkronisasi berhasil.
+- Status sekarang menunjukkan:
+  - database bersama aktif;
+  - jumlah rekening;
+  - waktu sinkronisasi terakhir.
+- GET database mencoba ulang satu kali jika terjadi gangguan server sementara.
+- Dua kegagalan auto-sync berurutan baru menampilkan peringatan merah.
+- Pesan server sekarang menampilkan tahap dan detail error.
+- Keterangan workspace diperbaiki dari local browser menjadi Cloudflare D1.
 
 ## File yang harus ditimpa
 
 ```text
-pencairan-xpay.html
-pencairan-xpay.css
+app.js
 pencairan-xpay.js
-schema.sql
+pencairan-xpay.css
 README.md
 functions/api/[[path]].js
 ```
 
-File lain boleh ikut di-upload agar seluruh project tetap sama dengan V11.
+File lain boleh ikut di-upload.
 
-## Setelah deployment
-
-1. Tunggu deployment Cloudflare berhasil.
-2. Tekan `Ctrl + Shift + R`.
-3. Buka `Pencairan → Pencairan XPAY`.
-4. Database lama pada browser master akan otomatis dikirim ke D1.
-5. Buka akun lain dan klik **Sinkronkan Sekarang**, atau tunggu maksimal 15 detik.
-
-## Endpoint baru
+Setelah deployment:
 
 ```text
-GET    /api/pencairan-xpay/accounts
-POST   /api/pencairan-xpay/accounts/bulk
-DELETE /api/pencairan-xpay/accounts/:id
-DELETE /api/pencairan-xpay/accounts
+Ctrl + Shift + R
 ```

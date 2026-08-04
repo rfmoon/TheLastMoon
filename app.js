@@ -385,7 +385,7 @@ async function renderPencairanXpayWorkspace(menu) {
           <div>
             <span class="kicker">PENCAIRAN WORKSPACE</span>
             <h3>Pencairan XPAY</h3>
-            <p>${escapeHtml(data.message)} Database rekening disimpan lokal pada browser ini.</p>
+            <p>${escapeHtml(data.message)} Database rekening disimpan di Cloudflare D1 dan dipakai bersama oleh semua user.</p>
           </div>
           <span class="xpay-workspace-badge">DATABASE • REKENING • KONVERSI</span>
         </header>
