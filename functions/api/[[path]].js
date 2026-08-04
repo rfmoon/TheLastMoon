@@ -13,7 +13,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v11-pencairan-xpay";
+const VERSION = "v12-shared-pencairan-db";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -150,6 +150,32 @@ async function routeRequest(request, env, url) {
     return updateBackground(request, env.DB, user);
   }
 
+  if (url.pathname === "/api/pencairan-xpay/accounts" && request.method === "GET") {
+    requireMenuAccess(user, "pencairan-xpay");
+    return listPayoutAccounts(env.DB);
+  }
+
+  if (url.pathname === "/api/pencairan-xpay/accounts/bulk" && request.method === "POST") {
+    requireMenuAccess(user, "pencairan-xpay");
+    return upsertPayoutAccounts(request, env.DB, user);
+  }
+
+  if (url.pathname === "/api/pencairan-xpay/accounts" && request.method === "DELETE") {
+    requireMenuAccess(user, "pencairan-xpay");
+    return clearPayoutAccounts(env.DB);
+  }
+
+  const payoutAccountMatch = url.pathname.match(
+    /^\/api\/pencairan-xpay\/accounts\/(\d+)$/
+  );
+  if (payoutAccountMatch && request.method === "DELETE") {
+    requireMenuAccess(user, "pencairan-xpay");
+    return deletePayoutAccount(
+      env.DB,
+      Number(payoutAccountMatch[1])
+    );
+  }
+
   const moduleMatch = url.pathname.match(/^\/api\/module\/([a-z0-9-]+)$/);
   if (moduleMatch && request.method === "GET") {
     return openModule(user, moduleMatch[1]);
@@ -191,6 +217,19 @@ async function initializeDatabase(env) {
         updated_at INTEGER NOT NULL,
         updated_by INTEGER
       )`,
+      `CREATE TABLE IF NOT EXISTS payout_accounts (
+        id INTEGER PRIMARY KEY,
+        account TEXT NOT NULL UNIQUE,
+        bank_code TEXT NOT NULL,
+        bank_name TEXT NOT NULL,
+        account_name TEXT NOT NULL,
+        created_by INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_by INTEGER,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_payout_accounts_name
+        ON payout_accounts(account_name)`,
       `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at)`
     ];
@@ -646,7 +685,184 @@ function clampInteger(value, minimum, maximum, fallback) {
   return Math.min(maximum, Math.max(minimum, Math.round(number)));
 }
 
-function openModule(user, menuId) {
+
+async function listPayoutAccounts(db) {
+  const result = await db.prepare(`
+    SELECT
+      id,
+      bank_code AS bankCode,
+      bank_name AS bankName,
+      account_name AS name,
+      account,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM payout_accounts
+    ORDER BY bank_name ASC, account_name ASC, account ASC
+  `).all();
+
+  return json({
+    accounts: result.results || [],
+    total: (result.results || []).length,
+    shared: true
+  });
+}
+
+async function upsertPayoutAccounts(request, db, user) {
+  const body = await readJson(request);
+  const input = Array.isArray(body.accounts) ? body.accounts : [];
+
+  if (!input.length) {
+    throw new AppError(
+      400,
+      "Tidak ada database rekening yang dikirim.",
+      "payout-accounts-empty"
+    );
+  }
+
+  if (input.length > 1000) {
+    throw new AppError(
+      400,
+      "Maksimal 1.000 rekening dalam sekali simpan.",
+      "payout-accounts-limit"
+    );
+  }
+
+  const normalized = [];
+  const seen = new Set();
+  let failed = 0;
+
+  for (const item of input) {
+    const bankCode = String(item?.bankCode || "").trim().slice(0, 20);
+    const bankName = String(item?.bankName || "").trim().slice(0, 100);
+    const accountName = String(item?.name || "").trim().slice(0, 150);
+    const account = String(item?.account || "")
+      .replace(/\D/g, "")
+      .slice(0, 50);
+
+    if (!bankCode || !bankName || !accountName || !account) {
+      failed += 1;
+      continue;
+    }
+
+    if (seen.has(account)) continue;
+    seen.add(account);
+
+    normalized.push({
+      bankCode,
+      bankName,
+      accountName,
+      account
+    });
+  }
+
+  if (!normalized.length) {
+    throw new AppError(
+      400,
+      "Semua data rekening tidak valid.",
+      "payout-accounts-invalid"
+    );
+  }
+
+  const placeholders = normalized.map(() => "?").join(",");
+  const existingResult = await db.prepare(`
+    SELECT account
+    FROM payout_accounts
+    WHERE account IN (${placeholders})
+  `).bind(...normalized.map(item => item.account)).all();
+
+  const existing = new Set(
+    (existingResult.results || []).map(row => String(row.account))
+  );
+
+  const now = Date.now();
+  let added = 0;
+  let updated = 0;
+
+  for (const item of normalized) {
+    await db.prepare(`
+      INSERT INTO payout_accounts (
+        account,
+        bank_code,
+        bank_name,
+        account_name,
+        created_by,
+        created_at,
+        updated_by,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(account) DO UPDATE SET
+        bank_code = excluded.bank_code,
+        bank_name = excluded.bank_name,
+        account_name = excluded.account_name,
+        updated_by = excluded.updated_by,
+        updated_at = excluded.updated_at
+    `).bind(
+      item.account,
+      item.bankCode,
+      item.bankName,
+      item.accountName,
+      user.id,
+      now,
+      user.id,
+      now
+    ).run();
+
+    if (existing.has(item.account)) updated += 1;
+    else added += 1;
+  }
+
+  return json({
+    success: true,
+    added,
+    updated,
+    failed,
+    totalProcessed: normalized.length
+  });
+}
+
+async function deletePayoutAccount(db, id) {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new AppError(
+      400,
+      "ID rekening tidak valid.",
+      "payout-account-id"
+    );
+  }
+
+  const existing = await db.prepare(
+    "SELECT id FROM payout_accounts WHERE id = ? LIMIT 1"
+  ).bind(id).first();
+
+  if (!existing) {
+    throw new AppError(
+      404,
+      "Data rekening tidak ditemukan.",
+      "payout-account-not-found"
+    );
+  }
+
+  await db.prepare(
+    "DELETE FROM payout_accounts WHERE id = ?"
+  ).bind(id).run();
+
+  return json({ success: true });
+}
+
+async function clearPayoutAccounts(db) {
+  const count = await db.prepare(
+    "SELECT COUNT(*) AS total FROM payout_accounts"
+  ).first();
+
+  await db.prepare("DELETE FROM payout_accounts").run();
+
+  return json({
+    success: true,
+    deleted: Number(count?.total || 0)
+  });
+}
+
+function requireMenuAccess(user, menuId) {
   const menu = MENUS.find(item => item.id === menuId);
   if (!menu) {
     throw new AppError(404, "Menu tidak ditemukan.", "module-not-found");
@@ -655,9 +871,19 @@ function openModule(user, menuId) {
   if (!isMaster(user)) {
     const permissions = safePermissions(user.permissions);
     if (menu.masterOnly || (menu.assignable && !permissions.includes(menuId))) {
-      throw new AppError(403, "Kamu tidak memiliki izin membuka menu ini.", "module-permission");
+      throw new AppError(
+        403,
+        "Kamu tidak memiliki izin membuka menu ini.",
+        "module-permission"
+      );
     }
   }
+
+  return menu;
+}
+
+function openModule(user, menuId) {
+  const menu = requireMenuAccess(user, menuId);
 
   return json({
     success: true,
