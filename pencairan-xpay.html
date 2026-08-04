@@ -11,7 +11,7 @@
 <main class="wrap">
   <h1>Database & Konversi Rekening</h1>
   <p class="subtitle">
-    Tambah satu atau banyak rekening tanpa nominal. Database hanya menyimpan bank, kode bank, nama rekening, dan nomor rekening.
+    Tambah satu atau banyak rekening tanpa nominal. Database disimpan di Cloudflare D1 dan otomatis dipakai bersama oleh semua user yang memiliki akses Pencairan XPAY.
   </p>
 
   <section class="layout">
@@ -31,6 +31,7 @@ BCA Fabian Aditya 46545464564"></textarea>
           <div class="toolbar">
             <button class="primary" id="importDbBtn">Masukkan ke Database</button>
             <button class="secondary" id="exportDbBtn">Salin Semua Database</button>
+            <button class="secondary" id="refreshDbBtn">Sinkronkan Sekarang</button>
             <button class="danger" id="clearDbBtn">Hapus Semua</button>
           </div>
           <div id="bulkMessage" class="message"></div>
@@ -79,7 +80,7 @@ Imam Mustakim 65414994165 25.000.000"></textarea>
           </div>
 
           <div class="note">
-            Sistem mencari bank dan kode berdasarkan <b>nomor rekening</b> di database.
+            Sistem mencari bank dan kode berdasarkan <b>nomor rekening</b> di database bersama.
             Nominal wajib ditulis pada setiap baris transaksi.
           </div>
           <div id="inputMessage" class="message"></div>

@@ -1,4 +1,7 @@
-const STORAGE_KEY = "rekening_database_v4";
+const LEGACY_STORAGE_KEY = "rekening_database_v4";
+const MIGRATION_KEY = "rekening_database_v4_migrated_to_d1";
+const API_BASE = "/api/pencairan-xpay/accounts";
+const SYNC_INTERVAL_MS = 15000;
 
 const BANKS = [
   {code:"1",name:"BRI",aliases:["BANK RAKYAT INDONESIA","BRI"]},
@@ -59,8 +62,10 @@ const BANKS = [
 ];
 
 const $ = id => document.getElementById(id);
-let database = loadDatabase();
+let database = [];
 let processedRows = [];
+let syncTimer = null;
+let loadingDatabase = false;
 
 function normalize(value){
   return String(value ?? "")
@@ -109,9 +114,9 @@ function setMessage(el,text="",type=""){
   el.className="message"+(type?" "+type:"");
 }
 
-function loadDatabase(){
+function loadLegacyDatabase(){
   try{
-    const data=JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const data=JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || "[]");
     if(!Array.isArray(data)) return [];
 
     return data
@@ -121,15 +126,99 @@ function loadDatabase(){
         name:String(row.name || "").trim(),
         account:cleanAccount(row.account || "")
       }))
-      .filter(row=>row.bankCode && row.name && row.account);
+      .filter(row=>row.bankCode && row.bankName && row.name && row.account);
   }catch{
     return [];
   }
 }
 
-function saveDatabase(){
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(database));
-  renderDatabase();
+async function api(path, options={}){
+  const response=await fetch(path,{
+    method:options.method || "GET",
+    credentials:"same-origin",
+    cache:"no-store",
+    headers:options.body ? {"Content-Type":"application/json"} : {},
+    body:options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  const text=await response.text();
+  let data={};
+
+  if(text){
+    try{
+      data=JSON.parse(text);
+    }catch{
+      throw new Error(`Respons API tidak valid (HTTP ${response.status}).`);
+    }
+  }
+
+  if(!response.ok){
+    throw new Error(data.error || `Terjadi kesalahan API (HTTP ${response.status}).`);
+  }
+
+  return data;
+}
+
+async function loadSharedDatabase({silent=false,migrate=true}={}){
+  if(loadingDatabase) return;
+  loadingDatabase=true;
+
+  try{
+    if(!silent){
+      setMessage($("dbMessage"),"Memuat database bersama dari server...");
+    }
+
+    if(migrate && localStorage.getItem(MIGRATION_KEY)!=="1"){
+      const legacy=loadLegacyDatabase();
+
+      if(legacy.length){
+        await api(`${API_BASE}/bulk`,{
+          method:"POST",
+          body:{accounts:legacy}
+        });
+      }
+
+      localStorage.setItem(MIGRATION_KEY,"1");
+    }
+
+    const data=await api(API_BASE);
+    database=Array.isArray(data.accounts) ? data.accounts : [];
+    renderDatabase();
+
+    if(!silent){
+      setMessage(
+        $("dbMessage"),
+        `${database.length} rekening tersinkron. Database ini dipakai bersama oleh semua user.`,
+        "ok"
+      );
+    }
+  }catch(error){
+    if(!silent){
+      setMessage($("dbMessage"),error.message || "Gagal memuat database.","error");
+    }
+  }finally{
+    loadingDatabase=false;
+  }
+}
+
+function startAutoSync(){
+  if(syncTimer) clearInterval(syncTimer);
+
+  syncTimer=setInterval(()=>{
+    if(document.visibilityState==="visible"){
+      loadSharedDatabase({silent:true,migrate:false});
+    }
+  },SYNC_INTERVAL_MS);
+
+  window.addEventListener("focus",()=>{
+    loadSharedDatabase({silent:true,migrate:false});
+  });
+
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible"){
+      loadSharedDatabase({silent:true,migrate:false});
+    }
+  });
 }
 
 
@@ -163,7 +252,7 @@ function renderDatabase(){
     return;
   }
 
-  database.forEach((row,index)=>{
+  database.forEach((row)=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`
       <td>${escapeHtml(row.bankName)}</td>
@@ -172,7 +261,7 @@ function renderDatabase(){
       <td>${escapeHtml(row.account)}</td>
       <td>
         <div class="actions">
-          <button class="danger small" data-delete="${index}">Hapus</button>
+          <button class="danger small" data-delete="${row.id}">Hapus</button>
         </div>
       </td>
     `;
@@ -183,13 +272,22 @@ function renderDatabase(){
 
 
 
-function deleteDatabase(index){
-  const row=database[index];
+async function deleteDatabase(id){
+  const row=database.find(item=>Number(item.id)===Number(id));
   if(!row) return;
-  if(!confirm(`Hapus rekening ${row.name} — ${row.account}?`)) return;
-  database.splice(index,1);
-  saveDatabase();
-  setMessage($("dbMessage"),"Data rekening berhasil dihapus.","ok");
+  if(!confirm(`Hapus rekening ${row.name} — ${row.account} dari database bersama?`)) return;
+
+  try{
+    await api(`${API_BASE}/${encodeURIComponent(id)}`,{method:"DELETE"});
+    await loadSharedDatabase({silent:true,migrate:false});
+    setMessage(
+      $("dbMessage"),
+      "Data rekening berhasil dihapus dan perubahan tersinkron ke semua user.",
+      "ok"
+    );
+  }catch(error){
+    setMessage($("dbMessage"),error.message,"error");
+  }
 }
 
 function parseDatabaseLine(line){
@@ -249,34 +347,55 @@ function parseDatabaseLine(line){
   };
 }
 
-function importDatabase(){
-  const lines=$("bulkDatabase").value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+async function importDatabase(){
+  const lines=$("bulkDatabase").value
+    .split(/\r?\n/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
   if(!lines.length){
     setMessage($("bulkMessage"),"Tempel data database terlebih dahulu.","warn");
     return;
   }
 
-  let added=0,updated=0,failed=0;
+  const accounts=[];
+  let failed=0;
+
   for(const line of lines){
     const parsed=parseDatabaseLine(line);
-    if(!parsed.valid){ failed++; continue; }
-
-    const index=database.findIndex(row=>row.account===parsed.record.account);
-    if(index>=0){
-      database[index]=parsed.record;
-      updated++;
-    }else{
-      database.push(parsed.record);
-      added++;
+    if(!parsed.valid){
+      failed++;
+      continue;
     }
+    accounts.push(parsed.record);
   }
 
-  saveDatabase();
-  setMessage(
-    $("bulkMessage"),
-    `Selesai: ${added} ditambahkan, ${updated} diperbarui, ${failed} gagal.`,
-    failed ? "warn" : "ok"
-  );
+  if(!accounts.length){
+    setMessage(
+      $("bulkMessage"),
+      `Tidak ada rekening valid. ${failed} baris gagal.`,
+      "error"
+    );
+    return;
+  }
+
+  try{
+    setMessage($("bulkMessage"),"Menyimpan ke database bersama...");
+    const result=await api(`${API_BASE}/bulk`,{
+      method:"POST",
+      body:{accounts}
+    });
+
+    await loadSharedDatabase({silent:true,migrate:false});
+
+    setMessage(
+      $("bulkMessage"),
+      `Tersimpan ke semua user: ${result.added} ditambahkan, ${result.updated} diperbarui, ${failed + Number(result.failed || 0)} gagal.`,
+      failed || result.failed ? "warn" : "ok"
+    );
+  }catch(error){
+    setMessage($("bulkMessage"),error.message,"error");
+  }
 }
 
 async function exportDatabase(){
@@ -548,19 +667,35 @@ function downloadCsv(){
 
 $("importDbBtn").addEventListener("click",importDatabase);
 $("exportDbBtn").addEventListener("click",exportDatabase);
+$("refreshDbBtn").addEventListener("click",()=>{
+  loadSharedDatabase({silent:false,migrate:false});
+});
 $("processBtn").addEventListener("click",processTransactions);
 $("copyBtn").addEventListener("click",copyResults);
 $("downloadBtn").addEventListener("click",downloadCsv);
 
-$("clearDbBtn").addEventListener("click",()=>{
+$("clearDbBtn").addEventListener("click",async()=>{
   if(!database.length){
     setMessage($("bulkMessage"),"Database sudah kosong.","warn");
     return;
   }
-  if(!confirm("Hapus seluruh database rekening?")) return;
-  database=[];
-  saveDatabase();
-  setMessage($("bulkMessage"),"Seluruh database berhasil dihapus.","ok");
+
+  if(!confirm(
+    "Hapus seluruh database rekening bersama? Data akan hilang untuk semua user."
+  )) return;
+
+  try{
+    const result=await api(API_BASE,{method:"DELETE"});
+    database=[];
+    renderDatabase();
+    setMessage(
+      $("bulkMessage"),
+      `${result.deleted} rekening dihapus dari database bersama.`,
+      "ok"
+    );
+  }catch(error){
+    setMessage($("bulkMessage"),error.message,"error");
+  }
 });
 
 $("clearInputBtn").addEventListener("click",()=>{
@@ -590,3 +725,5 @@ $("inputData").addEventListener("keydown",event=>{
 
 renderDatabase();
 renderResults();
+loadSharedDatabase({silent:false,migrate:true});
+startAutoSync();

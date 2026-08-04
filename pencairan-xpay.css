@@ -227,3 +227,14 @@ code {
 @media (max-width: 980px) {
   .wrap { padding-inline: 0; }
 }
+
+
+#dbMessage.ok::before {
+  content: "● ";
+  color: var(--success);
+}
+
+#dbMessage.error::before {
+  content: "● ";
+  color: var(--danger);
+}
