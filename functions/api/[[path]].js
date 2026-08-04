@@ -3,6 +3,7 @@ const MENUS = Object.freeze([
   { id: "checker", label: "Checker", icon: "✓", assignable: true },
   { id: "xpay-diff", label: "Cari Selisih XPAY", icon: "≠", assignable: true },
   { id: "pencairan", label: "Pencairan", icon: "⇄", assignable: true },
+  { id: "pencairan-xpay", label: "Pencairan XPAY", icon: "▤", parentId: "pencairan", assignable: true },
   { id: "biaya", label: "Biaya", icon: "◈", assignable: true },
   { id: "list-data", label: "List Data", icon: "☷", assignable: true },
   { id: "hasil-result", label: "Hasil Result", icon: "◎", assignable: true },
@@ -12,7 +13,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v10-xpay-workspace";
+const VERSION = "v11-pencairan-xpay";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -681,7 +682,7 @@ function menusForUser(user) {
 }
 
 function publicMenu(menu) {
-  return { id: menu.id, label: menu.label, icon: menu.icon };
+  return { id: menu.id, label: menu.label, icon: menu.icon, parentId: menu.parentId || null };
 }
 
 function publicUser(user) {
