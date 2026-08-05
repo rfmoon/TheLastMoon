@@ -7,13 +7,14 @@ const MENUS = Object.freeze([
   { id: "biaya", label: "Biaya", icon: "◈", assignable: true },
   { id: "list-data", label: "List Data", icon: "☷", assignable: true },
   { id: "hasil-result", label: "Hasil Result", icon: "◎", assignable: true },
+  { id: "event-scatter", label: "EVENT SCATTER", icon: "✺", assignable: true },
   { id: "ai-chat", label: "AI Chat", icon: "✦", assignable: true },
   { id: "upload", label: "Upload", icon: "⇧", assignable: true },
   { id: "settings", label: "Settings", icon: "⚙", masterOnly: true },
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v13-sync-status-fix";
+const VERSION = "v14-event-scatter";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
