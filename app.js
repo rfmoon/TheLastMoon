@@ -285,6 +285,7 @@ async function navigate(menuId) {
   if (menuId === "settings") return renderSettings();
   if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
   if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
+  if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -394,6 +395,37 @@ async function renderPencairanXpayWorkspace(menu) {
           class="xpay-frame pencairan-xpay-frame"
           src="/pencairan-xpay.html?v=11.0.0"
           title="Pencairan XPAY"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
+
+
+async function renderEventScatterWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="xpay-workspace event-scatter-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">EVENT WORKSPACE</span>
+            <h3>EVENT SCATTER</h3>
+            <p>${escapeHtml(data.message)} Data tersimpan otomatis di IndexedDB browser dan dapat dibuka berdasarkan tanggal.</p>
+          </div>
+          <span class="xpay-workspace-badge">PERIODE • SCANNER • RIWAYAT</span>
+        </header>
+
+        <iframe
+          class="xpay-frame event-scatter-frame"
+          src="/event-scatter.html?v=14.0.0"
+          title="EVENT SCATTER"
           loading="eager"
           referrerpolicy="same-origin">
         </iframe>

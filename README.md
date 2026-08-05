@@ -1,39 +1,56 @@
-# TheLastMoon V13 — Pencairan XPAY Sync Status Fix
+# TheLastMoon V14 — EVENT SCATTER
 
-Penyebab tulisan merah dapat tetap terlihat:
+Versi ini menambahkan menu baru:
 
-- sinkronisasi sebelumnya pernah gagal;
-- sinkronisasi berikutnya berhasil secara silent;
-- tabel sudah terisi, tetapi pesan error lama tidak dibersihkan.
+```text
+EVENT SCATTER
+```
 
-V13 memperbaiki hal tersebut.
+Menu berada sebagai menu utama di sidebar dan tersedia dalam pengaturan hak akses akun.
 
-## Perubahan
+## Fitur EVENT SCATTER
 
-- Error lama otomatis hilang setelah sinkronisasi berhasil.
-- Status sekarang menunjukkan:
-  - database bersama aktif;
-  - jumlah rekening;
-  - waktu sinkronisasi terakhir.
-- GET database mencoba ulang satu kali jika terjadi gangguan server sementara.
-- Dua kegagalan auto-sync berurutan baru menampilkan peringatan merah.
-- Pesan server sekarang menampilkan tahap dan detail error.
-- Keterangan workspace diperbaiki dari local browser menjadi Cloudflare D1.
+- data berdasarkan tanggal;
+- riwayat tanggal tersimpan;
+- tambah 10 baris;
+- USER ID;
+- PERIODE;
+- SCREENSHOT PERIODE;
+- x BET;
+- SSCHECK NOMINAL;
+- STATUS HADIAH;
+- SCANNER PENDING/DONE;
+- tiga kolom teks otomatis untuk PERIODE, NOMINAL, dan USER ID;
+- simpan otomatis menggunakan IndexedDB browser.
+
+## File baru
+
+```text
+event-scatter.html
+event-scatter.css
+event-scatter.js
+```
 
 ## File yang harus ditimpa
 
 ```text
 app.js
-pencairan-xpay.js
-pencairan-xpay.css
+styles.css
 README.md
 functions/api/[[path]].js
 ```
 
-File lain boleh ikut di-upload.
+Upload juga ketiga file baru di atas ke root repository.
 
-Setelah deployment:
+## Hak akses akun lain
 
 ```text
-Ctrl + Shift + R
+User Admin
+→ Edit akun
+→ centang EVENT SCATTER
+→ Simpan akun
 ```
+
+## Catatan penyimpanan
+
+EVENT SCATTER masih mengikuti logika sumber dan menyimpan data melalui IndexedDB browser. Jadi data mengikuti browser/perangkat yang digunakan, bukan otomatis sama di semua perangkat.

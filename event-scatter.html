@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>EVENT SCATTER</title>
+  <link rel="stylesheet" href="/event-scatter.css?v=14.0.0">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="titlebox">
+      <h1>EVENT SCATTER</h1>
+    </div>
+    <div class="datebox">
+      <label>TANGGAL AKTIF</label>
+      <div class="date-big" id="dateBig">--</div>
+    </div>
+    <div class="scannerbox">
+      <div class="label">SCANNER</div>
+      <div class="scanner-count" id="scannerCount">0</div>
+      <div class="clock" id="clock">00:00:00</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="prevDate">◀ Kemarin</button>
+    <div class="field">
+      <label>Pilih tanggal</label>
+      <input id="activeDate" type="date">
+    </div>
+    <button class="btn primary" id="todayDate">Hari Ini</button>
+    <button class="btn" id="nextDate">Besok ▶</button>
+
+    <div class="field">
+      <label>Riwayat tersimpan</label>
+      <select id="historyDates">
+        <option value="">Pilih riwayat...</option>
+      </select>
+    </div>
+
+    <button class="btn green" id="addRows">+ 10 Baris</button>
+    <button class="btn red" id="clearDate">Hapus Tanggal Ini</button>
+
+    <div class="save-state" id="saveState">Siap</div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th class="rowno">NO</th>
+          <th class="c-date">TANGGAL</th>
+          <th class="c-user">USER ID</th>
+          <th class="c-period">PERIODE</th>
+          <th class="c-shot">SCREENSHOT PERIODE</th>
+          <th class="c-bet">x BET</th>
+          <th class="c-check">SSCHECK NOMINAL</th>
+          <th class="c-prize">STATUS HADIAH</th>
+          <th class="c-scan">SCANNER</th>
+          <th class="c-copy-period">PERIODE</th>
+          <th class="c-copy-nominal">NOMINAL</th>
+          <th class="c-copy-user">USER ID</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="empty-note" id="emptyNote">Belum ada baris untuk tanggal ini.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/event-scatter.js?v=14.0.0" defer></script>
+</body>
+</html>

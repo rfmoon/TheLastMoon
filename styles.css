@@ -331,3 +331,14 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
 .pencairan-xpay-frame {
   min-height: 880px;
 }
+
+
+.event-scatter-frame {
+  min-height: 920px;
+}
+
+.event-scatter-workspace .xpay-workspace-head {
+  background:
+    linear-gradient(120deg,rgba(142,107,255,.12),rgba(24,232,237,.055)),
+    rgba(5,12,25,.22);
+}
