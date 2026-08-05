@@ -1,56 +1,37 @@
-# TheLastMoon V14 — EVENT SCATTER
+# TheLastMoon V15 — EVENT SCATTER New Logic
 
-Versi ini menambahkan menu baru:
+EVENT SCATTER diganti seluruhnya menggunakan script terbaru yang diberikan user.
 
-```text
-EVENT SCATTER
-```
+## Logika baru yang ikut masuk
 
-Menu berada sebagai menu utama di sidebar dan tersedia dalam pengaturan hak akses akun.
+- Saat fokus berada di kolom USER ID sebelah kanan;
+- tekan Enter;
+- fokus langsung pindah ke kolom PERIODE sebelah kanan pada baris berikutnya;
+- jika sedang berada di baris paling akhir, sistem otomatis menambah satu baris baru.
 
-## Fitur EVENT SCATTER
+Semua logika lama tetap ikut:
 
-- data berdasarkan tanggal;
-- riwayat tanggal tersimpan;
+- penyimpanan IndexedDB browser;
+- data per tanggal;
+- riwayat tanggal;
 - tambah 10 baris;
-- USER ID;
-- PERIODE;
-- SCREENSHOT PERIODE;
-- x BET;
-- SSCHECK NOMINAL;
-- STATUS HADIAH;
-- SCANNER PENDING/DONE;
-- tiga kolom teks otomatis untuk PERIODE, NOMINAL, dan USER ID;
-- simpan otomatis menggunakan IndexedDB browser.
+- STATUS HADIAH dan SCANNER saling mengikuti;
+- paste banyak kolom;
+- kolom output PERIODE, NOMINAL, dan USER ID.
 
-## File baru
+## File yang harus ditimpa
 
 ```text
 event-scatter.html
 event-scatter.css
 event-scatter.js
-```
-
-## File yang harus ditimpa
-
-```text
 app.js
-styles.css
 README.md
 functions/api/[[path]].js
 ```
 
-Upload juga ketiga file baru di atas ke root repository.
-
-## Hak akses akun lain
+Setelah deployment berhasil:
 
 ```text
-User Admin
-→ Edit akun
-→ centang EVENT SCATTER
-→ Simpan akun
+Ctrl + Shift + R
 ```
-
-## Catatan penyimpanan
-
-EVENT SCATTER masih mengikuti logika sumber dan menyimpan data melalui IndexedDB browser. Jadi data mengikuti browser/perangkat yang digunakan, bukan otomatis sama di semua perangkat.

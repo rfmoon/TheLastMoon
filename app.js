@@ -417,14 +417,14 @@ async function renderEventScatterWorkspace(menu) {
           <div>
             <span class="kicker">EVENT WORKSPACE</span>
             <h3>EVENT SCATTER</h3>
-            <p>${escapeHtml(data.message)} Data tersimpan otomatis di IndexedDB browser dan dapat dibuka berdasarkan tanggal.</p>
+            <p>${escapeHtml(data.message)} Data tersimpan otomatis di IndexedDB browser. Logika baru termasuk navigasi Enter pada kolom output USER ID.</p>
           </div>
           <span class="xpay-workspace-badge">PERIODE • SCANNER • RIWAYAT</span>
         </header>
 
         <iframe
           class="xpay-frame event-scatter-frame"
-          src="/event-scatter.html?v=14.0.0"
+          src="/event-scatter.html?v=15.0.0"
           title="EVENT SCATTER"
           loading="eager"
           referrerpolicy="same-origin">

@@ -301,6 +301,34 @@
     output.select();
   });
 
+  // Saat posisi kursor berada di kolom USER ID sebelah kanan,
+  // tekan Enter untuk langsung pindah ke kolom PERIODE pada baris berikutnya.
+  tableBody.addEventListener("keydown",(e)=>{
+    const output=e.target.closest('.formula-output[data-output-field="userId"]');
+    if(!output || e.key!=="Enter") return;
+
+    e.preventDefault();
+
+    const currentRow=output.closest("tr");
+    const currentIndex=Array.from(tableBody.children).indexOf(currentRow);
+    let nextRow=tableBody.children[currentIndex+1];
+
+    // Jika sedang berada di baris paling akhir, tambahkan satu baris baru.
+    if(!nextRow){
+      rows.push({...blankRow(),order:rows.length});
+      render();
+      scheduleSave();
+      nextRow=tableBody.children[currentIndex+1];
+    }
+
+    const nextPeriod=nextRow?.querySelector('.formula-output[data-output-field="period"]');
+    if(nextPeriod){
+      nextPeriod.focus();
+      nextPeriod.select();
+      nextPeriod.scrollIntoView({block:"nearest",behavior:"smooth"});
+    }
+  });
+
   tableBody.addEventListener("paste",(e)=>{
     const input=e.target.closest("input[data-field],select[data-field]");
     if(!input) return;
