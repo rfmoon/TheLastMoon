@@ -1,21 +1,17 @@
-# TheLastMoon V17 — Generate API
+# TheLastMoon V18 — Universal API
 
-Menu baru:
+Generate API sekarang tidak memakai pilihan scope satu per satu.
+
+Setiap API key baru otomatis:
 
 ```text
-Generate API
+SEMUA • READ ONLY
 ```
 
-Menu ini hanya tampil untuk akun master.
-
-## Fungsi
-
-Master dapat membuat API key read-only untuk membaca data dashboard dari sistem lain.
-
-Endpoint utama:
+Gunakan satu endpoint:
 
 ```text
-GET /api/external/dashboard
+GET /api/external/all
 ```
 
 Header:
@@ -24,57 +20,67 @@ Header:
 Authorization: Bearer tlm_live_xxxxxxxxx
 ```
 
-Data dashboard yang dapat dibaca:
+## Data yang dibaca satu endpoint
 
-- status sistem;
-- jumlah user;
-- jumlah user aktif;
-- jumlah master;
-- daftar menu operasional;
-- jumlah rekening Pencairan XPAY;
-- jumlah API key aktif;
-- setting background;
-- versi aplikasi.
+- Dashboard / status sistem
+- User Admin:
+  - username
+  - status aktif
+  - master/non-master
+  - hak akses menu
+  - tanpa password/hash
+- Semua menu dan struktur submenu
+- Settings / background
+- Database Pencairan XPAY
+- EVENT SCATTER
+- Metadata API key
+- Ringkasan workspace lain
 
-EVENT SCATTER belum ikut terbaca datanya karena data EVENT SCATTER masih tersimpan di IndexedDB browser.
+## EVENT SCATTER
 
-## Optional Scope
+V18 menambahkan sinkronisasi EVENT SCATTER ke Cloudflare D1.
 
-Jika saat generate dicentang:
+IndexedDB browser masih dipakai sebagai cache lokal, tetapi data tanggal juga dikirim ke D1 sehingga:
 
-```text
-Database Pencairan XPAY
+- user/perangkat lain dapat membaca data yang sama;
+- Universal API dapat membaca EVENT SCATTER;
+- data lama IndexedDB akan dimigrasikan ke D1 saat tanggal tersebut dibuka.
+
+## Contoh
+
+```js
+fetch("https://thelastmoon.pages.dev/api/external/all", {
+  headers: {
+    Authorization: "Bearer API_KEY_KAMU"
+  }
+})
+  .then(r => r.json())
+  .then(result => {
+    console.log(result.data);
+    console.log(result.data.eventScatter.rows);
+  });
 ```
 
-API key juga dapat membuka:
+## Catatan
 
-```text
-GET /api/external/pencairan-xpay/accounts
-```
+Workspace seperti Cari Selisih XPAY masih berupa data tempelan sementara di browser.
+Karena tidak disimpan permanen di server, Universal API hanya mengembalikan status/capability untuk workspace tersebut, bukan isi tempelan sesaat.
 
-## Keamanan
-
-- token lengkap hanya ditampilkan satu kali;
-- server hanya menyimpan SHA-256 hash token;
-- API eksternal bersifat read-only;
-- key dapat dicabut kapan saja;
-- masa berlaku dapat dipilih;
-- password akun tidak pernah dikirim oleh endpoint external.
-
-## File yang harus ditimpa
+## File yang perlu ditimpa
 
 ```text
 app.js
 styles.css
+event-scatter.js
 schema.sql
 README.md
 functions/api/[[path]].js
 ```
-
-File lainnya boleh ikut di-upload.
 
 Setelah deployment:
 
 ```text
 Ctrl + Shift + R
 ```
+
+Buat API key baru di menu Generate API agar key memiliki akses Universal Read.

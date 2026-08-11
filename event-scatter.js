@@ -5,6 +5,11 @@
   const DB_VERSION = 1;
   const STORE = "records";
   const DEFAULT_ROWS = 20;
+  const SERVER_API = "/api/event-scatter";
+  const SERVER_SYNC_DELAY = 500;
+
+  let serverSyncTimer = null;
+  let serverSyncBusy = false;
 
   let db = null;
   let currentDate = localDateISO(new Date());
@@ -16,6 +21,84 @@
   const activeDate = $("activeDate");
   const historyDates = $("historyDates");
   const saveState = $("saveState");
+
+  async function serverApi(path,options={}){
+    const response=await fetch(path,{
+      method:options.method || "GET",
+      credentials:"same-origin",
+      cache:"no-store",
+      headers:options.body ? {"Content-Type":"application/json"} : {},
+      body:options.body ? JSON.stringify(options.body) : undefined
+    });
+
+    const text=await response.text();
+    let data={};
+
+    if(text){
+      try{
+        data=JSON.parse(text);
+      }catch{
+        throw new Error(`Respons server tidak valid (HTTP ${response.status}).`);
+      }
+    }
+
+    if(!response.ok){
+      throw new Error(data.error || `Server error HTTP ${response.status}.`);
+    }
+
+    return data;
+  }
+
+  async function fetchServerDate(date){
+    try{
+      const data=await serverApi(
+        `${SERVER_API}?date=${encodeURIComponent(date)}`
+      );
+      return Array.isArray(data.rows) ? data.rows : [];
+    }catch(err){
+      console.warn("EVENT SCATTER server read:",err);
+      return null;
+    }
+  }
+
+  async function saveServerDate(date,items){
+    if(serverSyncBusy) return;
+    serverSyncBusy=true;
+
+    try{
+      await serverApi(
+        `${SERVER_API}/date/${encodeURIComponent(date)}`,
+        {
+          method:"PUT",
+          body:{rows:items}
+        }
+      );
+    }catch(err){
+      console.warn("EVENT SCATTER server save:",err);
+      saveState.textContent="Tersimpan lokal • sync server gagal";
+    }finally{
+      serverSyncBusy=false;
+    }
+  }
+
+  function scheduleServerSync(){
+    clearTimeout(serverSyncTimer);
+    serverSyncTimer=setTimeout(()=>{
+      saveServerDate(currentDate,rows);
+    },SERVER_SYNC_DELAY);
+  }
+
+  async function deleteServerDate(date){
+    try{
+      await serverApi(
+        `${SERVER_API}/date/${encodeURIComponent(date)}`,
+        {method:"DELETE"}
+      );
+    }catch(err){
+      console.warn("EVENT SCATTER server delete:",err);
+    }
+  }
+
 
   function localDateISO(d){
     const y = d.getFullYear();
@@ -126,10 +209,38 @@
   }
 
   async function ensureRows(){
-    rows = await getByDate(currentDate);
-    if(rows.length===0){
-      rows = Array.from({length:DEFAULT_ROWS},(_,i)=>({...blankRow(),order:i}));
+    const serverRows=await fetchServerDate(currentDate);
+
+    if(serverRows && serverRows.length){
+      rows=serverRows
+        .map((row,index)=>({
+          ...blankRow(currentDate),
+          ...row,
+          date:currentDate,
+          order:Number.isFinite(Number(row.order))
+            ? Number(row.order)
+            : index
+        }))
+        .sort((a,b)=>(a.order??0)-(b.order??0));
+
+      await deleteByDate(currentDate);
       await putMany(rows);
+      return;
+    }
+
+    rows=await getByDate(currentDate);
+
+    if(!rows.length){
+      rows=Array.from(
+        {length:DEFAULT_ROWS},
+        (_,i)=>({...blankRow(),order:i})
+      );
+      await putMany(rows);
+    }
+
+    if(serverRows && serverRows.length===0){
+      // Migrasi data IndexedDB lama ke Cloudflare D1.
+      await saveServerDate(currentDate,rows);
     }
   }
 
@@ -206,7 +317,8 @@
       try{
         rows.forEach((r,i)=>{r.order=i;r.updatedAt=Date.now();});
         await putMany(rows);
-        saveState.textContent="✓ Tersimpan otomatis";
+        scheduleServerSync();
+        saveState.textContent="✓ Tersimpan otomatis • sinkron server";
         await refreshHistory();
       }catch(err){
         console.error(err);
@@ -391,10 +503,28 @@
 
   async function refreshHistory(){
     const all=await getAll();
-    const dates=[...new Set(all.map(x=>x.date))].sort((a,b)=>b.localeCompare(a));
+    const counts=new Map();
+
+    for(const row of all){
+      counts.set(row.date,(counts.get(row.date)||0)+1);
+    }
+
+    try{
+      const server=await serverApi(`${SERVER_API}/dates`);
+      for(const item of (server.dates||[])){
+        counts.set(item.date,Number(item.total)||0);
+      }
+    }catch(err){
+      console.warn("EVENT SCATTER dates:",err);
+    }
+
+    const dates=[...counts.keys()].sort((a,b)=>b.localeCompare(a));
     const old=historyDates.value;
-    historyDates.innerHTML='<option value="">Pilih riwayat...</option>'+
-      dates.map(d=>`<option value="${d}">${displayDate(d)} (${all.filter(x=>x.date===d).length} baris)</option>`).join("");
+
+    historyDates.innerHTML=
+      '<option value="">Pilih riwayat...</option>'+
+      dates.map(d=>`<option value="${d}">${displayDate(d)} (${counts.get(d)||0} baris)</option>`).join("");
+
     if(dates.includes(old)) historyDates.value=old;
   }
 
@@ -416,8 +546,10 @@
     const ok=confirm(`Hapus semua data tanggal ${displayDate(currentDate)}? Tindakan ini tidak bisa dibatalkan.`);
     if(!ok) return;
     await deleteByDate(currentDate);
+    await deleteServerDate(currentDate);
     rows=Array.from({length:DEFAULT_ROWS},(_,i)=>({...blankRow(),order:i}));
     await putMany(rows);
+    await saveServerDate(currentDate,rows);
     render();
     await refreshHistory();
     toast("Data tanggal ini sudah dikosongkan.");

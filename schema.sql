@@ -59,3 +59,22 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_active
   ON api_keys(active);
+
+
+CREATE TABLE IF NOT EXISTS event_scatter_rows (
+  id TEXT PRIMARY KEY,
+  event_date TEXT NOT NULL,
+  row_order INTEGER NOT NULL DEFAULT 0,
+  user_id TEXT NOT NULL DEFAULT '',
+  period TEXT NOT NULL DEFAULT '',
+  screenshot TEXT NOT NULL DEFAULT '',
+  x_bet TEXT NOT NULL DEFAULT '',
+  check_nominal TEXT NOT NULL DEFAULT '',
+  prize_status INTEGER NOT NULL DEFAULT 0,
+  scanner_status TEXT NOT NULL DEFAULT 'PENDING',
+  updated_at INTEGER NOT NULL,
+  updated_by INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_scatter_date_order
+  ON event_scatter_rows(event_date, row_order);

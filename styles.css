@@ -575,3 +575,54 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
     width: 100%;
   }
 }
+
+
+.universal-api-grid .api-generator-card {
+  background:
+    linear-gradient(145deg,rgba(255,255,255,.105),rgba(255,255,255,.035));
+}
+
+.universal-access-box {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 16px;
+  border: 1px solid rgba(68,225,178,.28);
+  border-radius: 17px;
+  background:
+    linear-gradient(120deg,rgba(68,225,178,.10),rgba(142,107,255,.08));
+}
+
+.universal-access-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,.17);
+  border-radius: 17px;
+  color: #c9fff0;
+  background: rgba(68,225,178,.10);
+  font-size: 31px;
+  font-weight: 900;
+}
+
+.universal-access-box strong {
+  display: block;
+  color: #baffdf;
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+
+.universal-access-box p {
+  margin: 5px 0 0;
+  color: rgba(241,248,255,.82);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.universal-endpoint {
+  border-color: rgba(68,225,178,.22);
+  background:
+    linear-gradient(110deg,rgba(68,225,178,.08),rgba(87,165,255,.05));
+}

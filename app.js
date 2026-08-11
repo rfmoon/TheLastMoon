@@ -465,6 +465,7 @@ async function renderModule(menu) {
 }
 
 
+
 async function renderGenerateApi() {
   $("#pageContent").innerHTML = loadingHtml();
 
@@ -473,14 +474,14 @@ async function renderGenerateApi() {
     const origin = window.location.origin;
 
     $("#pageContent").innerHTML = `
-      <section class="api-generator-grid">
+      <section class="api-generator-grid universal-api-grid">
         <article class="api-generator-card glass">
-          <span class="kicker">DASHBOARD READER API</span>
+          <span class="kicker">UNIVERSAL DASHBOARD API</span>
           <h3>Generate API</h3>
           <p>
-            Buat API key read-only untuk membaca ringkasan dashboard dari
-            script, website, atau sistem lain. Password akun tidak pernah
-            dikirim melalui API ini.
+            Sekarang tidak perlu memilih data satu per satu.
+            Setiap API key baru otomatis mendapat <b>akses baca seluruh data server</b>
+            TheLastMoon melalui satu endpoint.
           </p>
 
           <form id="apiKeyForm">
@@ -488,8 +489,8 @@ async function renderGenerateApi() {
               <input
                 id="apiKeyName"
                 maxlength="80"
-                value="Dashboard Reader"
-                placeholder="contoh: Dashboard Reader">
+                value="TheLastMoon Universal Reader"
+                placeholder="contoh: Tampermonkey Reader">
             </label>
 
             <label>Masa berlaku
@@ -502,35 +503,27 @@ async function renderGenerateApi() {
               </select>
             </label>
 
-            <section class="api-scope-box">
-              <strong>Data yang boleh dibaca</strong>
-
-              <label class="api-scope-option fixed">
-                <input type="checkbox" checked disabled>
-                <span>
-                  <b>Dashboard</b>
-                  <small>Status sistem, jumlah user, menu, tampilan, dan jumlah rekening XPAY.</small>
-                </span>
-              </label>
-
-              <label class="api-scope-option">
-                <input id="scopePayoutAccounts" type="checkbox">
-                <span>
-                  <b>Database Pencairan XPAY</b>
-                  <small>Izinkan API membaca daftar rekening bersama.</small>
-                </span>
-              </label>
+            <section class="universal-access-box">
+              <div class="universal-access-icon">∞</div>
+              <div>
+                <strong>AKSES SEMUA — READ ONLY</strong>
+                <p>
+                  Dashboard, User Admin (tanpa password), menu & hak akses,
+                  Pencairan XPAY, EVENT SCATTER, Settings/background,
+                  serta metadata API key.
+                </p>
+              </div>
             </section>
 
             <button id="generateApiButton" class="btn btn-primary btn-full" type="submit">
-              ⌘ Generate API Key
+              ⌘ Generate Universal API Key
             </button>
           </form>
 
           <div id="generatedApiBox" class="generated-api-box hidden">
-            <span class="kicker">API KEY BARU</span>
+            <span class="kicker">UNIVERSAL API KEY</span>
             <strong>Simpan key ini sekarang</strong>
-            <p>Key lengkap hanya ditampilkan sekali.</p>
+            <p>Token lengkap hanya ditampilkan sekali.</p>
             <div class="api-secret-row">
               <code id="generatedApiToken"></code>
               <button id="copyGeneratedApi" class="btn btn-secondary" type="button">
@@ -543,25 +536,19 @@ async function renderGenerateApi() {
         </article>
 
         <article class="api-generator-card glass">
-          <span class="kicker">ENDPOINT</span>
-          <h3>API untuk membaca dashboard</h3>
-          <p>Kirim API key pada header <code>Authorization: Bearer ...</code>.</p>
+          <span class="kicker">SATU ENDPOINT UNTUK SEMUA</span>
+          <h3>Universal Read Endpoint</h3>
+          <p>
+            Cukup panggil endpoint ini. Tidak perlu endpoint terpisah
+            untuk Dashboard, Pencairan XPAY, atau EVENT SCATTER.
+          </p>
 
           <div class="api-endpoint-list">
-            <div class="api-endpoint-row">
+            <div class="api-endpoint-row universal-endpoint">
               <span class="api-method">GET</span>
-              <code>${escapeHtml(origin)}/api/external/dashboard</code>
+              <code>${escapeHtml(origin)}/api/external/all</code>
               <button class="row-btn" type="button"
-                      data-copy-api="${escapeAttribute(origin)}/api/external/dashboard">
-                ⧉
-              </button>
-            </div>
-
-            <div class="api-endpoint-row">
-              <span class="api-method optional">GET</span>
-              <code>${escapeHtml(origin)}/api/external/pencairan-xpay/accounts</code>
-              <button class="row-btn" type="button"
-                      data-copy-api="${escapeAttribute(origin)}/api/external/pencairan-xpay/accounts">
+                      data-copy-api="${escapeAttribute(origin)}/api/external/all">
                 ⧉
               </button>
             </div>
@@ -569,23 +556,31 @@ async function renderGenerateApi() {
 
           <div class="api-example">
             <header>
-              <strong>Contoh JavaScript</strong>
+              <strong>Contoh JavaScript / Tampermonkey</strong>
               <button id="copyApiExample" class="link-btn" type="button">Salin contoh</button>
             </header>
             <pre id="apiExampleCode">${escapeHtml(
-`fetch("${origin}/api/external/dashboard", {
+`fetch("${origin}/api/external/all", {
   headers: {
     Authorization: "Bearer API_KEY_KAMU"
   }
 })
   .then(response => response.json())
-  .then(data => console.log(data));`
+  .then(result => {
+    console.log("Semua data:", result.data);
+    console.log("EVENT SCATTER:", result.data.eventScatter.rows);
+    console.log("Pencairan XPAY:", result.data.pencairanXpay.accounts);
+  });`
             )}</pre>
           </div>
 
           <div class="api-security-note">
             <b>Read-only</b>
-            <span>API ini hanya membaca data. API tidak dapat membuat user, mengubah password, atau menghapus database.</span>
+            <span>
+              Key universal dapat membaca semua data server, tetapi tetap tidak dapat
+              membuat user, mengganti password, menambah/menghapus rekening,
+              atau mengubah data dashboard.
+            </span>
           </div>
         </article>
       </section>
@@ -594,7 +589,7 @@ async function renderGenerateApi() {
         <div class="section-head">
           <div>
             <h3>API key yang sudah dibuat</h3>
-            <p>Cabut key yang sudah tidak digunakan.</p>
+            <p>Key lama tetap ditampilkan. Generate key baru untuk mendapatkan akses Universal Read.</p>
           </div>
           <button id="refreshApiKeys" class="btn btn-secondary" type="button">
             ↻ Refresh
@@ -607,7 +602,7 @@ async function renderGenerateApi() {
               <tr>
                 <th>Nama</th>
                 <th>Prefix</th>
-                <th>Scope</th>
+                <th>Akses</th>
                 <th>Status</th>
                 <th>Dibuat</th>
                 <th>Terakhir dipakai</th>
@@ -652,20 +647,16 @@ function apiKeyRows(keys) {
   return keys.map(key => {
     const expired = key.expiresAt && Number(key.expiresAt) <= Date.now();
     const active = key.active && !expired;
-    const scopeLabels = (key.scopes || []).map(scope => {
-      if (scope === "dashboard:read") return "Dashboard";
-      if (scope === "payout-accounts:read") return "Pencairan XPAY";
-      return scope;
-    });
+    const universal = (key.scopes || []).includes("all:read");
 
     return `
       <tr>
         <td><strong>${escapeHtml(key.name)}</strong></td>
         <td><code>${escapeHtml(key.tokenPrefix)}…</code></td>
         <td>
-          <div class="chips">
-            ${scopeLabels.map(label => `<span class="chip">${escapeHtml(label)}</span>`).join("")}
-          </div>
+          <span class="badge ${universal ? "green" : "purple"}">
+            ${universal ? "SEMUA • READ ONLY" : "LEGACY"}
+          </span>
         </td>
         <td>
           <span class="badge ${active ? "green" : "red"}">
@@ -690,20 +681,14 @@ async function generateApiKey(event) {
   event.preventDefault();
   const button = $("#generateApiButton");
 
-  setBusy(button, true, "Membuat API...");
+  setBusy(button, true, "Membuat Universal API...");
 
   try {
-    const scopes = ["dashboard:read"];
-    if ($("#scopePayoutAccounts").checked) {
-      scopes.push("payout-accounts:read");
-    }
-
     const data = await api("/api/api-keys", {
       method: "POST",
       body: {
         name: $("#apiKeyName").value.trim(),
-        expiresDays: Number($("#apiKeyExpiry").value),
-        scopes
+        expiresDays: Number($("#apiKeyExpiry").value)
       }
     });
 
@@ -716,7 +701,7 @@ async function generateApiKey(event) {
 
     showMessage(
       "#apiGeneratorMessage",
-      "API key berhasil dibuat. Simpan key lengkap sekarang karena setelah halaman direfresh key lengkap tidak ditampilkan lagi.",
+      "Universal API key berhasil dibuat. Key ini dapat membaca seluruh data server melalui /api/external/all.",
       true
     );
 
@@ -724,7 +709,7 @@ async function generateApiKey(event) {
     $("#apiKeyRows").innerHTML = apiKeyRows(list.keys);
     bindApiRevokeButtons();
 
-    toast("API key berhasil dibuat.", "ok");
+    toast("Universal API key berhasil dibuat.", "ok");
   } catch (error) {
     showMessage("#apiGeneratorMessage", error.message);
   } finally {
