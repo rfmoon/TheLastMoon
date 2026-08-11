@@ -1,51 +1,79 @@
-# TheLastMoon V16 — Pencairan XPAY New Script
+# TheLastMoon V17 — Generate API
 
-Bagian **Pencairan → Pencairan XPAY** diganti menggunakan script terbaru user.
-
-## Logika baru yang ikut masuk
-
-- tampilan hasil Spreadsheet terbaru;
-- tombol **Download Excel (.xlsx)**;
-- hasil Excel berisi:
-  - No
-  - Amount
-  - Bank Code
-  - Bank Account
-  - Bank Account Name
-- `Bank Account` ditulis sebagai Text agar leading zero tetap aman;
-- salin ke Spreadsheet tanpa header;
-- parsing database dan transaksi mengikuti script terbaru.
-
-## Database tetap bersama
-
-Walaupun script sumber menggunakan localStorage, versi panel ini tetap mempertahankan requirement sebelumnya:
+Menu baru:
 
 ```text
-Cloudflare D1
+Generate API
 ```
 
-Jadi rekening yang ditambahkan satu user tetap muncul untuk user lain.
+Menu ini hanya tampil untuk akun master.
 
-Tersedia juga:
+## Fungsi
+
+Master dapat membuat API key read-only untuk membaca data dashboard dari sistem lain.
+
+Endpoint utama:
 
 ```text
-Sinkronkan Sekarang
+GET /api/external/dashboard
 ```
 
-dan auto-sync setiap 15 detik.
+Header:
+
+```text
+Authorization: Bearer tlm_live_xxxxxxxxx
+```
+
+Data dashboard yang dapat dibaca:
+
+- status sistem;
+- jumlah user;
+- jumlah user aktif;
+- jumlah master;
+- daftar menu operasional;
+- jumlah rekening Pencairan XPAY;
+- jumlah API key aktif;
+- setting background;
+- versi aplikasi.
+
+EVENT SCATTER belum ikut terbaca datanya karena data EVENT SCATTER masih tersimpan di IndexedDB browser.
+
+## Optional Scope
+
+Jika saat generate dicentang:
+
+```text
+Database Pencairan XPAY
+```
+
+API key juga dapat membuka:
+
+```text
+GET /api/external/pencairan-xpay/accounts
+```
+
+## Keamanan
+
+- token lengkap hanya ditampilkan satu kali;
+- server hanya menyimpan SHA-256 hash token;
+- API eksternal bersifat read-only;
+- key dapat dicabut kapan saja;
+- masa berlaku dapat dipilih;
+- password akun tidak pernah dikirim oleh endpoint external.
 
 ## File yang harus ditimpa
 
 ```text
-pencairan-xpay.html
-pencairan-xpay.css
-pencairan-xpay.js
 app.js
+styles.css
+schema.sql
 README.md
 functions/api/[[path]].js
 ```
 
-Setelah deployment berhasil:
+File lainnya boleh ikut di-upload.
+
+Setelah deployment:
 
 ```text
 Ctrl + Shift + R

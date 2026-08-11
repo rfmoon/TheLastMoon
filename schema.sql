@@ -42,3 +42,20 @@ CREATE TABLE IF NOT EXISTS payout_accounts (
 
 CREATE INDEX IF NOT EXISTS idx_payout_accounts_name
   ON payout_accounts(account_name);
+
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  token_prefix TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  scopes TEXT NOT NULL DEFAULT '["dashboard:read"]',
+  active INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER,
+  expires_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_active
+  ON api_keys(active);

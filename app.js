@@ -282,6 +282,7 @@ async function navigate(menuId) {
 
   if (menuId === "dashboard") return renderDashboard();
   if (menuId === "user-admin") return renderUserAdmin();
+  if (menuId === "generate-api") return renderGenerateApi();
   if (menuId === "settings") return renderSettings();
   if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
   if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
@@ -460,6 +461,311 @@ async function renderModule(menu) {
       </section>`;
   } catch (error) {
     $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
+
+
+async function renderGenerateApi() {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api("/api/api-keys");
+    const origin = window.location.origin;
+
+    $("#pageContent").innerHTML = `
+      <section class="api-generator-grid">
+        <article class="api-generator-card glass">
+          <span class="kicker">DASHBOARD READER API</span>
+          <h3>Generate API</h3>
+          <p>
+            Buat API key read-only untuk membaca ringkasan dashboard dari
+            script, website, atau sistem lain. Password akun tidak pernah
+            dikirim melalui API ini.
+          </p>
+
+          <form id="apiKeyForm">
+            <label>Nama API
+              <input
+                id="apiKeyName"
+                maxlength="80"
+                value="Dashboard Reader"
+                placeholder="contoh: Dashboard Reader">
+            </label>
+
+            <label>Masa berlaku
+              <select id="apiKeyExpiry">
+                <option value="0">Tidak kedaluwarsa</option>
+                <option value="7">7 hari</option>
+                <option value="30" selected>30 hari</option>
+                <option value="90">90 hari</option>
+                <option value="365">1 tahun</option>
+              </select>
+            </label>
+
+            <section class="api-scope-box">
+              <strong>Data yang boleh dibaca</strong>
+
+              <label class="api-scope-option fixed">
+                <input type="checkbox" checked disabled>
+                <span>
+                  <b>Dashboard</b>
+                  <small>Status sistem, jumlah user, menu, tampilan, dan jumlah rekening XPAY.</small>
+                </span>
+              </label>
+
+              <label class="api-scope-option">
+                <input id="scopePayoutAccounts" type="checkbox">
+                <span>
+                  <b>Database Pencairan XPAY</b>
+                  <small>Izinkan API membaca daftar rekening bersama.</small>
+                </span>
+              </label>
+            </section>
+
+            <button id="generateApiButton" class="btn btn-primary btn-full" type="submit">
+              ⌘ Generate API Key
+            </button>
+          </form>
+
+          <div id="generatedApiBox" class="generated-api-box hidden">
+            <span class="kicker">API KEY BARU</span>
+            <strong>Simpan key ini sekarang</strong>
+            <p>Key lengkap hanya ditampilkan sekali.</p>
+            <div class="api-secret-row">
+              <code id="generatedApiToken"></code>
+              <button id="copyGeneratedApi" class="btn btn-secondary" type="button">
+                Salin Key
+              </button>
+            </div>
+          </div>
+
+          <div id="apiGeneratorMessage" class="message hidden"></div>
+        </article>
+
+        <article class="api-generator-card glass">
+          <span class="kicker">ENDPOINT</span>
+          <h3>API untuk membaca dashboard</h3>
+          <p>Kirim API key pada header <code>Authorization: Bearer ...</code>.</p>
+
+          <div class="api-endpoint-list">
+            <div class="api-endpoint-row">
+              <span class="api-method">GET</span>
+              <code>${escapeHtml(origin)}/api/external/dashboard</code>
+              <button class="row-btn" type="button"
+                      data-copy-api="${escapeAttribute(origin)}/api/external/dashboard">
+                ⧉
+              </button>
+            </div>
+
+            <div class="api-endpoint-row">
+              <span class="api-method optional">GET</span>
+              <code>${escapeHtml(origin)}/api/external/pencairan-xpay/accounts</code>
+              <button class="row-btn" type="button"
+                      data-copy-api="${escapeAttribute(origin)}/api/external/pencairan-xpay/accounts">
+                ⧉
+              </button>
+            </div>
+          </div>
+
+          <div class="api-example">
+            <header>
+              <strong>Contoh JavaScript</strong>
+              <button id="copyApiExample" class="link-btn" type="button">Salin contoh</button>
+            </header>
+            <pre id="apiExampleCode">${escapeHtml(
+`fetch("${origin}/api/external/dashboard", {
+  headers: {
+    Authorization: "Bearer API_KEY_KAMU"
+  }
+})
+  .then(response => response.json())
+  .then(data => console.log(data));`
+            )}</pre>
+          </div>
+
+          <div class="api-security-note">
+            <b>Read-only</b>
+            <span>API ini hanya membaca data. API tidak dapat membuat user, mengubah password, atau menghapus database.</span>
+          </div>
+        </article>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h3>API key yang sudah dibuat</h3>
+            <p>Cabut key yang sudah tidak digunakan.</p>
+          </div>
+          <button id="refreshApiKeys" class="btn btn-secondary" type="button">
+            ↻ Refresh
+          </button>
+        </div>
+
+        <div class="table-wrap glass">
+          <table>
+            <thead>
+              <tr>
+                <th>Nama</th>
+                <th>Prefix</th>
+                <th>Scope</th>
+                <th>Status</th>
+                <th>Dibuat</th>
+                <th>Terakhir dipakai</th>
+                <th>Kedaluwarsa</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="apiKeyRows">
+              ${apiKeyRows(data.keys)}
+            </tbody>
+          </table>
+        </div>
+      </section>`;
+
+    $("#apiKeyForm").addEventListener("submit", generateApiKey);
+    $("#refreshApiKeys").addEventListener("click", renderGenerateApi);
+
+    $$("[data-copy-api]").forEach(button => {
+      button.addEventListener("click", () => {
+        copyApiText(button.dataset.copyApi);
+      });
+    });
+
+    $("#copyApiExample").addEventListener("click", () => {
+      copyApiText($("#apiExampleCode").textContent);
+    });
+
+    bindApiRevokeButtons();
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
+
+function apiKeyRows(keys) {
+  if (!Array.isArray(keys) || !keys.length) {
+    return `
+      <tr>
+        <td colspan="8" class="muted">Belum ada API key.</td>
+      </tr>`;
+  }
+
+  return keys.map(key => {
+    const expired = key.expiresAt && Number(key.expiresAt) <= Date.now();
+    const active = key.active && !expired;
+    const scopeLabels = (key.scopes || []).map(scope => {
+      if (scope === "dashboard:read") return "Dashboard";
+      if (scope === "payout-accounts:read") return "Pencairan XPAY";
+      return scope;
+    });
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(key.name)}</strong></td>
+        <td><code>${escapeHtml(key.tokenPrefix)}…</code></td>
+        <td>
+          <div class="chips">
+            ${scopeLabels.map(label => `<span class="chip">${escapeHtml(label)}</span>`).join("")}
+          </div>
+        </td>
+        <td>
+          <span class="badge ${active ? "green" : "red"}">
+            ${active ? "Aktif" : expired ? "Expired" : "Dicabut"}
+          </span>
+        </td>
+        <td>${escapeHtml(formatDate(key.createdAt))}</td>
+        <td>${escapeHtml(key.lastUsedAt ? formatDate(key.lastUsedAt) : "-")}</td>
+        <td>${escapeHtml(key.expiresAt ? formatDate(key.expiresAt) : "Tidak ada")}</td>
+        <td>
+          ${active ? `
+            <button class="row-btn danger" type="button"
+                    data-revoke-api="${key.id}" title="Cabut API">
+              ×
+            </button>` : `<span class="muted">—</span>`}
+        </td>
+      </tr>`;
+  }).join("");
+}
+
+async function generateApiKey(event) {
+  event.preventDefault();
+  const button = $("#generateApiButton");
+
+  setBusy(button, true, "Membuat API...");
+
+  try {
+    const scopes = ["dashboard:read"];
+    if ($("#scopePayoutAccounts").checked) {
+      scopes.push("payout-accounts:read");
+    }
+
+    const data = await api("/api/api-keys", {
+      method: "POST",
+      body: {
+        name: $("#apiKeyName").value.trim(),
+        expiresDays: Number($("#apiKeyExpiry").value),
+        scopes
+      }
+    });
+
+    $("#generatedApiToken").textContent = data.token;
+    $("#generatedApiBox").classList.remove("hidden");
+
+    $("#copyGeneratedApi").onclick = () => {
+      copyApiText(data.token);
+    };
+
+    showMessage(
+      "#apiGeneratorMessage",
+      "API key berhasil dibuat. Simpan key lengkap sekarang karena setelah halaman direfresh key lengkap tidak ditampilkan lagi.",
+      true
+    );
+
+    const list = await api("/api/api-keys");
+    $("#apiKeyRows").innerHTML = apiKeyRows(list.keys);
+    bindApiRevokeButtons();
+
+    toast("API key berhasil dibuat.", "ok");
+  } catch (error) {
+    showMessage("#apiGeneratorMessage", error.message);
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+function bindApiRevokeButtons() {
+  $$("[data-revoke-api]").forEach(button => {
+    button.addEventListener("click", async () => {
+      if (!confirm("Cabut API key ini? Sistem yang memakai key tersebut langsung tidak dapat membaca dashboard.")) {
+        return;
+      }
+
+      try {
+        await api(`/api/api-keys/${button.dataset.revokeApi}`, {
+          method: "DELETE"
+        });
+        toast("API key berhasil dicabut.", "ok");
+        await renderGenerateApi();
+      } catch (error) {
+        toast(error.message, "bad");
+      }
+    });
+  });
+}
+
+async function copyApiText(text) {
+  try {
+    await navigator.clipboard.writeText(String(text || ""));
+    toast("Berhasil disalin.", "ok");
+  } catch (_) {
+    const textarea = document.createElement("textarea");
+    textarea.value = String(text || "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-10000px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+    toast("Berhasil disalin.", "ok");
   }
 }
 
