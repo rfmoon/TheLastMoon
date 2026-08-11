@@ -15,7 +15,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v17-generate-api";
+const VERSION = "v18-universal-api";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -109,6 +109,15 @@ async function routeRequest(request, env, url) {
     });
   }
 
+  if (url.pathname === "/api/external/all" && request.method === "GET") {
+    const apiKey = await authenticateApiKey(
+      request,
+      env.DB,
+      "all:read"
+    );
+    return externalAllData(env.DB, apiKey);
+  }
+
   if (url.pathname === "/api/external/dashboard" && request.method === "GET") {
     const apiKey = await authenticateApiKey(
       request,
@@ -171,6 +180,37 @@ async function routeRequest(request, env, url) {
   if (apiKeyMatch && request.method === "DELETE") {
     requireMaster(user);
     return revokeApiKey(env.DB, Number(apiKeyMatch[1]));
+  }
+
+  if (url.pathname === "/api/event-scatter/dates" && request.method === "GET") {
+    requireMenuAccess(user, "event-scatter");
+    return listEventScatterDates(env.DB);
+  }
+
+  if (url.pathname === "/api/event-scatter" && request.method === "GET") {
+    requireMenuAccess(user, "event-scatter");
+    return getEventScatterDate(env.DB, url.searchParams.get("date") || "");
+  }
+
+  const eventScatterDateMatch = url.pathname.match(
+    /^\/api\/event-scatter\/date\/(\d{4}-\d{2}-\d{2})$/
+  );
+  if (eventScatterDateMatch && request.method === "PUT") {
+    requireMenuAccess(user, "event-scatter");
+    return replaceEventScatterDate(
+      request,
+      env.DB,
+      user,
+      eventScatterDateMatch[1]
+    );
+  }
+
+  if (eventScatterDateMatch && request.method === "DELETE") {
+    requireMenuAccess(user, "event-scatter");
+    return deleteEventScatterDate(
+      env.DB,
+      eventScatterDateMatch[1]
+    );
   }
 
   if (url.pathname === "/api/users" && request.method === "GET") {
@@ -277,6 +317,22 @@ async function initializeDatabase(env) {
         updated_by INTEGER,
         updated_at INTEGER NOT NULL
       )`,
+      `CREATE TABLE IF NOT EXISTS event_scatter_rows (
+        id TEXT PRIMARY KEY,
+        event_date TEXT NOT NULL,
+        row_order INTEGER NOT NULL DEFAULT 0,
+        user_id TEXT NOT NULL DEFAULT '',
+        period TEXT NOT NULL DEFAULT '',
+        screenshot TEXT NOT NULL DEFAULT '',
+        x_bet TEXT NOT NULL DEFAULT '',
+        check_nominal TEXT NOT NULL DEFAULT '',
+        prize_status INTEGER NOT NULL DEFAULT 0,
+        scanner_status TEXT NOT NULL DEFAULT 'PENDING',
+        updated_at INTEGER NOT NULL,
+        updated_by INTEGER
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_event_scatter_date_order
+        ON event_scatter_rows(event_date, row_order)`,
       `CREATE TABLE IF NOT EXISTS api_keys (
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -751,6 +807,7 @@ function clampInteger(value, minimum, maximum, fallback) {
 
 
 const API_SCOPES = Object.freeze([
+  "all:read",
   "dashboard:read",
   "payout-accounts:read"
 ]);
@@ -798,10 +855,9 @@ async function createApiKey(request, db, user) {
     );
   }
 
-  const scopes = sanitizeApiScopes(body.scopes);
-  if (!scopes.includes("dashboard:read")) {
-    scopes.unshift("dashboard:read");
-  }
+  // V18: setiap key baru adalah Universal Read API.
+  // Tidak perlu memilih scope satu per satu.
+  const scopes = ["all:read"];
 
   const allowedExpiryDays = new Set([0, 7, 30, 90, 365]);
   const requestedDays = Number(body.expiresDays || 0);
@@ -943,10 +999,13 @@ async function authenticateApiKey(request, db, requiredScope) {
   }
 
   const scopes = safeApiScopes(row.scopes);
-  if (!scopes.includes(requiredScope)) {
+  if (
+    !scopes.includes("all:read") &&
+    !scopes.includes(requiredScope)
+  ) {
     throw new AppError(
       403,
-      `API key tidak memiliki scope ${requiredScope}.`,
+      `API key tidak memiliki akses ${requiredScope}.`,
       "api-key-scope"
     );
   }
@@ -1076,6 +1135,342 @@ function externalCorsHeaders() {
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400"
   };
+}
+
+
+async function externalAllData(db, apiKey) {
+  const now = Date.now();
+
+  const userResult = await db.prepare(`
+    SELECT
+      id,
+      username,
+      permissions,
+      is_master AS isMaster,
+      active,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM users
+    ORDER BY is_master DESC, username_norm ASC
+  `).all();
+
+  const payoutResult = await db.prepare(`
+    SELECT
+      id,
+      bank_code AS bankCode,
+      bank_name AS bankName,
+      account_name AS name,
+      account,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM payout_accounts
+    ORDER BY bank_name ASC, account_name ASC, account ASC
+  `).all();
+
+  const eventResult = await db.prepare(`
+    SELECT
+      id,
+      event_date AS date,
+      row_order AS "order",
+      user_id AS userId,
+      period,
+      screenshot,
+      x_bet AS xBet,
+      check_nominal AS checkNominal,
+      prize_status AS prizeStatus,
+      scanner_status AS scannerStatus,
+      updated_at AS updatedAt
+    FROM event_scatter_rows
+    ORDER BY event_date DESC, row_order ASC
+    LIMIT 10000
+  `).all();
+
+  const apiResult = await db.prepare(`
+    SELECT
+      id,
+      name,
+      token_prefix AS tokenPrefix,
+      scopes,
+      active,
+      created_at AS createdAt,
+      last_used_at AS lastUsedAt,
+      expires_at AS expiresAt
+    FROM api_keys
+    ORDER BY created_at DESC
+  `).all();
+
+  const eventRows = (eventResult.results || []).map(row => ({
+    ...row,
+    prizeStatus: Number(row.prizeStatus) === 1
+  }));
+
+  const eventDatesMap = new Map();
+  for (const row of eventRows) {
+    eventDatesMap.set(row.date, (eventDatesMap.get(row.date) || 0) + 1);
+  }
+
+  const users = (userResult.results || []).map(row => ({
+    id: row.id,
+    username: row.username,
+    permissions: safePermissions(row.permissions),
+    isMaster: Number(row.isMaster) === 1,
+    active: Number(row.active) === 1,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  }));
+
+  const apiKeys = (apiResult.results || []).map(row => ({
+    id: row.id,
+    name: row.name,
+    tokenPrefix: row.tokenPrefix,
+    scopes: safeApiScopes(row.scopes),
+    active:
+      Number(row.active) === 1 &&
+      (!row.expiresAt || Number(row.expiresAt) > now),
+    createdAt: row.createdAt,
+    lastUsedAt: row.lastUsedAt || null,
+    expiresAt: row.expiresAt || null
+  }));
+
+  const operationalMenus = MENUS.map(menu => ({
+    id: menu.id,
+    label: menu.label,
+    icon: menu.icon,
+    parentId: menu.parentId || null,
+    masterOnly: Boolean(menu.masterOnly),
+    assignable: Boolean(menu.assignable),
+    always: Boolean(menu.always)
+  }));
+
+  return json({
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    version: VERSION,
+    apiKey: {
+      name: apiKey.name,
+      access: "universal-read"
+    },
+    data: {
+      dashboard: {
+        system: {
+          online: true,
+          sessionHours: Math.round(SESSION_TTL_MS / 3600000)
+        },
+        counts: {
+          users: users.length,
+          activeUsers: users.filter(user => user.active).length,
+          masters: users.filter(user => user.isMaster).length,
+          menus: operationalMenus.length,
+          payoutAccounts: (payoutResult.results || []).length,
+          eventScatterRows: eventRows.length,
+          activeApiKeys: apiKeys.filter(key => key.active).length
+        }
+      },
+
+      users,
+
+      menus: operationalMenus,
+
+      appearance: await readAppearance(db),
+
+      pencairanXpay: {
+        total: (payoutResult.results || []).length,
+        accounts: payoutResult.results || []
+      },
+
+      eventScatter: {
+        storage: "cloudflare-d1-shared",
+        total: eventRows.length,
+        dates: [...eventDatesMap.entries()].map(([date, total]) => ({
+          date,
+          total
+        })),
+        rows: eventRows
+      },
+
+      apiKeys,
+
+      workspaces: {
+        checker: {
+          persistentServerData: false,
+          note: "Workspace ini tidak menyimpan data permanen di server."
+        },
+        xpayDiff: {
+          persistentServerData: false,
+          note: "Data tempelan Cari Selisih XPAY bersifat sementara di browser."
+        },
+        biaya: {
+          persistentServerData: false
+        },
+        listData: {
+          persistentServerData: false
+        },
+        hasilResult: {
+          persistentServerData: false
+        },
+        aiChat: {
+          persistentServerData: false
+        },
+        upload: {
+          persistentServerData: false
+        }
+      }
+    }
+  }, 200, externalCorsHeaders());
+}
+
+async function listEventScatterDates(db) {
+  const result = await db.prepare(`
+    SELECT
+      event_date AS date,
+      COUNT(*) AS total,
+      MAX(updated_at) AS updatedAt
+    FROM event_scatter_rows
+    GROUP BY event_date
+    ORDER BY event_date DESC
+  `).all();
+
+  return json({
+    dates: result.results || []
+  });
+}
+
+async function getEventScatterDate(db, date) {
+  validateEventScatterDate(date);
+
+  const result = await db.prepare(`
+    SELECT
+      id,
+      event_date AS date,
+      row_order AS "order",
+      user_id AS userId,
+      period,
+      screenshot,
+      x_bet AS xBet,
+      check_nominal AS checkNominal,
+      prize_status AS prizeStatus,
+      scanner_status AS scannerStatus,
+      updated_at AS updatedAt
+    FROM event_scatter_rows
+    WHERE event_date = ?
+    ORDER BY row_order ASC
+  `).bind(date).all();
+
+  return json({
+    date,
+    rows: (result.results || []).map(row => ({
+      ...row,
+      prizeStatus: Number(row.prizeStatus) === 1
+    }))
+  });
+}
+
+async function replaceEventScatterDate(request, db, user, date) {
+  validateEventScatterDate(date);
+
+  const body = await readJson(request);
+  const input = Array.isArray(body.rows) ? body.rows : [];
+
+  if (input.length > 500) {
+    throw new AppError(
+      400,
+      "Maksimal 500 baris EVENT SCATTER per tanggal.",
+      "event-scatter-limit"
+    );
+  }
+
+  const normalized = input.map((row, index) => ({
+    id: String(row?.id || "").trim().slice(0, 120) ||
+      `event-${date}-${index}-${Date.now()}`,
+    date,
+    order: Number.isInteger(Number(row?.order))
+      ? Number(row.order)
+      : index,
+    userId: String(row?.userId || "").trim().slice(0, 150),
+    period: String(row?.period || "").trim().slice(0, 150),
+    screenshot: String(row?.screenshot || "").trim().slice(0, 2000),
+    xBet: String(row?.xBet || "").trim().slice(0, 100),
+    checkNominal: String(row?.checkNominal || "").trim().slice(0, 100),
+    prizeStatus: Boolean(row?.prizeStatus),
+    scannerStatus:
+      String(row?.scannerStatus || "").toUpperCase() === "DONE"
+        ? "DONE"
+        : "PENDING",
+    updatedAt: Number(row?.updatedAt) || Date.now()
+  }));
+
+  await db.prepare(
+    "DELETE FROM event_scatter_rows WHERE event_date = ?"
+  ).bind(date).run();
+
+  for (const row of normalized) {
+    await db.prepare(`
+      INSERT INTO event_scatter_rows (
+        id,
+        event_date,
+        row_order,
+        user_id,
+        period,
+        screenshot,
+        x_bet,
+        check_nominal,
+        prize_status,
+        scanner_status,
+        updated_at,
+        updated_by
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      row.id,
+      row.date,
+      row.order,
+      row.userId,
+      row.period,
+      row.screenshot,
+      row.xBet,
+      row.checkNominal,
+      row.prizeStatus ? 1 : 0,
+      row.scannerStatus,
+      row.updatedAt,
+      user.id
+    ).run();
+  }
+
+  return json({
+    success: true,
+    date,
+    total: normalized.length
+  });
+}
+
+async function deleteEventScatterDate(db, date) {
+  validateEventScatterDate(date);
+
+  const count = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM event_scatter_rows
+    WHERE event_date = ?
+  `).bind(date).first();
+
+  await db.prepare(
+    "DELETE FROM event_scatter_rows WHERE event_date = ?"
+  ).bind(date).run();
+
+  return json({
+    success: true,
+    date,
+    deleted: Number(count?.total || 0)
+  });
+}
+
+function validateEventScatterDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) {
+    throw new AppError(
+      400,
+      "Tanggal EVENT SCATTER tidak valid.",
+      "event-scatter-date"
+    );
+  }
 }
 
 async function listPayoutAccounts(db) {
