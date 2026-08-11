@@ -10,11 +10,12 @@ const MENUS = Object.freeze([
   { id: "event-scatter", label: "EVENT SCATTER", icon: "✺", assignable: true },
   { id: "ai-chat", label: "AI Chat", icon: "✦", assignable: true },
   { id: "upload", label: "Upload", icon: "⇧", assignable: true },
+  { id: "generate-api", label: "Generate API", icon: "⌘", masterOnly: true },
   { id: "settings", label: "Settings", icon: "⚙", masterOnly: true },
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v16-pencairan-xpay-new";
+const VERSION = "v17-generate-api";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -31,19 +32,22 @@ export async function onRequest(context) {
   } catch (error) {
     console.error("TheLastMoon API error:", error);
 
+    const externalRequest = new URL(request.url).pathname.startsWith("/api/external/");
+    const externalHeaders = externalRequest ? externalCorsHeaders() : {};
+
     if (error instanceof AppError) {
       return json({
         error: error.message,
         stage: error.stage || undefined,
         version: VERSION
-      }, error.status);
+      }, error.status, externalHeaders);
     }
 
     return json({
       error: "Terjadi kesalahan pada server.",
       detail: safeErrorMessage(error),
       version: VERSION
-    }, 500);
+    }, 500, externalHeaders);
   }
 }
 
@@ -98,6 +102,34 @@ async function routeRequest(request, env, url) {
     return json(await readAppearance(env.DB));
   }
 
+  if (url.pathname.startsWith("/api/external/") && request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: externalCorsHeaders()
+    });
+  }
+
+  if (url.pathname === "/api/external/dashboard" && request.method === "GET") {
+    const apiKey = await authenticateApiKey(
+      request,
+      env.DB,
+      "dashboard:read"
+    );
+    return externalDashboard(env.DB, apiKey);
+  }
+
+  if (
+    url.pathname === "/api/external/pencairan-xpay/accounts" &&
+    request.method === "GET"
+  ) {
+    const apiKey = await authenticateApiKey(
+      request,
+      env.DB,
+      "payout-accounts:read"
+    );
+    return externalPayoutAccounts(env.DB, apiKey);
+  }
+
   if (url.pathname === "/api/session" && request.method === "GET") {
     const user = await getSessionUser(request, env.DB);
     return json({
@@ -123,6 +155,22 @@ async function routeRequest(request, env, url) {
 
   if (url.pathname === "/api/change-password" && request.method === "POST") {
     return changePassword(request, env.DB, user);
+  }
+
+  if (url.pathname === "/api/api-keys" && request.method === "GET") {
+    requireMaster(user);
+    return listApiKeys(env.DB);
+  }
+
+  if (url.pathname === "/api/api-keys" && request.method === "POST") {
+    requireMaster(user);
+    return createApiKey(request, env.DB, user);
+  }
+
+  const apiKeyMatch = url.pathname.match(/^\/api\/api-keys\/(\d+)$/);
+  if (apiKeyMatch && request.method === "DELETE") {
+    requireMaster(user);
+    return revokeApiKey(env.DB, Number(apiKeyMatch[1]));
   }
 
   if (url.pathname === "/api/users" && request.method === "GET") {
@@ -229,6 +277,20 @@ async function initializeDatabase(env) {
         updated_by INTEGER,
         updated_at INTEGER NOT NULL
       )`,
+      `CREATE TABLE IF NOT EXISTS api_keys (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        token_prefix TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        scopes TEXT NOT NULL DEFAULT '["dashboard:read"]',
+        active INTEGER NOT NULL DEFAULT 1,
+        created_by INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER,
+        expires_at INTEGER
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_api_keys_active
+        ON api_keys(active)`,
       `CREATE INDEX IF NOT EXISTS idx_payout_accounts_name
         ON payout_accounts(account_name)`,
       `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
@@ -686,6 +748,335 @@ function clampInteger(value, minimum, maximum, fallback) {
   return Math.min(maximum, Math.max(minimum, Math.round(number)));
 }
 
+
+
+const API_SCOPES = Object.freeze([
+  "dashboard:read",
+  "payout-accounts:read"
+]);
+
+async function listApiKeys(db) {
+  const result = await db.prepare(`
+    SELECT
+      id,
+      name,
+      token_prefix AS tokenPrefix,
+      scopes,
+      active,
+      created_at AS createdAt,
+      last_used_at AS lastUsedAt,
+      expires_at AS expiresAt
+    FROM api_keys
+    ORDER BY created_at DESC
+  `).all();
+
+  return json({
+    keys: (result.results || []).map(row => ({
+      id: row.id,
+      name: row.name,
+      tokenPrefix: row.tokenPrefix,
+      scopes: safeApiScopes(row.scopes),
+      active: Number(row.active) === 1,
+      createdAt: row.createdAt,
+      lastUsedAt: row.lastUsedAt || null,
+      expiresAt: row.expiresAt || null
+    }))
+  });
+}
+
+async function createApiKey(request, db, user) {
+  const body = await readJson(request);
+  const name = String(body.name || "Dashboard Reader")
+    .trim()
+    .slice(0, 80);
+
+  if (!name) {
+    throw new AppError(
+      400,
+      "Nama API wajib diisi.",
+      "api-key-name"
+    );
+  }
+
+  const scopes = sanitizeApiScopes(body.scopes);
+  if (!scopes.includes("dashboard:read")) {
+    scopes.unshift("dashboard:read");
+  }
+
+  const allowedExpiryDays = new Set([0, 7, 30, 90, 365]);
+  const requestedDays = Number(body.expiresDays || 0);
+  const expiresDays = allowedExpiryDays.has(requestedDays)
+    ? requestedDays
+    : 0;
+
+  const rawToken = `tlm_live_${randomToken(32)}`;
+  const tokenHash = await sha256(rawToken);
+  const tokenPrefix = rawToken.slice(0, 18);
+  const now = Date.now();
+  const expiresAt = expiresDays
+    ? now + expiresDays * 24 * 60 * 60 * 1000
+    : null;
+
+  const result = await db.prepare(`
+    INSERT INTO api_keys (
+      name,
+      token_prefix,
+      token_hash,
+      scopes,
+      active,
+      created_by,
+      created_at,
+      expires_at
+    )
+    VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+  `).bind(
+    name,
+    tokenPrefix,
+    tokenHash,
+    JSON.stringify(scopes),
+    user.id,
+    now,
+    expiresAt
+  ).run();
+
+  return json({
+    success: true,
+    token: rawToken,
+    key: {
+      id: result.meta?.last_row_id,
+      name,
+      tokenPrefix,
+      scopes,
+      active: true,
+      createdAt: now,
+      lastUsedAt: null,
+      expiresAt
+    },
+    warning: "Token lengkap hanya ditampilkan sekali. Simpan di tempat aman."
+  }, 201);
+}
+
+async function revokeApiKey(db, id) {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new AppError(
+      400,
+      "ID API tidak valid.",
+      "api-key-id"
+    );
+  }
+
+  const existing = await db.prepare(
+    "SELECT id, active FROM api_keys WHERE id = ? LIMIT 1"
+  ).bind(id).first();
+
+  if (!existing) {
+    throw new AppError(
+      404,
+      "API key tidak ditemukan.",
+      "api-key-not-found"
+    );
+  }
+
+  await db.prepare(`
+    UPDATE api_keys
+    SET active = 0
+    WHERE id = ?
+  `).bind(id).run();
+
+  return json({ success: true });
+}
+
+async function authenticateApiKey(request, db, requiredScope) {
+  const authorization = String(
+    request.headers.get("Authorization") || ""
+  ).trim();
+
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    throw new AppError(
+      401,
+      "Authorization Bearer token wajib dikirim.",
+      "api-key-missing"
+    );
+  }
+
+  const rawToken = match[1].trim();
+  if (!rawToken.startsWith("tlm_live_")) {
+    throw new AppError(
+      401,
+      "Format API key tidak valid.",
+      "api-key-format"
+    );
+  }
+
+  const tokenHash = await sha256(rawToken);
+  const row = await db.prepare(`
+    SELECT
+      id,
+      name,
+      scopes,
+      active,
+      expires_at AS expiresAt
+    FROM api_keys
+    WHERE token_hash = ?
+    LIMIT 1
+  `).bind(tokenHash).first();
+
+  if (!row || Number(row.active) !== 1) {
+    throw new AppError(
+      401,
+      "API key tidak valid atau sudah dicabut.",
+      "api-key-invalid"
+    );
+  }
+
+  if (row.expiresAt && Number(row.expiresAt) <= Date.now()) {
+    await db.prepare(
+      "UPDATE api_keys SET active = 0 WHERE id = ?"
+    ).bind(row.id).run();
+
+    throw new AppError(
+      401,
+      "API key sudah kedaluwarsa.",
+      "api-key-expired"
+    );
+  }
+
+  const scopes = safeApiScopes(row.scopes);
+  if (!scopes.includes(requiredScope)) {
+    throw new AppError(
+      403,
+      `API key tidak memiliki scope ${requiredScope}.`,
+      "api-key-scope"
+    );
+  }
+
+  await db.prepare(`
+    UPDATE api_keys
+    SET last_used_at = ?
+    WHERE id = ?
+  `).bind(Date.now(), row.id).run();
+
+  return {
+    id: row.id,
+    name: row.name,
+    scopes
+  };
+}
+
+async function externalDashboard(db, apiKey) {
+  const userStats = await db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) AS active,
+      SUM(CASE WHEN is_master = 1 THEN 1 ELSE 0 END) AS masters
+    FROM users
+  `).first();
+
+  const payoutStats = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM payout_accounts
+  `).first();
+
+  const activeApiStats = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM api_keys
+    WHERE active = 1
+      AND (expires_at IS NULL OR expires_at > ?)
+  `).bind(Date.now()).first();
+
+  const operationalMenus = MENUS
+    .filter(menu => !menu.masterOnly)
+    .map(publicMenu);
+
+  return json({
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    version: VERSION,
+    apiKey: {
+      name: apiKey.name
+    },
+    dashboard: {
+      system: {
+        online: true,
+        sessionHours: Math.round(SESSION_TTL_MS / 3600000)
+      },
+      users: {
+        total: Number(userStats?.total || 0),
+        active: Number(userStats?.active || 0),
+        masters: Number(userStats?.masters || 0)
+      },
+      menus: {
+        total: operationalMenus.length,
+        items: operationalMenus
+      },
+      pencairanXpay: {
+        accountCount: Number(payoutStats?.total || 0)
+      },
+      api: {
+        activeKeys: Number(activeApiStats?.total || 0)
+      },
+      appearance: await readAppearance(db),
+      eventScatter: {
+        storage: "browser-indexeddb",
+        readableViaServerApi: false
+      }
+    }
+  }, 200, externalCorsHeaders());
+}
+
+async function externalPayoutAccounts(db, apiKey) {
+  const result = await db.prepare(`
+    SELECT
+      bank_code AS bankCode,
+      bank_name AS bankName,
+      account_name AS name,
+      account,
+      updated_at AS updatedAt
+    FROM payout_accounts
+    ORDER BY bank_name ASC, account_name ASC, account ASC
+  `).all();
+
+  return json({
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    version: VERSION,
+    apiKey: {
+      name: apiKey.name
+    },
+    total: (result.results || []).length,
+    accounts: result.results || []
+  }, 200, externalCorsHeaders());
+}
+
+function sanitizeApiScopes(value) {
+  const requested = Array.isArray(value) ? value : [];
+  const allowed = new Set(API_SCOPES);
+
+  return [...new Set(
+    requested.filter(scope => allowed.has(String(scope)))
+  )];
+}
+
+function safeApiScopes(value) {
+  try {
+    const parsed = Array.isArray(value)
+      ? value
+      : JSON.parse(value || "[]");
+    return sanitizeApiScopes(parsed);
+  } catch (_) {
+    return [];
+  }
+}
+
+function externalCorsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Max-Age": "86400"
+  };
+}
 
 async function listPayoutAccounts(db) {
   try {
