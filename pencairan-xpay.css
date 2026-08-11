@@ -144,7 +144,8 @@
       .field.full{grid-column:auto}
     }
 
-html, body {
+html,
+body {
   background: transparent !important;
 }
 
@@ -159,13 +160,9 @@ body {
   padding: 4px 4px 46px;
 }
 
-.hero,
-.card,
-.actions,
-.summary-card,
-.result-card {
+.card {
   background:
-    linear-gradient(145deg, rgba(255,255,255,.105), rgba(255,255,255,.035)) !important;
+    linear-gradient(145deg,rgba(255,255,255,.105),rgba(255,255,255,.035)) !important;
   border-color: rgba(255,255,255,.20) !important;
   box-shadow:
     0 18px 55px rgba(0,0,0,.22),
@@ -174,8 +171,7 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(145%);
 }
 
-.card-head,
-.result-head {
+.card-head {
   background: rgba(5,12,25,.26) !important;
   border-color: rgba(255,255,255,.12) !important;
 }
@@ -194,14 +190,8 @@ input::placeholder {
 }
 
 .subtitle,
-.mapping,
-.source-status,
-.global-status,
-.summary-name,
-.result-desc,
-.footer-note,
 .note {
-  color: rgba(244,248,255,.82) !important;
+  color: rgba(244,248,255,.84) !important;
 }
 
 .table-wrap {
@@ -211,7 +201,7 @@ input::placeholder {
 
 thead th {
   color: #ffffff !important;
-  background: rgba(10,20,38,.82) !important;
+  background: rgba(10,20,38,.86) !important;
   text-shadow: 0 1px 4px rgba(0,0,0,.85);
 }
 
@@ -223,22 +213,6 @@ tbody td {
 code {
   background: rgba(4,10,20,.55) !important;
 }
-
-@media (max-width: 980px) {
-  .wrap { padding-inline: 0; }
-}
-
-
-#dbMessage.ok::before {
-  content: "● ";
-  color: var(--success);
-}
-
-#dbMessage.error::before {
-  content: "● ";
-  color: var(--danger);
-}
-
 
 #dbMessage {
   min-height: 24px;
@@ -256,4 +230,18 @@ code {
 #dbMessage.error {
   border: 1px solid rgba(255,110,125,.27);
   background: rgba(255,110,125,.075);
+}
+
+#dbMessage.ok::before {
+  content: "● ";
+  color: var(--success);
+}
+
+#dbMessage.error::before {
+  content: "● ";
+  color: var(--danger);
+}
+
+@media(max-width:980px){
+  .wrap{padding-inline:0}
 }

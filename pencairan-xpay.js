@@ -134,12 +134,12 @@ function loadLegacyDatabase(){
   }
 }
 
-async function api(path, options={}){
+async function api(path,options={}){
   const method=options.method || "GET";
-  const maxAttempts=method==="GET" ? 2 : 1;
+  const attempts=method==="GET" ? 2 : 1;
   let lastError=null;
 
-  for(let attempt=1;attempt<=maxAttempts;attempt++){
+  for(let attempt=1;attempt<=attempts;attempt++){
     try{
       const response=await fetch(path,{
         method,
@@ -161,13 +161,13 @@ async function api(path, options={}){
       }
 
       if(!response.ok){
-        const parts=[
+        const detail=[
           data.error || `Terjadi kesalahan API (HTTP ${response.status}).`,
           data.stage ? `Tahap: ${data.stage}` : "",
           data.detail ? `Detail: ${data.detail}` : ""
-        ].filter(Boolean);
+        ].filter(Boolean).join(" • ");
 
-        const error=new Error(parts.join(" • "));
+        const error=new Error(detail);
         error.status=response.status;
         throw error;
       }
@@ -175,10 +175,9 @@ async function api(path, options={}){
       return data;
     }catch(error){
       lastError=error;
-
       const retryable=
         method==="GET" &&
-        attempt<maxAttempts &&
+        attempt<attempts &&
         (!error.status || error.status>=500);
 
       if(!retryable) throw error;
@@ -204,21 +203,12 @@ function syncStatusText(total){
 function markSyncSuccess(total){
   syncFailureCount=0;
   lastSyncAt=new Date();
-
-  setMessage(
-    $("dbMessage"),
-    syncStatusText(total),
-    "ok"
-  );
+  setMessage($("dbMessage"),syncStatusText(total),"ok");
 }
 
 function markSyncFailure(error,{silent=false}={}){
-  syncFailureCount+=1;
-
-  // Error sementara dari auto-sync tidak langsung mengganti status hijau.
-  // Baru tampil merah setelah dua kegagalan berurutan.
+  syncFailureCount++;
   if(silent && syncFailureCount<2) return;
-
   setMessage(
     $("dbMessage"),
     error.message || "Gagal menyinkronkan database bersama.",
@@ -251,9 +241,6 @@ async function loadSharedDatabase({silent=false,migrate=true}={}){
     const data=await api(API_BASE);
     database=Array.isArray(data.accounts) ? data.accounts : [];
     renderDatabase();
-
-    // Selalu ganti error lama setelah sinkronisasi berhasil,
-    // termasuk sinkronisasi silent setelah import.
     markSyncSuccess(database.length);
   }catch(error){
     markSyncFailure(error,{silent});
@@ -336,15 +323,15 @@ function renderDatabase(){
 async function deleteDatabase(id){
   const row=database.find(item=>Number(item.id)===Number(id));
   if(!row) return;
+
   if(!confirm(`Hapus rekening ${row.name} — ${row.account} dari database bersama?`)) return;
 
   try{
     await api(`${API_BASE}/${encodeURIComponent(id)}`,{method:"DELETE"});
     await loadSharedDatabase({silent:true,migrate:false});
-    markSyncSuccess(database.length);
     setMessage(
       $("bulkMessage"),
-      "Data rekening berhasil dihapus dan perubahan tersinkron ke semua user.",
+      "Data rekening berhasil dihapus dan tersinkron ke semua user.",
       "ok"
     );
   }catch(error){
@@ -443,13 +430,13 @@ async function importDatabase(){
 
   try{
     setMessage($("bulkMessage"),"Menyimpan ke database bersama...");
+
     const result=await api(`${API_BASE}/bulk`,{
       method:"POST",
       body:{accounts}
     });
 
     await loadSharedDatabase({silent:true,migrate:false});
-    markSyncSuccess(database.length);
 
     setMessage(
       $("bulkMessage"),
@@ -702,30 +689,346 @@ async function copyResults(){
   }
 }
 
-function downloadCsv(){
+function xmlEscape(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&apos;");
+}
+
+function excelColumnName(number){
+  let name="";
+  while(number>0){
+    const remainder=(number-1)%26;
+    name=String.fromCharCode(65+remainder)+name;
+    number=Math.floor((number-1)/26);
+  }
+  return name;
+}
+
+function crc32(bytes){
+  if(!crc32.table){
+    const table=new Uint32Array(256);
+    for(let n=0;n<256;n++){
+      let c=n;
+      for(let k=0;k<8;k++){
+        c=(c&1) ? (0xEDB88320^(c>>>1)) : (c>>>1);
+      }
+      table[n]=c>>>0;
+    }
+    crc32.table=table;
+  }
+
+  let crc=0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++){
+    crc=crc32.table[(crc^bytes[i])&0xFF]^(crc>>>8);
+  }
+  return (crc^0xFFFFFFFF)>>>0;
+}
+
+function writeU16(view,offset,value){
+  view[offset]=value&0xFF;
+  view[offset+1]=(value>>>8)&0xFF;
+}
+
+function writeU32(view,offset,value){
+  view[offset]=value&0xFF;
+  view[offset+1]=(value>>>8)&0xFF;
+  view[offset+2]=(value>>>16)&0xFF;
+  view[offset+3]=(value>>>24)&0xFF;
+}
+
+function zipDosDateTime(date){
+  const year=Math.max(1980,date.getFullYear());
+  const dosTime=
+    (date.getHours()<<11) |
+    (date.getMinutes()<<5) |
+    Math.floor(date.getSeconds()/2);
+
+  const dosDate=
+    ((year-1980)<<9) |
+    ((date.getMonth()+1)<<5) |
+    date.getDate();
+
+  return {dosTime,dosDate};
+}
+
+function concatUint8(arrays){
+  const total=arrays.reduce((sum,a)=>sum+a.length,0);
+  const out=new Uint8Array(total);
+  let offset=0;
+  arrays.forEach(a=>{
+    out.set(a,offset);
+    offset+=a.length;
+  });
+  return out;
+}
+
+function createZip(files){
+  const encoder=new TextEncoder();
+  const now=zipDosDateTime(new Date());
+  const localParts=[];
+  const centralParts=[];
+  let localOffset=0;
+
+  for(const file of files){
+    const nameBytes=encoder.encode(file.name);
+    const dataBytes=typeof file.data==="string" ? encoder.encode(file.data) : file.data;
+    const crc=crc32(dataBytes);
+
+    const localHeader=new Uint8Array(30+nameBytes.length);
+    writeU32(localHeader,0,0x04034B50);
+    writeU16(localHeader,4,20);
+    writeU16(localHeader,6,0x0800);
+    writeU16(localHeader,8,0);
+    writeU16(localHeader,10,now.dosTime);
+    writeU16(localHeader,12,now.dosDate);
+    writeU32(localHeader,14,crc);
+    writeU32(localHeader,18,dataBytes.length);
+    writeU32(localHeader,22,dataBytes.length);
+    writeU16(localHeader,26,nameBytes.length);
+    writeU16(localHeader,28,0);
+    localHeader.set(nameBytes,30);
+
+    localParts.push(localHeader,dataBytes);
+
+    const centralHeader=new Uint8Array(46+nameBytes.length);
+    writeU32(centralHeader,0,0x02014B50);
+    writeU16(centralHeader,4,20);
+    writeU16(centralHeader,6,20);
+    writeU16(centralHeader,8,0x0800);
+    writeU16(centralHeader,10,0);
+    writeU16(centralHeader,12,now.dosTime);
+    writeU16(centralHeader,14,now.dosDate);
+    writeU32(centralHeader,16,crc);
+    writeU32(centralHeader,20,dataBytes.length);
+    writeU32(centralHeader,24,dataBytes.length);
+    writeU16(centralHeader,28,nameBytes.length);
+    writeU16(centralHeader,30,0);
+    writeU16(centralHeader,32,0);
+    writeU16(centralHeader,34,0);
+    writeU16(centralHeader,36,0);
+    writeU32(centralHeader,38,0);
+    writeU32(centralHeader,42,localOffset);
+    centralHeader.set(nameBytes,46);
+    centralParts.push(centralHeader);
+
+    localOffset+=localHeader.length+dataBytes.length;
+  }
+
+  const centralData=concatUint8(centralParts);
+  const end=new Uint8Array(22);
+  writeU32(end,0,0x06054B50);
+  writeU16(end,4,0);
+  writeU16(end,6,0);
+  writeU16(end,8,files.length);
+  writeU16(end,10,files.length);
+  writeU32(end,12,centralData.length);
+  writeU32(end,16,localOffset);
+  writeU16(end,20,0);
+
+  return concatUint8([...localParts,centralData,end]);
+}
+
+function makeInlineStringCell(ref,value,styleId="0"){
+  return `<c r="${ref}" s="${styleId}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+}
+
+function makeNumberCell(ref,value,styleId="0"){
+  const number=Number(value);
+  return `<c r="${ref}" s="${styleId}"><v>${Number.isFinite(number) ? number : 0}</v></c>`;
+}
+
+function downloadExcel(){
   if(!processedRows.length) processTransactions();
+
   const rows=getValidRows();
   if(!rows.length){
-    setMessage($("outputMessage"),"Tidak ada baris valid untuk di-download.","error");
+    setMessage($("outputMessage"),"Tidak ada baris valid untuk dibuat menjadi Excel.","error");
     return;
   }
 
-  const csv="\uFEFF"+rows.map(row=>
-    [row.amount,row.code,row.account,row.name]
-      .map(value=>'"'+String(value).replace(/"/g,'""')+'"')
-      .join(";")
-  ).join("\r\n");
+  const headers=["No","Amount","Bank Code","Bank Account","Bank Account Name"];
 
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  let sheetRows="";
+  sheetRows+=`<row r="1" ht="20" customHeight="1">`;
+  headers.forEach((header,index)=>{
+    sheetRows+=makeInlineStringCell(`${excelColumnName(index+1)}1`,header,"1");
+  });
+  sheetRows+="</row>";
+
+  rows.forEach((row,index)=>{
+    const excelRow=index+2;
+    sheetRows+=`<row r="${excelRow}">`;
+    sheetRows+=makeNumberCell(`A${excelRow}`,index+1,"0");
+    sheetRows+=makeNumberCell(`B${excelRow}`,row.amountNumeric,"2");
+    sheetRows+=makeNumberCell(`C${excelRow}`,row.code,"0");
+
+    // Sangat penting: nomor rekening ditulis sebagai STRING/TEXT,
+    // bukan sebagai angka, sehingga 0 di depan tetap tersimpan.
+    sheetRows+=makeInlineStringCell(`D${excelRow}`,row.account,"3");
+    sheetRows+=makeInlineStringCell(`E${excelRow}`,row.name,"0");
+    sheetRows+="</row>";
+  });
+
+  const lastRow=rows.length+1;
+
+  const worksheetXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:E${lastRow}"/>
+  <sheetViews>
+    <sheetView workbookViewId="0">
+      <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
+    </sheetView>
+  </sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <cols>
+    <col min="1" max="1" width="7" customWidth="1"/>
+    <col min="2" max="2" width="18" customWidth="1"/>
+    <col min="3" max="3" width="13" customWidth="1"/>
+    <col min="4" max="4" width="22" customWidth="1"/>
+    <col min="5" max="5" width="30" customWidth="1"/>
+  </cols>
+  <sheetData>${sheetRows}</sheetData>
+  <autoFilter ref="A1:E${lastRow}"/>
+</worksheet>`;
+
+  const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="2">
+    <numFmt numFmtId="164" formatCode="#,##0"/>
+    <numFmt numFmtId="165" formatCode="@"/>
+  </numFmts>
+  <fonts count="2">
+    <font>
+      <sz val="11"/>
+      <name val="Calibri"/>
+      <family val="2"/>
+      <scheme val="minor"/>
+    </font>
+    <font>
+      <b/>
+      <sz val="11"/>
+      <name val="Calibri"/>
+      <family val="2"/>
+      <scheme val="minor"/>
+    </font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill>
+      <patternFill patternType="solid">
+        <fgColor rgb="FFE7E6E6"/>
+        <bgColor indexed="64"/>
+      </patternFill>
+    </fill>
+  </fills>
+  <borders count="2">
+    <border>
+      <left/><right/><top/><bottom/><diagonal/>
+    </border>
+    <border>
+      <left style="thin"><color rgb="FFBFBFBF"/></left>
+      <right style="thin"><color rgb="FFBFBFBF"/></right>
+      <top style="thin"><color rgb="FFBFBFBF"/></top>
+      <bottom style="thin"><color rgb="FFBFBFBF"/></bottom>
+      <diagonal/>
+    </border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  </cellStyleXfs>
+  <cellXfs count="4">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0"
+        applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="center" vertical="center"/>
+    </xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0"
+        applyNumberFormat="1"/>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0"
+        applyNumberFormat="1"/>
+  </cellXfs>
+  <cellStyles count="1">
+    <cellStyle name="Normal" xfId="0" builtinId="0"/>
+  </cellStyles>
+  <dxfs count="0"/>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+</styleSheet>`;
+
+  const workbookXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <bookViews>
+    <workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/>
+  </bookViews>
+  <sheets>
+    <sheet name="DATA REKENING" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`;
+
+  const workbookRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1"
+    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+    Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2"
+    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"
+    Target="styles.xml"/>
+</Relationships>`;
+
+  const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1"
+    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+    Target="xl/workbook.xml"/>
+</Relationships>`;
+
+  const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml"
+    ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml"
+    ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml"
+    ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+
+  const files=[
+    {name:"[Content_Types].xml",data:contentTypes},
+    {name:"_rels/.rels",data:rootRels},
+    {name:"xl/workbook.xml",data:workbookXml},
+    {name:"xl/_rels/workbook.xml.rels",data:workbookRels},
+    {name:"xl/worksheets/sheet1.xml",data:worksheetXml},
+    {name:"xl/styles.xml",data:stylesXml}
+  ];
+
+  const xlsxBytes=createZip(files);
+  const blob=new Blob(
+    [xlsxBytes],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+  );
+
   const url=URL.createObjectURL(blob);
   const link=document.createElement("a");
   link.href=url;
-  link.download="hasil-rekening-tanpa-header.csv";
+  link.download="hasil-rekening.xlsx";
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
-  setMessage($("outputMessage"),"CSV berhasil dibuat tanpa header.","ok");
+
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+
+  setMessage(
+    $("outputMessage"),
+    `${rows.length} baris berhasil dibuat menjadi Excel (.xlsx). Bank Account disimpan sebagai Text.`,
+    "ok"
+  );
 }
 
 $("importDbBtn").addEventListener("click",importDatabase);
@@ -735,7 +1038,7 @@ $("refreshDbBtn").addEventListener("click",()=>{
 });
 $("processBtn").addEventListener("click",processTransactions);
 $("copyBtn").addEventListener("click",copyResults);
-$("downloadBtn").addEventListener("click",downloadCsv);
+$("downloadExcelBtn").addEventListener("click",downloadExcel);
 
 $("clearDbBtn").addEventListener("click",async()=>{
   if(!database.length){
@@ -752,6 +1055,7 @@ $("clearDbBtn").addEventListener("click",async()=>{
     database=[];
     renderDatabase();
     markSyncSuccess(0);
+
     setMessage(
       $("bulkMessage"),
       `${result.deleted} rekening dihapus dari database bersama.`,

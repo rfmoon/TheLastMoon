@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <title>Pencairan XPAY</title>
-  <link rel="stylesheet" href="/pencairan-xpay.css?v=11.0.0">
+  <link rel="stylesheet" href="/pencairan-xpay.css?v=16.0.0">
 </head>
 <body>
 <main class="wrap">
   <h1>Database & Konversi Rekening</h1>
   <p class="subtitle">
-    Tambah satu atau banyak rekening tanpa nominal. Database disimpan di Cloudflare D1 dan otomatis dipakai bersama oleh semua user yang memiliki akses Pencairan XPAY.
+    Tambah satu atau banyak rekening tanpa nominal. Database disimpan di Cloudflare D1 dan dipakai bersama oleh semua user yang memiliki akses Pencairan XPAY.
   </p>
 
   <section class="layout">
@@ -98,7 +98,13 @@ Imam Mustakim 65414994165 25.000.000"></textarea>
         <div class="card-body">
           <div class="toolbar" style="margin-top:0;margin-bottom:12px">
             <button class="success" id="copyBtn">Salin ke Spreadsheet</button>
-            <button class="secondary" id="downloadBtn">Download CSV</button>
+            <button class="secondary" id="downloadExcelBtn">Download Excel (.xlsx)</button>
+          </div>
+
+          <div class="note" style="margin-top:0;margin-bottom:12px">
+            File Excel otomatis dibuat dengan kolom:
+            <b>No — Amount — Bank Code — Bank Account — Bank Account Name</b>.
+            Kolom <b>Bank Account</b> disimpan sebagai <b>Text</b> agar nomor rekening yang diawali 0 tetap utuh.
           </div>
 
           <div class="table-wrap">
@@ -123,6 +129,6 @@ Imam Mustakim 65414994165 25.000.000"></textarea>
     </div>
   </section>
 </main>
-<script src="/pencairan-xpay.js?v=11.0.0" defer></script>
+<script src="/pencairan-xpay.js?v=16.0.0" defer></script>
 </body>
 </html>

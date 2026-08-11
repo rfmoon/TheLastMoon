@@ -1,30 +1,45 @@
-# TheLastMoon V15 — EVENT SCATTER New Logic
+# TheLastMoon V16 — Pencairan XPAY New Script
 
-EVENT SCATTER diganti seluruhnya menggunakan script terbaru yang diberikan user.
+Bagian **Pencairan → Pencairan XPAY** diganti menggunakan script terbaru user.
 
 ## Logika baru yang ikut masuk
 
-- Saat fokus berada di kolom USER ID sebelah kanan;
-- tekan Enter;
-- fokus langsung pindah ke kolom PERIODE sebelah kanan pada baris berikutnya;
-- jika sedang berada di baris paling akhir, sistem otomatis menambah satu baris baru.
+- tampilan hasil Spreadsheet terbaru;
+- tombol **Download Excel (.xlsx)**;
+- hasil Excel berisi:
+  - No
+  - Amount
+  - Bank Code
+  - Bank Account
+  - Bank Account Name
+- `Bank Account` ditulis sebagai Text agar leading zero tetap aman;
+- salin ke Spreadsheet tanpa header;
+- parsing database dan transaksi mengikuti script terbaru.
 
-Semua logika lama tetap ikut:
+## Database tetap bersama
 
-- penyimpanan IndexedDB browser;
-- data per tanggal;
-- riwayat tanggal;
-- tambah 10 baris;
-- STATUS HADIAH dan SCANNER saling mengikuti;
-- paste banyak kolom;
-- kolom output PERIODE, NOMINAL, dan USER ID.
+Walaupun script sumber menggunakan localStorage, versi panel ini tetap mempertahankan requirement sebelumnya:
+
+```text
+Cloudflare D1
+```
+
+Jadi rekening yang ditambahkan satu user tetap muncul untuk user lain.
+
+Tersedia juga:
+
+```text
+Sinkronkan Sekarang
+```
+
+dan auto-sync setiap 15 detik.
 
 ## File yang harus ditimpa
 
 ```text
-event-scatter.html
-event-scatter.css
-event-scatter.js
+pencairan-xpay.html
+pencairan-xpay.css
+pencairan-xpay.js
 app.js
 README.md
 functions/api/[[path]].js
