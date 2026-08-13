@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Checker BANK</title>
+  <link rel="stylesheet" href="/checker-bank.css?v=19.0.0">
+</head>
+<body>
+<div class="wrap">
+  <h1>CEK STATUS REKENING</h1>
+  <div class="sub">Membaca sheet <b>BANK</b>: A = Nama Rekening, B = Nomor Rekening, C = Status/Keterangan.</div>
+
+  <section class="card">
+    <label for="sheetUrl">Spreadsheet Database BANK</label>
+    <div class="linkRow">
+      <input id="sheetUrl" value="https://docs.google.com/spreadsheets/d/1GgLZO1TvqT5ZCTi5JwdtBMkfiDVFDNdHCfbz4rLf8ag/edit?gid=1252132751#gid=1252132751" readonly>
+      <button id="loadBtn" type="button">MUAT ULANG BANK</button>
+    </div>
+    <div class="hint">
+      Database memakai tab spreadsheet yang diberikan untuk <b>BANK</b>. Kolom <b>B</b> sebaiknya berformat <b>Plain text</b> agar angka awal 0 tidak hilang.
+      Spreadsheet akan dibaca otomatis saat Checker dibuka.
+    </div>
+    <div id="loadStatus" class="status wait">Menyiapkan database BANK...</div>
+  </section>
+
+  <section class="card">
+    <label for="pasteData">Tempel Data Rekening yang Ingin Dicek</label>
+    <textarea id="pasteData" placeholder="Contoh:
+*UNTUK REKENING BERIKUT INI JIKA MASIH DIGUNAKAN...*
+BNI    Bendrahati Duha    456456
+BRI    Aci Ramadani    4565456465
+BCA Muhammad Rama Rusyana 1790399273"></textarea>
+    <div class="buttons">
+      <button id="checkBtn" type="button">CEK DATA</button>
+      <button id="copyBtn" class="secondary" type="button">COPY HASIL</button>
+      <button id="clearBtn" class="danger" type="button">BERSIHKAN</button>
+    </div>
+    <div class="hint">Kalimat pembuka otomatis diabaikan. Format TAB, spasi biasa, dan tabel Markdown dengan tanda <b>|</b> dapat dibaca.</div>
+  </section>
+
+  <section class="card">
+    <div class="stats">
+      <span class="pill">Database BANK: <b id="dbCount">0</b></span>
+      <span class="pill">Dicek: <b id="checkCount">0</b></span>
+      <span class="pill">Ketemu: <b id="foundCount">0</b></span>
+      <span class="pill">Tidak ketemu: <b id="notFoundCount">0</b></span>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>NAMA REKENING</th>
+            <th>NOMOR REKENING</th>
+            <th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody">
+          <tr><td colspan="3" class="empty">Belum ada hasil.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<script src="/checker-bank.js?v=19.0.0" defer></script>
+</body>
+</html>

@@ -284,6 +284,7 @@ async function navigate(menuId) {
   if (menuId === "user-admin") return renderUserAdmin();
   if (menuId === "generate-api") return renderGenerateApi();
   if (menuId === "settings") return renderSettings();
+  if (menuId === "checker") return renderCheckerBankWorkspace(menu);
   if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
   if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
   if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
@@ -344,6 +345,37 @@ function renderDashboard() {
   $$("[data-quick]").forEach(button => {
     button.addEventListener("click", () => navigate(button.dataset.quick));
   });
+}
+
+
+async function renderCheckerBankWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="xpay-workspace checker-bank-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">BANK ACCOUNT CHECKER</span>
+            <h3>Checker</h3>
+            <p>${escapeHtml(data.message)} Database BANK otomatis dibaca dari Google Spreadsheet yang sudah ditetapkan.</p>
+          </div>
+          <span class="xpay-workspace-badge">BANK • REKENING • STATUS</span>
+        </header>
+
+        <iframe
+          class="xpay-frame checker-bank-frame"
+          src="/checker-bank.html?v=19.0.0"
+          title="Checker BANK"
+          loading="eager"
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
 }
 
 async function renderXpayWorkspace(menu) {

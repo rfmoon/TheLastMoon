@@ -626,3 +626,14 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
   background:
     linear-gradient(110deg,rgba(68,225,178,.08),rgba(87,165,255,.05));
 }
+
+
+.checker-bank-frame {
+  min-height: 825px;
+}
+
+.checker-bank-workspace .xpay-workspace-head {
+  background:
+    linear-gradient(120deg,rgba(87,165,255,.10),rgba(68,225,178,.055)),
+    rgba(5,12,25,.22);
+}

@@ -1,86 +1,71 @@
-# TheLastMoon V18 — Universal API
+# TheLastMoon V19 — Checker BANK Spreadsheet
 
-Generate API sekarang tidak memakai pilihan scope satu per satu.
+Menu **Checker** sekarang menjalankan script Cek Status Rekening dari file terbaru.
 
-Setiap API key baru otomatis:
-
-```text
-SEMUA • READ ONLY
-```
-
-Gunakan satu endpoint:
+Spreadsheet sudah ditetapkan langsung:
 
 ```text
-GET /api/external/all
+https://docs.google.com/spreadsheets/d/1GgLZO1TvqT5ZCTi5JwdtBMkfiDVFDNdHCfbz4rLf8ag/edit?gid=1252132751#gid=1252132751
 ```
 
-Header:
+Tab yang dibaca memakai:
 
 ```text
-Authorization: Bearer tlm_live_xxxxxxxxx
+gid=1252132751
 ```
 
-## Data yang dibaca satu endpoint
+Jadi user tidak perlu menempel link spreadsheet setiap kali membuka Checker.
 
-- Dashboard / status sistem
-- User Admin:
-  - username
-  - status aktif
-  - master/non-master
-  - hak akses menu
-  - tanpa password/hash
-- Semua menu dan struktur submenu
-- Settings / background
-- Database Pencairan XPAY
-- EVENT SCATTER
-- Metadata API key
-- Ringkasan workspace lain
+## Cara kerja
 
-## EVENT SCATTER
+Saat menu:
 
-V18 menambahkan sinkronisasi EVENT SCATTER ke Cloudflare D1.
-
-IndexedDB browser masih dipakai sebagai cache lokal, tetapi data tanggal juga dikirim ke D1 sehingga:
-
-- user/perangkat lain dapat membaca data yang sama;
-- Universal API dapat membaca EVENT SCATTER;
-- data lama IndexedDB akan dimigrasikan ke D1 saat tanggal tersebut dibuka.
-
-## Contoh
-
-```js
-fetch("https://thelastmoon.pages.dev/api/external/all", {
-  headers: {
-    Authorization: "Bearer API_KEY_KAMU"
-  }
-})
-  .then(r => r.json())
-  .then(result => {
-    console.log(result.data);
-    console.log(result.data.eventScatter.rows);
-  });
+```text
+Checker
 ```
 
-## Catatan
+dibuka:
 
-Workspace seperti Cari Selisih XPAY masih berupa data tempelan sementara di browser.
-Karena tidak disimpan permanen di server, Universal API hanya mengembalikan status/capability untuk workspace tersebut, bukan isi tempelan sesaat.
+1. Spreadsheet BANK otomatis dimuat.
+2. Kolom A dibaca sebagai Nama Rekening.
+3. Kolom B dibaca sebagai Nomor Rekening.
+4. Kolom C dibaca sebagai Status/Keterangan.
+5. User tinggal menempel daftar rekening dan menekan **CEK DATA**.
+
+Nomor rekening dicocokkan lebih dulu berdasarkan nomor rekening. Nama rekening hanya menjadi fallback.
+
+## File baru
+
+```text
+checker-bank.html
+checker-bank.css
+checker-bank.js
+```
 
 ## File yang perlu ditimpa
 
 ```text
 app.js
 styles.css
-event-scatter.js
-schema.sql
+_headers
 README.md
 functions/api/[[path]].js
 ```
+
+Upload juga tiga file Checker baru di root repository.
+
+## Penting
+
+`_headers` V19 menambahkan:
+
+```text
+https://docs.google.com
+```
+
+ke `script-src` agar pembacaan Google Sheets GViz/JSONP tidak diblokir CSP.
 
 Setelah deployment:
 
 ```text
 Ctrl + Shift + R
 ```
-
-Buat API key baru di menu Generate API agar key memiliki akses Universal Read.
