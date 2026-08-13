@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Checker BANK</title>
-  <link rel="stylesheet" href="/checker-bank.css?v=20.0.0">
+  <link rel="stylesheet" href="/checker-bank.css?v=21.0.0">
 </head>
 <body>
 <div class="wrap">
   <h1>CEK STATUS REKENING</h1>
-  <div class="sub">Membaca sheet <b>BANK</b>: A = Nama Rekening, B = Nomor Rekening, C = Status/Keterangan.</div>
+  <div class="sub">Membaca sheet <b>BANK</b>: A = Nama Rekening, B = Nomor Rekening, C = Status/Keterangan. Jenis BANK diambil dari data yang ditempel.</div>
 
   <section class="card">
     <label for="sheetUrl">Link Google Spreadsheet</label>
@@ -37,7 +37,7 @@ BCA Muhammad Rama Rusyana 1790399273"></textarea>
       <button id="copyBtn" class="secondary" type="button">COPY HASIL</button>
       <button id="clearBtn" class="danger" type="button">BERSIHKAN</button>
     </div>
-    <div class="hint">Kalimat pembuka otomatis diabaikan. Format TAB, spasi biasa, dan tabel Markdown dengan tanda <b>|</b> dapat dibaca.</div>
+    <div class="hint">Kalimat pembuka otomatis diabaikan. BANK diambil dari data tempelan. Data dianggap ketemu hanya jika <b>Nama + Nomor Rekening</b> sama dengan sheet BANK.</div>
   </section>
 
   <section class="card">
@@ -52,18 +52,19 @@ BCA Muhammad Rama Rusyana 1790399273"></textarea>
       <table>
         <thead>
           <tr>
+            <th>BANK</th>
             <th>NAMA REKENING</th>
             <th>NOMOR REKENING</th>
             <th>STATUS</th>
           </tr>
         </thead>
         <tbody id="resultBody">
-          <tr><td colspan="3" class="empty">Belum ada hasil.</td></tr>
+          <tr><td colspan="4" class="empty">Belum ada hasil.</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 </div>
-<script src="/checker-bank.js?v=20.0.0" defer></script>
+<script src="/checker-bank.js?v=21.0.0" defer></script>
 </body>
 </html>

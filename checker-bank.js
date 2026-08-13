@@ -218,20 +218,17 @@
   }
 
   function findMatch(item) {
+    // BANK dari data tempelan TIDAK ikut dicocokkan karena sheet BANK hanya punya:
+    // A = Nama, B = Nomor Rekening, C = Status.
+    // Agar benar-benar "data yang sama", Nama + Nomor Rekening harus sama.
     const account = normalizeAccount(item.account);
-    if (account) {
-      const exactAccount = bankRows.find(r => normalizeAccount(r.account) === account);
-      if (exactAccount) return exactAccount;
-    }
-
-    // Nama hanya dipakai sebagai cadangan bila nomor tidak ketemu.
     const name = normalizeName(item.name);
-    if (name) {
-      const sameNames = bankRows.filter(r => normalizeName(r.name) === name);
-      if (sameNames.length === 1) return sameNames[0];
-    }
+    if (!account || !name) return null;
 
-    return null;
+    return bankRows.find(r =>
+      normalizeAccount(r.account) === account &&
+      normalizeName(r.name) === name
+    ) || null;
   }
 
   function statusClass(status='') {
@@ -261,13 +258,16 @@
     const foundResults = currentResults.filter(x => x.match);
 
     if (!foundResults.length) {
-      resultBody.innerHTML = '<tr><td colspan="3" class="empty"><b>Kosong ya bos</b></td></tr>';
+      resultBody.innerHTML = '<tr><td colspan="4" class="empty"><b>Kosong ya bos</b></td></tr>';
       return;
     }
 
-    resultBody.innerHTML = foundResults.map(({match}) => `<tr>
-      <td><b>${escapeHtml(match.name)}</b></td>
-      <td class="mono">${escapeHtml(match.account)}</td>
+    // BANK, NAMA dan NOMOR ditampilkan mengikuti data yang ditempel.
+    // STATUS diambil dari sheet BANK.
+    resultBody.innerHTML = foundResults.map(({item, match}) => `<tr>
+      <td><b>${escapeHtml(item.bank || '-')}</b></td>
+      <td><b>${escapeHtml(item.name)}</b></td>
+      <td class="mono">${escapeHtml(item.account)}</td>
       <td><span class="tag ${statusClass(match.status)}">${escapeHtml(match.status || 'TANPA KETERANGAN')}</span></td>
     </tr>`).join('');
   }
@@ -279,9 +279,9 @@
       return;
     }
 
-    const rows = foundResults.map(({match}) => `${match.name}\t${match.account}\t${match.status}`);
+    const rows = foundResults.map(({item, match}) => `${item.bank || ''}\t${item.name}\t${item.account}\t${match.status}`);
 
-    const text = ['NAMA REKENING\tNOMOR REKENING\tSTATUS', ...rows].join('\n');
+    const text = ['BANK\tNAMA REKENING\tNOMOR REKENING\tSTATUS', ...rows].join('\n');
     try {
       await navigator.clipboard.writeText(text);
     } catch (_) {
@@ -306,7 +306,7 @@
     checkCount.textContent = '0';
     foundCount.textContent = '0';
     notFoundCount.textContent = '0';
-    resultBody.innerHTML = '<tr><td colspan="3" class="empty">Belum ada hasil.</td></tr>';
+    resultBody.innerHTML = '<tr><td colspan="4" class="empty">Belum ada hasil.</td></tr>';
     pasteData.focus();
   }
 

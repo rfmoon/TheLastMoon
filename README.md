@@ -1,27 +1,58 @@
-# TheLastMoon V20 — Checker Full Replace
+# TheLastMoon V21 — Checker Strict Match
 
-Bagian **Checker** diganti seluruhnya memakai script terbaru dari user.
+Bagian **Checker** diganti seluruhnya menggunakan script terbaru user.
 
-## Perubahan logika Checker terbaru
+## Perubahan logika utama
 
-- Google Spreadsheet tetap dibaca dari link yang ditempel di kolom Link Google Spreadsheet.
-- Sheet yang dibaca bernama `BANK`.
-- Kolom A = Nama Rekening.
-- Kolom B = Nomor Rekening.
-- Kolom C = Status/Keterangan.
-- Pencocokan utama berdasarkan nomor rekening.
-- Nama rekening hanya menjadi fallback bila nomor tidak ditemukan.
-- Hasil tabel sekarang hanya menampilkan rekening yang ditemukan.
-- Rekening yang tidak ditemukan tidak lagi ditampilkan sebagai baris merah.
-- Jika tidak ada rekening yang ditemukan, hasil menampilkan:
+Data tempelan sekarang mempertahankan:
+
+```text
+BANK
+NAMA REKENING
+NOMOR REKENING
+```
+
+Sedangkan status tetap dibaca dari sheet `BANK`.
+
+Rekening dianggap **KETEMU** hanya jika:
+
+```text
+Nama Rekening sama
+DAN
+Nomor Rekening sama
+```
+
+BANK dari data tempelan tidak digunakan sebagai kunci pencocokan karena spreadsheet BANK hanya berisi:
+
+```text
+A = Nama Rekening
+B = Nomor Rekening
+C = Status
+```
+
+## Hasil
+
+Kolom hasil sekarang:
+
+```text
+BANK
+NAMA REKENING
+NOMOR REKENING
+STATUS
+```
+
+BANK, Nama, dan Nomor mengikuti data yang ditempel.
+STATUS diambil dari Google Spreadsheet.
+
+Jika tidak ada data yang cocok:
 
 ```text
 Kosong ya bos
 ```
 
-- COPY HASIL juga hanya menyalin rekening yang ditemukan.
+COPY HASIL juga memakai empat kolom tersebut.
 
-## File utama yang berubah
+## File yang perlu ditimpa
 
 ```text
 checker-bank.html
