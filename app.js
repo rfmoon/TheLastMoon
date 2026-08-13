@@ -360,14 +360,14 @@ async function renderCheckerBankWorkspace(menu) {
           <div>
             <span class="kicker">BANK ACCOUNT CHECKER</span>
             <h3>Checker</h3>
-            <p>${escapeHtml(data.message)} Database BANK otomatis dibaca dari Google Spreadsheet yang sudah ditetapkan.</p>
+            <p>${escapeHtml(data.message)} Link Google Spreadsheet hanya dapat dilihat oleh Master Administrator. User hanya dapat membaca database BANK untuk pengecekan.</p>
           </div>
           <span class="xpay-workspace-badge">BANK • REKENING • STATUS</span>
         </header>
 
         <iframe
           class="xpay-frame checker-bank-frame"
-          src="/checker-bank.html?v=21.0.0"
+          src="/checker-bank.html?v=22.0.0"
           title="Checker BANK"
           loading="eager"
           referrerpolicy="strict-origin-when-cross-origin">

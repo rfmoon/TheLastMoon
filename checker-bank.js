@@ -5,6 +5,11 @@
   const sheetUrl = $('sheetUrl');
   const loadBtn = $('loadBtn');
   const loadStatus = $('loadStatus');
+  const masterSheetConfig = $('masterSheetConfig');
+  const userSheetInfo = $('userSheetInfo');
+  const saveSheetBtn = $('saveSheetBtn');
+  const saveSheetStatus = $('saveSheetStatus');
+  const toggleSheetUrl = $('toggleSheetUrl');
   const pasteData = $('pasteData');
   const checkBtn = $('checkBtn');
   const copyBtn = $('copyBtn');
@@ -42,12 +47,39 @@
       .replace(/\s+/g, ' ');
   }
 
-  function extractSpreadsheetId(value='') {
-    const s = String(value).trim();
-    const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-    if (m) return m[1];
-    if (/^[a-zA-Z0-9_-]{20,}$/.test(s)) return s;
-    return '';
+  async function api(path, options={}) {
+    const response = await fetch(path, {
+      method: options.method || 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: options.body ? {'Content-Type':'application/json'} : {},
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+
+    const text = await response.text();
+    let data = {};
+
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (_) {
+        throw new Error(`Respons server tidak valid (HTTP ${response.status}).`);
+      }
+    }
+
+    if (!response.ok) {
+      const details = [
+        data.error || `Server error HTTP ${response.status}.`,
+        data.stage ? `Tahap: ${data.stage}` : '',
+        data.detail ? `Detail: ${data.detail}` : ''
+      ].filter(Boolean);
+
+      const error = new Error(details.join(' • '));
+      error.status = response.status;
+      throw error;
+    }
+
+    return data;
   }
 
   function setLoadStatus(message, type='') {
@@ -55,104 +87,119 @@
     loadStatus.className = 'status' + (type ? ' ' + type : '');
   }
 
-  function cellText(cell) {
-    if (!cell) return '';
-    // Untuk kolom Plain Text, c.v berupa string. c.f dipakai jika tersedia.
-    if (cell.f !== undefined && cell.f !== null && cell.f !== '') return String(cell.f).trim();
-    if (cell.v === undefined || cell.v === null) return '';
-    return String(cell.v).trim();
+  function setSaveStatus(message, type='') {
+    saveSheetStatus.textContent = message;
+    saveSheetStatus.className =
+      'status' + (type ? ' ' + type : '');
+    saveSheetStatus.classList.remove('hidden');
   }
 
-  function buildBankRowsFromGviz(response) {
-    if (!response || response.status === 'error') {
-      const msg = response?.errors?.[0]?.detailed_message || response?.errors?.[0]?.message || 'Google Sheets mengembalikan error.';
-      throw new Error(msg);
-    }
+  async function initializeCheckerAccess() {
+    try {
+      const session = await api('/api/session');
 
-    const rows = response?.table?.rows || [];
-    const parsed = rows.map((row, index) => {
-      const cells = row.c || [];
-      const name = cellText(cells[0]);
-      const account = normalizeAccount(cellText(cells[1]));
-      const status = cellText(cells[2]);
-      return { row: index + 1, name, account, status };
-    }).filter(r => r.name || r.account || r.status);
-
-    return parsed.filter(r => {
-      const n = normalizeName(r.name);
-      const a = normalizeName(r.account);
-      return !(n.includes('NAMA') && (a.includes('NOMOR') || normalizeName(r.status).includes('STATUS')));
-    });
-  }
-
-  function loadViaJsonp(spreadsheetId) {
-    return new Promise((resolve, reject) => {
-      const callbackName = '__bankGviz_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-      let finished = false;
-      const script = document.createElement('script');
-      const timeout = setTimeout(() => {
-        if (finished) return;
-        finished = true;
-        cleanup();
-        reject(new Error('Akses Google Sheets belum diizinkan atau koneksi terlalu lama.'));
-      }, 20000);
-
-      function cleanup() {
-        clearTimeout(timeout);
-        try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
-        script.remove();
+      if (!session.authenticated) {
+        throw new Error('Sesi login habis. Silakan login ulang.');
       }
 
-      window[callbackName] = response => {
-        if (finished) return;
-        finished = true;
+      if (session.user?.isMaster) {
+        masterSheetConfig.classList.remove('hidden');
+        userSheetInfo.classList.add('hidden');
+
         try {
-          const rows = buildBankRowsFromGviz(response);
-          cleanup();
-          resolve(rows);
-        } catch (err) {
-          cleanup();
-          reject(err);
+          const config = await api('/api/checker-bank/config');
+          sheetUrl.value = config.url || '';
+
+          if (config.configured) {
+            setSaveStatus(
+              'Link spreadsheet tersimpan di server.',
+              'ok'
+            );
+          } else {
+            setSaveStatus(
+              'Belum ada link spreadsheet. Masukkan link lalu klik SIMPAN LINK.',
+              'wait'
+            );
+          }
+        } catch (error) {
+          setSaveStatus(error.message, 'err');
         }
-      };
-
-      script.onerror = () => {
-        if (finished) return;
-        finished = true;
-        cleanup();
-        reject(new Error('Tidak dapat terhubung ke Google Sheets.'));
-      };
-
-      const tqx = encodeURIComponent('out:json;responseHandler:' + callbackName);
-      script.src = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?sheet=${encodeURIComponent('BANK')}&tqx=${tqx}&_=${Date.now()}`;
-      document.head.appendChild(script);
-    });
+      } else {
+        masterSheetConfig.classList.add('hidden');
+        userSheetInfo.classList.remove('hidden');
+      }
+    } catch (error) {
+      setLoadStatus(error.message, 'err');
+      loadBtn.disabled = true;
+    }
   }
 
-  async function loadBankSheet() {
-    const id = extractSpreadsheetId(sheetUrl.value);
-    if (!id) {
-      setLoadStatus('Link Google Spreadsheet tidak valid.', 'err');
+  async function saveSheetConfig() {
+    const url = String(sheetUrl.value || '').trim();
+
+    if (!url) {
+      setSaveStatus(
+        'Masukkan Link Google Spreadsheet terlebih dahulu.',
+        'err'
+      );
       return;
     }
 
-    localStorage.setItem('bankSheetUrl', sheetUrl.value.trim());
-    loadBtn.disabled = true;
-    setLoadStatus('Menghubungkan ke Google Sheets dan membaca sheet BANK...', 'wait');
+    saveSheetBtn.disabled = true;
+    setSaveStatus('Menyimpan link ke server...', 'wait');
 
     try {
-      bankRows = await loadViaJsonp(id);
-      if (!bankRows.length) throw new Error('Sheet BANK terbaca, tetapi kolom A:B:C tidak mempunyai data.');
+      const result = await api('/api/checker-bank/config', {
+        method: 'PUT',
+        body: { url }
+      });
+
+      sheetUrl.value = result.url || url;
+      setSaveStatus(
+        'Link berhasil disimpan. User biasa tetap tidak dapat melihat link ini.',
+        'ok'
+      );
+    } catch (error) {
+      setSaveStatus(error.message, 'err');
+    } finally {
+      saveSheetBtn.disabled = false;
+    }
+  }
+
+  async function loadBankSheet() {
+    loadBtn.disabled = true;
+    setLoadStatus(
+      'Server sedang membaca database BANK dari Google Spreadsheet...',
+      'wait'
+    );
+
+    try {
+      const data = await api('/api/checker-bank/data');
+
+      bankRows = Array.isArray(data.rows)
+        ? data.rows.map((row, index) => ({
+            row: Number(row.row || index + 1),
+            name: String(row.name || '').trim(),
+            account: normalizeAccount(row.account || ''),
+            status: String(row.status || '').trim()
+          }))
+        : [];
+
+      if (!bankRows.length) {
+        throw new Error(
+          'Sheet BANK terbaca, tetapi kolom A:B:C tidak mempunyai data.'
+        );
+      }
 
       dbCount.textContent = bankRows.length;
-      setLoadStatus(`Berhasil membaca ${bankRows.length} rekening dari sheet BANK.`, 'ok');
-    } catch (err) {
+      setLoadStatus(
+        `Berhasil membaca ${bankRows.length} rekening dari sheet BANK.`,
+        'ok'
+      );
+    } catch (error) {
       bankRows = [];
       dbCount.textContent = '0';
-      setLoadStatus(
-        `Belum dapat membaca sheet BANK. ${err.message} Jika muncul “Allow network access?”, pilih Allow. Pastikan Spreadsheet dapat dilihat dari browser ini dan sheet bernama BANK.`,
-        'err'
-      );
+      setLoadStatus(error.message, 'err');
     } finally {
       loadBtn.disabled = false;
     }
@@ -315,6 +362,13 @@
   copyBtn.addEventListener('click', copyResults);
   clearBtn.addEventListener('click', clearInput);
 
-  const saved = localStorage.getItem('bankSheetUrl');
-  if (saved) sheetUrl.value = saved;
+  saveSheetBtn.addEventListener('click', saveSheetConfig);
+
+  toggleSheetUrl.addEventListener('click', () => {
+    const visible = sheetUrl.type === 'text';
+    sheetUrl.type = visible ? 'password' : 'text';
+    toggleSheetUrl.textContent = visible ? 'LIHAT LINK' : 'SEMBUNYIKAN';
+  });
+
+  initializeCheckerAccess();
 })();

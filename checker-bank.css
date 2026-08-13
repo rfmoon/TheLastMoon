@@ -142,3 +142,86 @@ tbody tr:hover td {
 @media(max-width:720px) {
   .wrap { padding-inline: 0; }
 }
+
+
+.hidden {
+  display: none !important;
+}
+
+.checker-source-card {
+  display: grid;
+  gap: 14px;
+}
+
+.secret-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.secret-head label {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.secret-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid rgba(255,199,102,.32);
+  border-radius: 999px;
+  color: #ffe0a0;
+  background: rgba(255,199,102,.08);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.secret-badge.user {
+  border-color: rgba(87,216,148,.28);
+  color: #a9f4d4;
+  background: rgba(87,216,148,.08);
+}
+
+.master-link-row {
+  margin-top: 10px;
+}
+
+.mini-btn {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  font-size: 10px;
+}
+
+.user-sheet-info {
+  padding: 3px 0;
+}
+
+.user-sheet-info strong {
+  display: block;
+  margin-top: 9px;
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.reader-action {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.reader-action #loadBtn {
+  min-width: 190px;
+}
+
+@media(max-width:720px) {
+  .secret-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .secret-head .mini-btn,
+  .reader-action #loadBtn {
+    width: 100%;
+  }
+}

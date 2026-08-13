@@ -1,56 +1,80 @@
-# TheLastMoon V21 — Checker Strict Match
+# TheLastMoon V22 — Checker Master Secret
 
-Bagian **Checker** diganti seluruhnya menggunakan script terbaru user.
+Perubahan keamanan pada menu **Checker**:
 
-## Perubahan logika utama
+## Master Administrator
 
-Data tempelan sekarang mempertahankan:
-
-```text
-BANK
-NAMA REKENING
-NOMOR REKENING
-```
-
-Sedangkan status tetap dibaca dari sheet `BANK`.
-
-Rekening dianggap **KETEMU** hanya jika:
+Master melihat bagian:
 
 ```text
-Nama Rekening sama
-DAN
-Nomor Rekening sama
+MASTER ADMINISTRATOR ONLY
+Link Google Spreadsheet
+[SIMPAN LINK]
+[LIHAT LINK]
 ```
 
-BANK dari data tempelan tidak digunakan sebagai kunci pencocokan karena spreadsheet BANK hanya berisi:
+Link disimpan di Cloudflare D1 melalui server.
+
+Master dapat:
+
+- melihat link;
+- mengganti link;
+- menyimpan link;
+- menekan BACA SHEET BANK;
+- melakukan pengecekan rekening.
+
+## User biasa
+
+User yang diberi akses `Checker`:
+
+- TIDAK menerima link spreadsheet;
+- TIDAK dapat membuka endpoint konfigurasi;
+- TIDAK dapat melihat URL melalui HTML/JavaScript;
+- hanya melihat tombol:
 
 ```text
-A = Nama Rekening
-B = Nomor Rekening
-C = Status
+BACA SHEET BANK
 ```
 
-## Hasil
+Setelah ditekan, browser meminta data BANK ke server TheLastMoon.
+Cloudflare Function yang membaca Google Spreadsheet, bukan browser user.
 
-Kolom hasil sekarang:
+## Penting: set link sekali setelah upgrade
+
+V22 sengaja tidak menaruh URL spreadsheet di source code agar link tidak bocor ke User.
+
+Setelah deploy:
+
+1. Login sebagai Master Administrator.
+2. Buka `Checker`.
+3. Tempel Link Google Spreadsheet.
+4. Klik `SIMPAN LINK`.
+5. Klik `BACA SHEET BANK`.
+
+Sesudah itu User cukup membuka Checker dan menekan `BACA SHEET BANK`.
+
+## Akses Google Sheets
+
+Karena sekarang Cloudflare Function yang membaca Spreadsheet, spreadsheet harus dapat dibaca tanpa login interaktif Google, misalnya akses read-only yang sesuai.
+
+Jika Google Sheet hanya dapat dibuka karena browser Master sedang login ke Google, server Cloudflare tidak akan memiliki sesi Google tersebut. Untuk sheet private sepenuhnya diperlukan integrasi Google Sheets API/service account.
+
+## Endpoint internal baru
+
+Master only:
 
 ```text
-BANK
-NAMA REKENING
-NOMOR REKENING
-STATUS
+GET /api/checker-bank/config
+PUT /api/checker-bank/config
 ```
 
-BANK, Nama, dan Nomor mengikuti data yang ditempel.
-STATUS diambil dari Google Spreadsheet.
-
-Jika tidak ada data yang cocok:
+User dengan akses Checker:
 
 ```text
-Kosong ya bos
+GET /api/checker-bank/data
 ```
 
-COPY HASIL juga memakai empat kolom tersebut.
+Endpoint data tidak mengembalikan URL spreadsheet.
 
 ## File yang perlu ditimpa
 
@@ -59,6 +83,7 @@ checker-bank.html
 checker-bank.css
 checker-bank.js
 app.js
+_headers
 README.md
 functions/api/[[path]].js
 ```
