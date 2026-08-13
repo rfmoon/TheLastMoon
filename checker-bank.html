@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Checker BANK</title>
-  <link rel="stylesheet" href="/checker-bank.css?v=19.0.0">
+  <link rel="stylesheet" href="/checker-bank.css?v=20.0.0">
 </head>
 <body>
 <div class="wrap">
@@ -13,16 +13,16 @@
   <div class="sub">Membaca sheet <b>BANK</b>: A = Nama Rekening, B = Nomor Rekening, C = Status/Keterangan.</div>
 
   <section class="card">
-    <label for="sheetUrl">Spreadsheet Database BANK</label>
+    <label for="sheetUrl">Link Google Spreadsheet</label>
     <div class="linkRow">
-      <input id="sheetUrl" value="https://docs.google.com/spreadsheets/d/1GgLZO1TvqT5ZCTi5JwdtBMkfiDVFDNdHCfbz4rLf8ag/edit?gid=1252132751#gid=1252132751" readonly>
-      <button id="loadBtn" type="button">MUAT ULANG BANK</button>
+      <input id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/xxxxxxxxxxxxxxxx/edit">
+      <button id="loadBtn" type="button">BACA SHEET BANK</button>
     </div>
     <div class="hint">
-      Database memakai tab spreadsheet yang diberikan untuk <b>BANK</b>. Kolom <b>B</b> sebaiknya berformat <b>Plain text</b> agar angka awal 0 tidak hilang.
-      Spreadsheet akan dibaca otomatis saat Checker dibuka.
+      Sheet harus bernama <b>BANK</b>. Kolom <b>B</b> sebaiknya berformat <b>Plain text</b> agar angka awal 0 tidak hilang.
+      Spreadsheet harus bisa dilihat oleh akun/browser yang membuka HTML ini.
     </div>
-    <div id="loadStatus" class="status wait">Menyiapkan database BANK...</div>
+    <div id="loadStatus" class="status">Belum ada database BANK yang dimuat.</div>
   </section>
 
   <section class="card">
@@ -64,6 +64,6 @@ BCA Muhammad Rama Rusyana 1790399273"></textarea>
     </div>
   </section>
 </div>
-<script src="/checker-bank.js?v=19.0.0" defer></script>
+<script src="/checker-bank.js?v=20.0.0" defer></script>
 </body>
 </html>

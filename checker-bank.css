@@ -85,12 +85,8 @@ textarea {
   color: #ffffff !important;
 }
 
-input[readonly] {
-  color: rgba(238,244,255,.76) !important;
-  cursor: default;
-}
-
-textarea::placeholder {
+textarea::placeholder,
+input::placeholder {
   color: rgba(235,242,255,.58);
 }
 

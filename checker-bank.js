@@ -15,9 +15,6 @@
   const foundCount = $('foundCount');
   const notFoundCount = $('notFoundCount');
 
-  const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1GgLZO1TvqT5ZCTi5JwdtBMkfiDVFDNdHCfbz4rLf8ag/edit?gid=1252132751#gid=1252132751';
-  const DEFAULT_SHEET_GID = '1252132751';
-
   let bankRows = [];
   let currentResults = [];
 
@@ -51,12 +48,6 @@
     if (m) return m[1];
     if (/^[a-zA-Z0-9_-]{20,}$/.test(s)) return s;
     return '';
-  }
-
-  function extractSpreadsheetGid(value='') {
-    const s = String(value).trim();
-    const match = s.match(/[?&#]gid=(\d+)/i);
-    return match ? match[1] : DEFAULT_SHEET_GID;
   }
 
   function setLoadStatus(message, type='') {
@@ -94,7 +85,7 @@
     });
   }
 
-  function loadViaJsonp(spreadsheetId, gid='') {
+  function loadViaJsonp(spreadsheetId) {
     return new Promise((resolve, reject) => {
       const callbackName = '__bankGviz_' + Date.now() + '_' + Math.random().toString(36).slice(2);
       let finished = false;
@@ -133,28 +124,24 @@
       };
 
       const tqx = encodeURIComponent('out:json;responseHandler:' + callbackName);
-      const target = gid
-        ? `gid=${encodeURIComponent(gid)}`
-        : `sheet=${encodeURIComponent('BANK')}`;
-      script.src = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?${target}&tqx=${tqx}&_=${Date.now()}`;
+      script.src = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?sheet=${encodeURIComponent('BANK')}&tqx=${tqx}&_=${Date.now()}`;
       document.head.appendChild(script);
     });
   }
 
   async function loadBankSheet() {
     const id = extractSpreadsheetId(sheetUrl.value);
-    const gid = extractSpreadsheetGid(sheetUrl.value);
     if (!id) {
       setLoadStatus('Link Google Spreadsheet tidak valid.', 'err');
       return;
     }
 
-    localStorage.setItem('bankSheetUrl', DEFAULT_SHEET_URL);
+    localStorage.setItem('bankSheetUrl', sheetUrl.value.trim());
     loadBtn.disabled = true;
     setLoadStatus('Menghubungkan ke Google Sheets dan membaca sheet BANK...', 'wait');
 
     try {
-      bankRows = await loadViaJsonp(id, gid);
+      bankRows = await loadViaJsonp(id);
       if (!bankRows.length) throw new Error('Sheet BANK terbaca, tetapi kolom A:B:C tidak mempunyai data.');
 
       dbCount.textContent = bankRows.length;
@@ -163,7 +150,7 @@
       bankRows = [];
       dbCount.textContent = '0';
       setLoadStatus(
-        `Belum dapat membaca database BANK. ${err.message} Pastikan Spreadsheet dapat dibaca dari browser ini dan tab gid ${gid} tersedia.`,
+        `Belum dapat membaca sheet BANK. ${err.message} Jika muncul “Allow network access?”, pilih Allow. Pastikan Spreadsheet dapat dilihat dari browser ini dan sheet bernama BANK.`,
         'err'
       );
     } finally {
@@ -271,38 +258,28 @@
   }
 
   function renderResults() {
-    if (!currentResults.length) {
-      resultBody.innerHTML = '<tr><td colspan="3" class="empty">Tidak ada data rekening yang dapat dibaca.</td></tr>';
+    const foundResults = currentResults.filter(x => x.match);
+
+    if (!foundResults.length) {
+      resultBody.innerHTML = '<tr><td colspan="3" class="empty"><b>Kosong ya bos</b></td></tr>';
       return;
     }
 
-    resultBody.innerHTML = currentResults.map(({item, match}) => {
-      if (match) {
-        return `<tr>
-          <td><b>${escapeHtml(match.name)}</b></td>
-          <td class="mono">${escapeHtml(match.account)}</td>
-          <td><span class="tag ${statusClass(match.status)}">${escapeHtml(match.status || 'TANPA KETERANGAN')}</span></td>
-        </tr>`;
-      }
-
-      return `<tr>
-        <td>${escapeHtml(item.name || '-')}</td>
-        <td class="mono">${escapeHtml(item.account || '-')}</td>
-        <td><span class="tag bad">TIDAK DITEMUKAN DI SHEET BANK</span></td>
-      </tr>`;
-    }).join('');
+    resultBody.innerHTML = foundResults.map(({match}) => `<tr>
+      <td><b>${escapeHtml(match.name)}</b></td>
+      <td class="mono">${escapeHtml(match.account)}</td>
+      <td><span class="tag ${statusClass(match.status)}">${escapeHtml(match.status || 'TANPA KETERANGAN')}</span></td>
+    </tr>`).join('');
   }
 
   async function copyResults() {
-    if (!currentResults.length) {
-      alert('Belum ada hasil yang bisa disalin.');
+    const foundResults = currentResults.filter(x => x.match);
+    if (!foundResults.length) {
+      alert('Kosong ya bos');
       return;
     }
 
-    const rows = currentResults.map(({item, match}) => {
-      if (match) return `${match.name}\t${match.account}\t${match.status}`;
-      return `${item.name}\t${item.account}\tTIDAK DITEMUKAN DI SHEET BANK`;
-    });
+    const rows = foundResults.map(({match}) => `${match.name}\t${match.account}\t${match.status}`);
 
     const text = ['NAMA REKENING\tNOMOR REKENING\tSTATUS', ...rows].join('\n');
     try {
@@ -338,10 +315,6 @@
   copyBtn.addEventListener('click', copyResults);
   clearBtn.addEventListener('click', clearInput);
 
-  sheetUrl.value = DEFAULT_SHEET_URL;
-
-  // Database BANK otomatis dimuat saat menu Checker dibuka.
-  window.setTimeout(() => {
-    loadBankSheet();
-  }, 120);
+  const saved = localStorage.getItem('bankSheetUrl');
+  if (saved) sheetUrl.value = saved;
 })();
