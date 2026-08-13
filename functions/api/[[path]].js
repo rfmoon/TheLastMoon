@@ -15,7 +15,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v21-checker-strict-match";
+const VERSION = "v22-checker-master-secret";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -160,6 +160,21 @@ async function routeRequest(request, env, url) {
   const user = await getSessionUser(request, env.DB);
   if (!user) {
     throw new AppError(401, "Sesi login habis. Silakan masuk kembali.", "session");
+  }
+
+  if (url.pathname === "/api/checker-bank/config" && request.method === "GET") {
+    requireMaster(user);
+    return getCheckerBankConfig(env.DB);
+  }
+
+  if (url.pathname === "/api/checker-bank/config" && request.method === "PUT") {
+    requireMaster(user);
+    return updateCheckerBankConfig(request, env.DB, user);
+  }
+
+  if (url.pathname === "/api/checker-bank/data" && request.method === "GET") {
+    requireMenuAccess(user, "checker");
+    return readCheckerBankData(env.DB);
   }
 
   if (url.pathname === "/api/change-password" && request.method === "POST") {
@@ -1471,6 +1486,281 @@ function validateEventScatterDate(date) {
       "event-scatter-date"
     );
   }
+}
+
+
+async function getCheckerBankConfig(db) {
+  const url = await readAppSetting(
+    db,
+    "checker_bank_sheet_url"
+  );
+
+  return json({
+    configured: Boolean(url),
+    url
+  });
+}
+
+async function updateCheckerBankConfig(request, db, user) {
+  const body = await readJson(request);
+  const url = validateCheckerSheetUrl(
+    String(body.url || "").trim()
+  );
+
+  await upsertAppSetting(
+    db,
+    "checker_bank_sheet_url",
+    url,
+    user.id
+  );
+
+  return json({
+    success: true,
+    configured: true,
+    url
+  });
+}
+
+async function readCheckerBankData(db) {
+  const sourceUrl = await readAppSetting(
+    db,
+    "checker_bank_sheet_url"
+  );
+
+  if (!sourceUrl) {
+    throw new AppError(
+      409,
+      "Database BANK belum dikonfigurasi oleh Master Administrator.",
+      "checker-bank-not-configured"
+    );
+  }
+
+  const parsed = parseCheckerSheetUrl(sourceUrl);
+  const targetParam = parsed.gid
+    ? `gid=${encodeURIComponent(parsed.gid)}`
+    : `sheet=${encodeURIComponent("BANK")}`;
+
+  const gvizUrl =
+    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
+    `/gviz/tq?tqx=out:csv&${targetParam}&_=${Date.now()}`;
+
+  let response;
+
+  try {
+    response = await fetch(gvizUrl, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        "Accept": "text/csv,text/plain,*/*",
+        "User-Agent": "TheLastMoon-Checker/1.0"
+      }
+    });
+  } catch (error) {
+    throw new AppError(
+      502,
+      `Tidak dapat terhubung ke Google Sheets: ${safeErrorMessage(error)}`,
+      "checker-bank-fetch"
+    );
+  }
+
+  if (!response.ok) {
+    throw new AppError(
+      502,
+      `Google Sheets mengembalikan HTTP ${response.status}. Pastikan spreadsheet dapat dibaca oleh server.`,
+      "checker-bank-google-http"
+    );
+  }
+
+  const csv = await response.text();
+  const table = parseCsv(csv);
+
+  const rows = table
+    .map((cells, index) => {
+      const name = String(cells[0] || "").trim();
+      const account = normalizeCheckerAccount(
+        cells[1] || ""
+      );
+      const status = String(cells[2] || "").trim();
+
+      return {
+        row: index + 1,
+        name,
+        account,
+        status
+      };
+    })
+    .filter(row => row.name || row.account || row.status)
+    .filter(row => {
+      const name = normalizeCheckerName(row.name);
+      const account = normalizeCheckerName(row.account);
+      const status = normalizeCheckerName(row.status);
+
+      return !(
+        name.includes("NAMA") &&
+        (
+          account.includes("NOMOR") ||
+          status.includes("STATUS")
+        )
+      );
+    });
+
+  if (!rows.length) {
+    throw new AppError(
+      422,
+      "Spreadsheet terbaca, tetapi data BANK A:B:C kosong atau formatnya tidak sesuai.",
+      "checker-bank-empty"
+    );
+  }
+
+  return json({
+    ok: true,
+    total: rows.length,
+    rows
+  });
+}
+
+function validateCheckerSheetUrl(value) {
+  if (!value) {
+    throw new AppError(
+      400,
+      "Link Google Spreadsheet wajib diisi.",
+      "checker-bank-url-empty"
+    );
+  }
+
+  if (value.length > 2000) {
+    throw new AppError(
+      400,
+      "Link Google Spreadsheet terlalu panjang.",
+      "checker-bank-url-length"
+    );
+  }
+
+  parseCheckerSheetUrl(value);
+  return value;
+}
+
+function parseCheckerSheetUrl(value) {
+  let parsed;
+
+  try {
+    parsed = new URL(value);
+  } catch (_) {
+    throw new AppError(
+      400,
+      "Format Link Google Spreadsheet tidak valid.",
+      "checker-bank-url-invalid"
+    );
+  }
+
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.hostname !== "docs.google.com"
+  ) {
+    throw new AppError(
+      400,
+      "Link harus berasal dari https://docs.google.com.",
+      "checker-bank-url-host"
+    );
+  }
+
+  const match = parsed.pathname.match(
+    /^\/spreadsheets\/d\/([A-Za-z0-9_-]+)/
+  );
+
+  if (!match) {
+    throw new AppError(
+      400,
+      "Link Google Spreadsheet tidak mempunyai Spreadsheet ID yang valid.",
+      "checker-bank-url-id"
+    );
+  }
+
+  const hashParams = new URLSearchParams(
+    String(parsed.hash || "").replace(/^#/, "")
+  );
+
+  const gid =
+    parsed.searchParams.get("gid") ||
+    hashParams.get("gid") ||
+    "";
+
+  return {
+    id: match[1],
+    gid: /^\d+$/.test(gid) ? gid : ""
+  };
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  const input = String(text || "");
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+
+    if (quoted) {
+      if (char === '"') {
+        if (input[index + 1] === '"') {
+          cell += '"';
+          index += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        cell += char;
+      }
+
+      continue;
+    }
+
+    if (char === '"') {
+      quoted = true;
+      continue;
+    }
+
+    if (char === ",") {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if (char === "\n") {
+      row.push(cell.replace(/\r$/, ""));
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  if (cell.length || row.length) {
+    row.push(cell.replace(/\r$/, ""));
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function normalizeCheckerAccount(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^'+/, "")
+    .replace(/[^0-9]/g, "");
+}
+
+function normalizeCheckerName(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 async function listPayoutAccounts(db) {
