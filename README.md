@@ -1,95 +1,86 @@
-# TheLastMoon V22 — Checker Master Secret
+# TheLastMoon V23 — Xpay Checker Cloudflare
 
-Perubahan keamanan pada menu **Checker**:
-
-## Master Administrator
-
-Master melihat bagian:
+Menu baru:
 
 ```text
-MASTER ADMINISTRATOR ONLY
-Link Google Spreadsheet
-[SIMPAN LINK]
-[LIHAT LINK]
+Xpay Checker
 ```
 
-Link disimpan di Cloudflare D1 melalui server.
+Menu dapat diberikan kepada User melalui `User Admin`.
 
-Master dapat:
+## API Cloudflare
 
-- melihat link;
-- mengganti link;
-- menyimpan link;
-- menekan BACA SHEET BANK;
-- melakukan pengecekan rekening.
+Script Xpay Checker tidak lagi memakai `garpusomay.com/xpay-api.php`.
 
-## User biasa
-
-User yang diberi akses `Checker`:
-
-- TIDAK menerima link spreadsheet;
-- TIDAK dapat membuka endpoint konfigurasi;
-- TIDAK dapat melihat URL melalui HTML/JavaScript;
-- hanya melihat tombol:
+API sekarang berada langsung di Cloudflare Pages TheLastMoon:
 
 ```text
-BACA SHEET BANK
+GET  /api/xpay-checker/transactions
+POST /api/xpay-checker/transactions/bulk
 ```
 
-Setelah ditekan, browser meminta data BANK ke server TheLastMoon.
-Cloudflare Function yang membaca Google Spreadsheet, bukan browser user.
-
-## Penting: set link sekali setelah upgrade
-
-V22 sengaja tidak menaruh URL spreadsheet di source code agar link tidak bocor ke User.
-
-Setelah deploy:
-
-1. Login sebagai Master Administrator.
-2. Buka `Checker`.
-3. Tempel Link Google Spreadsheet.
-4. Klik `SIMPAN LINK`.
-5. Klik `BACA SHEET BANK`.
-
-Sesudah itu User cukup membuka Checker dan menekan `BACA SHEET BANK`.
-
-## Akses Google Sheets
-
-Karena sekarang Cloudflare Function yang membaca Spreadsheet, spreadsheet harus dapat dibaca tanpa login interaktif Google, misalnya akses read-only yang sesuai.
-
-Jika Google Sheet hanya dapat dibuka karena browser Master sedang login ke Google, server Cloudflare tidak akan memiliki sesi Google tersebut. Untuk sheet private sepenuhnya diperlukan integrasi Google Sheets API/service account.
-
-## Endpoint internal baru
-
-Master only:
+Data disimpan ke D1 table:
 
 ```text
-GET /api/checker-bank/config
-PUT /api/checker-bank/config
+xpay_transactions
 ```
 
-User dengan akses Checker:
+## Cara kerja
+
+Mode `Cek Settlement per Tanggal`:
+
+1. pilih CSV XPay;
+2. CSV dibaca dan dihitung seperti script sumber;
+3. transaksi otomatis disinkronkan ke Cloudflare D1;
+4. data memakai ID transaksi XPay untuk dedupe bila ID tersedia.
+
+Mode `Cek dari Cloudflare DB`:
+
+1. tidak perlu upload CSV;
+2. pilih Tanggal Cair;
+3. script membaca H-2 sampai H-1 dari API Cloudflare;
+4. Settlement dan Cutoff dihitung dengan logika yang sama.
+
+## Batas waktu
 
 ```text
-GET /api/checker-bank/data
+Settlement = H-1, sebelum 23:30:00
+Cutoff     = H-2, mulai 23:30:00 sampai 23:59:59
+23:30:00   = CUTOFF
+STATUS     = SUCCESS
 ```
 
-Endpoint data tidak mengembalikan URL spreadsheet.
+## File baru
+
+```text
+xpay-settlement-checker.html
+xpay-settlement-checker.css
+xpay-settlement-checker.js
+```
 
 ## File yang perlu ditimpa
 
 ```text
-checker-bank.html
-checker-bank.css
-checker-bank.js
 app.js
-_headers
+styles.css
+schema.sql
 README.md
 functions/api/[[path]].js
 ```
+
+Upload juga ketiga file Xpay Checker baru ke root repository.
 
 Setelah deployment:
 
 ```text
 Ctrl + Shift + R
+```
+
+Hak akses User:
+
+```text
+User Admin
+→ Edit User
+→ centang Xpay Checker
+→ Simpan
 ```

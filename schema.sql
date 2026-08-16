@@ -78,3 +78,31 @@ CREATE TABLE IF NOT EXISTS event_scatter_rows (
 
 CREATE INDEX IF NOT EXISTS idx_event_scatter_date_order
   ON event_scatter_rows(event_date, row_order);
+
+
+CREATE TABLE IF NOT EXISTS xpay_transactions (
+  id INTEGER PRIMARY KEY,
+  signature TEXT NOT NULL UNIQUE,
+  transaction_id TEXT NOT NULL DEFAULT '',
+  payment TEXT NOT NULL,
+  payment_date TEXT NOT NULL,
+  payment_sec INTEGER NOT NULL DEFAULT 0,
+  record_value REAL NOT NULL DEFAULT 0,
+  record_fee REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'SUCCESS',
+  member TEXT NOT NULL DEFAULT '',
+  partner_id TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  uploaded_by INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_xpay_transactions_date
+  ON xpay_transactions(payment_date);
+
+CREATE INDEX IF NOT EXISTS idx_xpay_transactions_payment
+  ON xpay_transactions(payment_date, payment_sec);
+
+CREATE INDEX IF NOT EXISTS idx_xpay_transactions_member
+  ON xpay_transactions(member);

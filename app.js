@@ -285,6 +285,7 @@ async function navigate(menuId) {
   if (menuId === "generate-api") return renderGenerateApi();
   if (menuId === "settings") return renderSettings();
   if (menuId === "checker") return renderCheckerBankWorkspace(menu);
+  if (menuId === "xpay-checker") return renderXpaySettlementCheckerWorkspace(menu);
   if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
   if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
   if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
@@ -347,6 +348,37 @@ function renderDashboard() {
   });
 }
 
+
+
+async function renderXpaySettlementCheckerWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="xpay-workspace xpay-settlement-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">CLOUDFLARE D1 • SETTLEMENT</span>
+            <h3>Xpay Checker</h3>
+            <p>${escapeHtml(data.message)} Upload CSV otomatis disimpan ke Cloudflare D1 TheLastMoon. Mode database memakai API Cloudflare same-origin.</p>
+          </div>
+          <span class="xpay-workspace-badge">SETTLEMENT • CUTOFF • 23:30</span>
+        </header>
+
+        <iframe
+          class="xpay-frame xpay-settlement-frame"
+          src="/xpay-settlement-checker.html?v=23.0.0"
+          title="Xpay Checker"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
 
 async function renderCheckerBankWorkspace(menu) {
   $("#pageContent").innerHTML = loadingHtml();
