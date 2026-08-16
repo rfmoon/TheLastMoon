@@ -16,7 +16,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v23-xpay-checker-cloudflare";
+const VERSION = "v24-xpay-checker-settlement-233000";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -345,6 +345,7 @@ async function initializeDatabase(env) {
         payment TEXT NOT NULL,
         payment_date TEXT NOT NULL,
         payment_sec INTEGER NOT NULL DEFAULT 0,
+        settlement_raw TEXT NOT NULL DEFAULT '',
         record_value REAL NOT NULL DEFAULT 0,
         record_fee REAL NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'SUCCESS',
@@ -414,6 +415,7 @@ async function initializeDatabase(env) {
       });
     }
 
+    await ensureXpayV24Schema(env.DB);
     await migrateLegacySettings(env.DB);
     schemaReady = true;
   }
@@ -1530,6 +1532,24 @@ function validateEventScatterDate(date) {
 
 
 
+
+async function ensureXpayV24Schema(db) {
+  const info = await db.prepare(
+    "PRAGMA table_info(xpay_transactions)"
+  ).all();
+
+  const columns = new Set(
+    (info.results || []).map(row => String(row.name || ""))
+  );
+
+  if (!columns.has("settlement_raw")) {
+    await db.prepare(`
+      ALTER TABLE xpay_transactions
+      ADD COLUMN settlement_raw TEXT NOT NULL DEFAULT ''
+    `).run();
+  }
+}
+
 async function listXpayCheckerTransactions(db, url) {
   const from = String(url.searchParams.get("date_from") || "").trim();
   const to = String(url.searchParams.get("date_to") || "").trim();
@@ -1556,6 +1576,7 @@ async function listXpayCheckerTransactions(db, url) {
       payment,
       payment_date,
       payment_sec,
+      settlement_raw AS settlement,
       record_value,
       record_fee,
       status,
@@ -1610,6 +1631,10 @@ async function upsertXpayCheckerTransactions(request, db, user) {
       item?.transactionId || item?.transaction_id || ""
     ).trim().slice(0, 200);
 
+    const settlement = String(
+      item?.settlement ?? item?.settlement_raw ?? ""
+    ).trim().slice(0, 200);
+
     const value = xpayFiniteNumber(item?.value);
     const fee = xpayFiniteNumber(item?.fee);
     const status = String(item?.status || "SUCCESS")
@@ -1622,7 +1647,7 @@ async function upsertXpayCheckerTransactions(request, db, user) {
 
     const signatureSource = transactionId
       ? `ID:${transactionId}`
-      : [payment, value, fee, status, member, partner].join("|");
+      : [payment, settlement, value, fee, status, member, partner].join("|");
 
     rows.push({
       signature: await sha256(signatureSource),
@@ -1630,6 +1655,7 @@ async function upsertXpayCheckerTransactions(request, db, user) {
       payment,
       paymentDate: parts.date,
       paymentSec: parts.sec,
+      settlement,
       value,
       fee,
       status,
@@ -1655,6 +1681,7 @@ async function upsertXpayCheckerTransactions(request, db, user) {
         payment,
         payment_date,
         payment_sec,
+        settlement_raw,
         record_value,
         record_fee,
         status,
@@ -1665,12 +1692,13 @@ async function upsertXpayCheckerTransactions(request, db, user) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(signature) DO UPDATE SET
         transaction_id = excluded.transaction_id,
         payment = excluded.payment,
         payment_date = excluded.payment_date,
         payment_sec = excluded.payment_sec,
+        settlement_raw = excluded.settlement_raw,
         record_value = excluded.record_value,
         record_fee = excluded.record_fee,
         status = excluded.status,
@@ -1685,6 +1713,7 @@ async function upsertXpayCheckerTransactions(request, db, user) {
       row.payment,
       row.paymentDate,
       row.paymentSec,
+      row.settlement,
       row.value,
       row.fee,
       row.status,
