@@ -1,86 +1,84 @@
-# TheLastMoon V23 — Xpay Checker Cloudflare
+# TheLastMoon V24 — Xpay Checker 23:30:00 Settlement Logic
 
-Menu baru:
+Bagian Xpay Checker menggunakan HTML V24 terbaru.
 
-```text
-Xpay Checker
-```
+## Logika V24
 
-Menu dapat diberikan kepada User melalui `User Admin`.
-
-## API Cloudflare
-
-Script Xpay Checker tidak lagi memakai `garpusomay.com/xpay-api.php`.
-
-API sekarang berada langsung di Cloudflare Pages TheLastMoon:
+Tanggal Cair = H.
 
 ```text
-GET  /api/xpay-checker/transactions
-POST /api/xpay-checker/transactions/bulk
+SETTLEMENT normal:
+PAYMENT H-1 00:00:00–23:29:59
+
+CUTOFF normal:
+PAYMENT H-2 23:30:01–23:59:59
 ```
 
-Data disimpan ke D1 table:
+Khusus PAYMENT tepat:
 
 ```text
-xpay_transactions
+23:30:00
 ```
 
-## Cara kerja
-
-Mode `Cek Settlement per Tanggal`:
-
-1. pilih CSV XPay;
-2. CSV dibaca dan dihitung seperti script sumber;
-3. transaksi otomatis disinkronkan ke Cloudflare D1;
-4. data memakai ID transaksi XPay untuk dedupe bila ID tersedia.
-
-Mode `Cek dari Cloudflare DB`:
-
-1. tidak perlu upload CSV;
-2. pilih Tanggal Cair;
-3. script membaca H-2 sampai H-1 dari API Cloudflare;
-4. Settlement dan Cutoff dihitung dengan logika yang sama.
-
-## Batas waktu
+sistem membaca kolom:
 
 ```text
-Settlement = H-1, sebelum 23:30:00
-Cutoff     = H-2, mulai 23:30:00 sampai 23:59:59
-23:30:00   = CUTOFF
-STATUS     = SUCCESS
+SETTLEMENT
 ```
 
-## File baru
+Aturan:
+
+```text
+SETTLEMENT berisi tanggal yang sama dengan Tanggal Cair
+→ masuk SETTLEMENT
+
+SETTLEMENT kosong + PAYMENT berada pada H-2
+→ masuk CUTOFF
+```
+
+Hanya `STATUS = SUCCESS`.
+
+## Cloudflare D1
+
+Kolom baru pada `xpay_transactions`:
+
+```text
+settlement_raw
+```
+
+V24 otomatis melakukan migration untuk database V23 yang sudah ada.
+
+Data lama V23 belum memiliki nilai SETTLEMENT. Untuk transaksi tepat 23:30:00, upload ulang CSV sumber satu kali agar kolom SETTLEMENT ikut masuk ke D1.
+
+## Asset baru
+
+```text
+xpay-settlement-checker-v24.css
+xpay-settlement-checker-v24.js
+```
+
+HTML:
 
 ```text
 xpay-settlement-checker.html
-xpay-settlement-checker.css
-xpay-settlement-checker.js
 ```
 
-## File yang perlu ditimpa
+sudah menunjuk ke asset V24.
+
+## File yang perlu ditimpa/upload
 
 ```text
+xpay-settlement-checker.html
+xpay-settlement-checker-v24.css
+xpay-settlement-checker-v24.js
 app.js
-styles.css
 schema.sql
 README.md
 functions/api/[[path]].js
 ```
 
-Upload juga ketiga file Xpay Checker baru ke root repository.
-
-Setelah deployment:
+Setelah deploy:
 
 ```text
 Ctrl + Shift + R
-```
-
-Hak akses User:
-
-```text
-User Admin
-→ Edit User
-→ centang Xpay Checker
-→ Simpan
 ```

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Xpay Checker</title>
-  <link rel="stylesheet" href="/xpay-settlement-checker.css?v=23.0.0">
+  <link rel="stylesheet" href="/xpay-settlement-checker-v24.css?v=24.0.0">
 </head>
 <body>
 <div class="wrap">
@@ -24,7 +24,7 @@
       </div>
 
       <div class="db-note" id="dbNote">
-        ☁ Data langsung dibaca dari database XPay Cloudflare D1 TheLastMoon yang sudah pernah di-upload. Tidak perlu pilih CSV lagi.
+        ☁ Data langsung dibaca dari database XPay Cloudflare D1 TheLastMoon. Tidak perlu pilih CSV lagi setelah data tersinkron. Untuk data lama yang dibuat sebelum logika v24, upload ulang CSV satu kali agar nilai SETTLEMENT pada transaksi 23:30:00 ikut tersimpan.
       </div>
 
       <div class="date-row">
@@ -33,7 +33,8 @@
       </div>
       <div class="hint" id="hintText">
         Tanggal Cair dipakai untuk menentukan otomatis: <b>Settlement = H-1</b> dan <b>Cutoff = H-2</b>.
-        Settlement mengambil PAYMENT <b>sebelum 23:30:00</b>; Cutoff mengambil PAYMENT <b>mulai 23:30:00 s/d 23:59:59</b>. Jadi transaksi tepat <b>23:30:00</b> dan setelahnya masuk <b>CUTOFF</b>. Hanya STATUS <b>SUCCESS</b>.
+        Settlement normal mengambil PAYMENT <b>00:00:00–23:29:59</b>; Cutoff normal mengambil PAYMENT <b>23:30:01–23:59:59</b>.
+        Khusus tepat <b>23:30:00</b>, sistem membaca kolom <b>SETTLEMENT</b>: tanggal sama dengan Tanggal Cair = <b>SETTLEMENT</b>; jika kosong pada H-2 = <b>CUTOFF</b>. Hanya STATUS <b>SUCCESS</b>.
       </div>
       <div class="status" id="status">Belum ada CSV yang dimuat.</div>
       <div class="cloud-api-note">API Cloudflare: <code>/api/xpay-checker/transactions</code></div>
@@ -41,7 +42,7 @@
 
     <div class="mode-tabs" id="modeTabs">
       <button class="mode-tab active" id="tabCsv" type="button">📄 Cek Settlement per Tanggal</button>
-      <button class="mode-tab" id="tabDb" type="button">☁ Cek dari Cloudflare DB</button>
+      <button class="mode-tab" id="tabDb" type="button">🕦 Cek Settlement 23:30</button>
     </div>
 
     <div class="cards">
@@ -98,6 +99,6 @@
       </div>
     </div>
   </div>
-<script src="/xpay-settlement-checker.js?v=23.0.0" defer></script>
+<script src="/xpay-settlement-checker-v24.js?v=24.0.0" defer></script>
 </body>
 </html>

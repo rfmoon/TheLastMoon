@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS xpay_transactions (
   payment TEXT NOT NULL,
   payment_date TEXT NOT NULL,
   payment_sec INTEGER NOT NULL DEFAULT 0,
+  settlement_raw TEXT NOT NULL DEFAULT '',
   record_value REAL NOT NULL DEFAULT 0,
   record_fee REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'SUCCESS',
