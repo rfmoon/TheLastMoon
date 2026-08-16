@@ -1,78 +1,79 @@
-# TheLastMoon V24 — Xpay Checker 23:30:00 Settlement Logic
+# TheLastMoon V26 — Xpay Checker Tanpa API
 
-Bagian Xpay Checker menggunakan HTML V24 terbaru.
+Xpay Checker V26 tidak memakai API untuk data transaksi XPay.
 
-## Logika V24
+## Penyimpanan
+
+CSV yang di-upload disimpan langsung ke browser menggunakan IndexedDB:
+
+```text
+Database: TheLastMoonXpayChecker
+Store: transactions
+```
+
+Artinya:
+
+- tidak ada request ke `/api/xpay-checker/...`;
+- tidak ada proses baca/tulis Cloudflare D1 untuk Xpay Checker;
+- mode database lebih cepat karena membaca data lokal;
+- data hanya tersedia pada browser/perangkat yang sama.
+
+## Cara kerja
+
+Mode CSV:
+
+```text
+Pilih CSV
+→ parse transaksi
+→ simpan ke IndexedDB
+→ hitung Settlement/Cutoff
+```
+
+Mode `Cek Settlement 23:30`:
+
+```text
+Pilih tanggal
+→ baca IndexedDB browser
+→ hitung Settlement/Cutoff
+```
+
+## Logika V25 tetap dipakai
 
 Tanggal Cair = H.
 
 ```text
-SETTLEMENT normal:
-PAYMENT H-1 00:00:00–23:29:59
+Settlement normal:
+H-1 00:00:00–23:29:59
 
-CUTOFF normal:
-PAYMENT H-2 23:30:01–23:59:59
+Cutoff normal:
+H-2 23:30:01–23:59:59
 ```
 
-Khusus PAYMENT tepat:
+Khusus `23:30:00`:
 
 ```text
-23:30:00
-```
+SETTLEMENT = tanggal H-1
+→ SETTLEMENT
 
-sistem membaca kolom:
-
-```text
-SETTLEMENT
-```
-
-Aturan:
-
-```text
-SETTLEMENT berisi tanggal yang sama dengan Tanggal Cair
-→ masuk SETTLEMENT
-
-SETTLEMENT kosong + PAYMENT berada pada H-2
-→ masuk CUTOFF
+SETTLEMENT kosong + PAYMENT H-2
+→ CUTOFF
 ```
 
 Hanya `STATUS = SUCCESS`.
 
-## Cloudflare D1
+## Catatan penting
 
-Kolom baru pada `xpay_transactions`:
+Karena tanpa API, data IndexedDB tidak otomatis ikut ke komputer/browser User lain.
 
-```text
-settlement_raw
-```
+Kalau browser data/cache/site data dihapus, database lokal juga dapat terhapus.
 
-V24 otomatis melakukan migration untuk database V23 yang sudah ada.
-
-Data lama V23 belum memiliki nilai SETTLEMENT. Untuk transaksi tepat 23:30:00, upload ulang CSV sumber satu kali agar kolom SETTLEMENT ikut masuk ke D1.
-
-## Asset baru
-
-```text
-xpay-settlement-checker-v24.css
-xpay-settlement-checker-v24.js
-```
-
-HTML:
+## File utama
 
 ```text
 xpay-settlement-checker.html
-```
-
-sudah menunjuk ke asset V24.
-
-## File yang perlu ditimpa/upload
-
-```text
-xpay-settlement-checker.html
-xpay-settlement-checker-v24.css
-xpay-settlement-checker-v24.js
+xpay-settlement-checker-v26.css
+xpay-settlement-checker-v26.js
 app.js
-schema.sql
 README.md
 functions/api/[[path]].js
 ```

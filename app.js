@@ -362,14 +362,14 @@ async function renderXpaySettlementCheckerWorkspace(menu) {
           <div>
             <span class="kicker">CLOUDFLARE D1 • SETTLEMENT</span>
             <h3>Xpay Checker</h3>
-            <p>${escapeHtml(data.message)} Upload CSV otomatis disimpan ke Cloudflare D1 TheLastMoon. Mode database memakai API Cloudflare same-origin.</p>
+            <p>${escapeHtml(data.message)} Upload CSV disimpan langsung ke IndexedDB browser. Mode database membaca data lokal tanpa API sehingga lebih cepat.</p>
           </div>
-          <span class="xpay-workspace-badge">SETTLEMENT • CUTOFF • V24</span>
+          <span class="xpay-workspace-badge">SETTLEMENT • CUTOFF • V26 LOCAL</span>
         </header>
 
         <iframe
           class="xpay-frame xpay-settlement-frame"
-          src="/xpay-settlement-checker.html?v=24.0.0"
+          src="/xpay-settlement-checker.html?v=26.0.0"
           title="Xpay Checker"
           loading="eager"
           referrerpolicy="same-origin">
