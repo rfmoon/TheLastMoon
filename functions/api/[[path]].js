@@ -16,7 +16,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v27-xpay-full-cloudflare";
+const VERSION = "v28-xpay-clean-two-files";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -505,8 +505,7 @@ async function initializeDatabase(env) {
       });
     }
 
-    await ensureXpayV24Schema(env.DB);
-    await ensureXpayFullSchema(env.DB);
+    await ensureXpayV28Schema(env.DB);
     await migrateLegacySettings(env.DB);
     schemaReady = true;
   }
@@ -1624,6 +1623,40 @@ function validateEventScatterDate(date) {
 
 
 
+async function ensureXpayV28Schema(db) {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS xpay28_transactions (
+      id INTEGER PRIMARY KEY, signature TEXT NOT NULL UNIQUE, batch_id TEXT NOT NULL,
+      transaction_id TEXT NOT NULL DEFAULT '', record_date TEXT NOT NULL DEFAULT '',
+      record_value REAL NOT NULL DEFAULT 0, record_fee REAL NOT NULL DEFAULT 0, net_amount REAL NOT NULL DEFAULT 0,
+      merchant TEXT NOT NULL DEFAULT '', member TEXT NOT NULL DEFAULT '', payment_time TEXT NOT NULL,
+      payment TEXT NOT NULL DEFAULT '', payment_date TEXT NOT NULL, payment_sec INTEGER NOT NULL DEFAULT 0,
+      settlement_raw TEXT NOT NULL DEFAULT '', settlement_type TEXT NOT NULL, settlement_date TEXT NOT NULL,
+      partner_id TEXT NOT NULL DEFAULT '', vendor_id TEXT NOT NULL DEFAULT '', status_excel TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT '', ticket TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', uploaded_by INTEGER,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_transactions_settlement ON xpay28_transactions(settlement_date, settlement_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_transactions_payment ON xpay28_transactions(payment_date, payment_sec)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_transactions_partner ON xpay28_transactions(partner_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_transactions_batch ON xpay28_transactions(batch_id)`,
+    `CREATE TABLE IF NOT EXISTS xpay28_upload_history (batch_id TEXT PRIMARY KEY, filename TEXT NOT NULL DEFAULT '', file_type TEXT NOT NULL DEFAULT '', total_records INTEGER NOT NULL DEFAULT 0, total_amount REAL NOT NULL DEFAULT 0, uploaded_by TEXT NOT NULL DEFAULT '', uploaded_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS xpay28_settlement_files (id INTEGER PRIMARY KEY, filename TEXT NOT NULL DEFAULT '', settlement_date TEXT NOT NULL, total_records INTEGER NOT NULL DEFAULT 0, total_amount REAL NOT NULL DEFAULT 0, uploaded_by TEXT NOT NULL DEFAULT '', uploaded_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS xpay28_settlement_details (id INTEGER PRIMARY KEY, settlement_file_id INTEGER NOT NULL, partner_id TEXT NOT NULL, amount REAL NOT NULL DEFAULT 0, settlement_date TEXT NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_settlement_details_date ON xpay28_settlement_details(settlement_date)`,
+    `CREATE TABLE IF NOT EXISTS xpay28_comparison_results (id INTEGER PRIMARY KEY, settlement_date TEXT NOT NULL, partner_id TEXT NOT NULL, expected_amount REAL NOT NULL DEFAULT 0, actual_amount REAL NOT NULL DEFAULT 0, difference REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT '', transaction_count INTEGER NOT NULL DEFAULT 0, UNIQUE(settlement_date, partner_id))`,
+    `CREATE TABLE IF NOT EXISTS xpay28_disbursements (id INTEGER PRIMARY KEY, batch_id TEXT NOT NULL DEFAULT '', transaction_id TEXT NOT NULL DEFAULT '', date_disbursement TEXT NOT NULL, bank_code TEXT NOT NULL DEFAULT '', bank_no TEXT NOT NULL DEFAULT '', account_name TEXT NOT NULL DEFAULT '', amount REAL NOT NULL DEFAULT 0, ref_id TEXT NOT NULL UNIQUE, vendor_status TEXT NOT NULL DEFAULT 'pending', status_done INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_disbursements_date ON xpay28_disbursements(date_disbursement)`,
+    `CREATE TABLE IF NOT EXISTS xpay28_disbursement_logs (id INTEGER PRIMARY KEY, disbursement_id INTEGER NOT NULL, ref_id TEXT NOT NULL, batch_id TEXT NOT NULL DEFAULT '', action_type TEXT NOT NULL, field_name TEXT, old_value TEXT, new_value TEXT, changed_by TEXT NOT NULL DEFAULT '', changed_at INTEGER NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_disbursement_logs_ref ON xpay28_disbursement_logs(ref_id, changed_at)`,
+    `CREATE TABLE IF NOT EXISTS xpay28_disbursement_marks (id INTEGER PRIMARY KEY, disbursement_id INTEGER NOT NULL, ref_id TEXT NOT NULL, marked_by TEXT NOT NULL DEFAULT '', note TEXT, marked_at INTEGER NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS xpay28_balance_history (id INTEGER PRIMARY KEY, signature TEXT NOT NULL UNIQUE, batch_id TEXT NOT NULL, record_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', credit REAL NOT NULL DEFAULT 0, debit REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, uploaded_by TEXT NOT NULL DEFAULT '', uploaded_at INTEGER NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_balance_date ON xpay28_balance_history(date_created)`,
+    `CREATE INDEX IF NOT EXISTS idx_xpay28_balance_batch ON xpay28_balance_history(batch_id)`
+  ];
+  await db.batch(statements.map(sql => db.prepare(sql)));
+}
+
 async function ensureXpayV24Schema(db) {
   const info = await db.prepare(
     "PRAGMA table_info(xpay_transactions)"
@@ -1736,7 +1769,7 @@ async function xpaySummary(db) {
       COALESCE(SUM(record_value),0) AS total_value,
       COALESCE(SUM(record_fee),0) AS total_fee,
       COALESCE(SUM(net_amount),0) AS total_net
-    FROM xpay_transactions
+    FROM xpay28_transactions
   `).first();
 
   return json({
@@ -1753,7 +1786,7 @@ async function xpaySummary(db) {
 async function xpayGetBatches(db) {
   const result = await db.prepare(`
     SELECT batch_id, filename, file_type, total_records, total_amount, uploaded_by, uploaded_at
-    FROM xpay_upload_history
+    FROM xpay28_upload_history
     ORDER BY uploaded_at DESC
     LIMIT 1000
   `).all();
@@ -1788,7 +1821,7 @@ async function xpayUploadTransactionsChunk(request, db, user) {
 
     values.push(netAmount);
     statements.push(db.prepare(`
-      INSERT OR IGNORE INTO xpay_transactions (
+      INSERT OR IGNORE INTO xpay28_transactions (
         signature, transaction_id, payment, payment_date, payment_sec, settlement_raw,
         record_value, record_fee, status, member, partner_id, source, uploaded_by,
         created_at, updated_at, batch_id, record_date, net_amount, merchant,
@@ -1836,12 +1869,12 @@ async function xpayUploadTransactionsChunk(request, db, user) {
   }
 
   await db.prepare(`
-    INSERT INTO xpay_upload_history
+    INSERT INTO xpay28_upload_history
       (batch_id, filename, file_type, total_records, total_amount, uploaded_by, uploaded_at)
     VALUES (?, ?, 'TRANSACTION', ?, ?, ?, ?)
     ON CONFLICT(batch_id) DO UPDATE SET
-      total_records = xpay_upload_history.total_records + excluded.total_records,
-      total_amount = xpay_upload_history.total_amount + excluded.total_amount
+      total_records = xpay28_upload_history.total_records + excluded.total_records,
+      total_amount = xpay28_upload_history.total_amount + excluded.total_amount
   `).bind(batchId, filename, saved, totalNet, user.username, now).run();
 
   return json({ success: true, saved, totalNet });
@@ -1855,17 +1888,17 @@ async function xpaySettlementStart(request, db, user) {
   if (!settlementDate || !filename || !batchId) throw new AppError(400, "Data settlement belum lengkap.", "xpay-settlement-start");
 
   await db.prepare(`
-    DELETE FROM xpay_settlement_details
+    DELETE FROM xpay28_settlement_details
     WHERE settlement_date = ?
   `).bind(settlementDate).run();
 
   await db.prepare(`
-    DELETE FROM xpay_settlement_files
+    DELETE FROM xpay28_settlement_files
     WHERE settlement_date = ?
   `).bind(settlementDate).run();
 
   const result = await db.prepare(`
-    INSERT INTO xpay_settlement_files
+    INSERT INTO xpay28_settlement_files
       (filename, settlement_date, total_records, total_amount, uploaded_by, uploaded_at)
     VALUES (?, ?, 0, 0, ?, ?)
   `).bind(filename, settlementDate, user.username, Date.now()).run();
@@ -1879,7 +1912,7 @@ async function xpaySettlementChunk(request, db) {
   const rows = Array.isArray(body.rows) ? body.rows : [];
   if (!fileId || !rows.length) throw new AppError(400, "fileId/rows settlement kosong.", "xpay-settlement-chunk");
 
-  const file = await db.prepare("SELECT settlement_date FROM xpay_settlement_files WHERE id = ?").bind(fileId).first();
+  const file = await db.prepare("SELECT settlement_date FROM xpay28_settlement_files WHERE id = ?").bind(fileId).first();
   if (!file) throw new AppError(404, "Settlement file tidak ditemukan.", "xpay-settlement-file");
 
   const statements = [];
@@ -1890,7 +1923,7 @@ async function xpaySettlementChunk(request, db) {
     if (!xpayUuid(partner) || amount <= 0) continue;
     amounts.push(amount);
     statements.push(db.prepare(`
-      INSERT INTO xpay_settlement_details
+      INSERT INTO xpay28_settlement_details
         (settlement_file_id, partner_id, amount, settlement_date)
       VALUES (?, ?, ?, ?)
     `).bind(fileId, partner, amount, file.settlement_date));
@@ -1919,13 +1952,13 @@ async function xpaySettlementFinish(request, db, user) {
   if (!fileId || !batchId || !filename || !settlementDate) throw new AppError(400, "Finalize settlement belum lengkap.", "xpay-settlement-finish");
 
   await db.prepare(`
-    UPDATE xpay_settlement_files
+    UPDATE xpay28_settlement_files
     SET total_records = ?, total_amount = ?
     WHERE id = ?
   `).bind(totalRecords, totalAmount, fileId).run();
 
   await db.prepare(`
-    INSERT INTO xpay_upload_history
+    INSERT INTO xpay28_upload_history
       (batch_id, filename, file_type, total_records, total_amount, uploaded_by, uploaded_at)
     VALUES (?, ?, 'SETTLEMENT', ?, ?, ?, ?)
     ON CONFLICT(batch_id) DO UPDATE SET
@@ -1942,20 +1975,20 @@ async function xpayCheckSettlement(db, dateRaw) {
   if (!date) throw new AppError(400, "Tanggal tidak valid.", "xpay-check-date");
 
   const settlementResult = await db.prepare(`
-    SELECT * FROM xpay_transactions
+    SELECT * FROM xpay28_transactions
     WHERE settlement_date = ? AND settlement_type = 'SETTLEMENT'
     ORDER BY payment_time
   `).bind(date).all();
 
   const cutoffResult = await db.prepare(`
-    SELECT * FROM xpay_transactions
+    SELECT * FROM xpay28_transactions
     WHERE settlement_date = ? AND settlement_type = 'CUTOFF'
     ORDER BY payment_time
   `).bind(date).all();
 
   const yesterday = xpayAddDays(date, -1);
   const cutoffTodayResult = await db.prepare(`
-    SELECT * FROM xpay_transactions
+    SELECT * FROM xpay28_transactions
     WHERE payment_date = ? AND settlement_type = 'CUTOFF'
     ORDER BY payment_time
   `).bind(yesterday).all();
@@ -2002,7 +2035,7 @@ async function xpayGetComparison(db, dateRaw) {
 
   const count = await db.prepare(`
     SELECT COUNT(*) AS cnt, COALESCE(SUM(amount),0) AS total
-    FROM xpay_settlement_details WHERE settlement_date = ?
+    FROM xpay28_settlement_details WHERE settlement_date = ?
   `).bind(date).first();
 
   if (Number(count?.cnt || 0) > 0) await xpayRunComparison(db, date);
@@ -2010,7 +2043,7 @@ async function xpayGetComparison(db, dateRaw) {
   const result = await db.prepare(`
     SELECT settlement_date, partner_id, expected_amount, actual_amount,
            difference, status, transaction_count
-    FROM xpay_comparison_results
+    FROM xpay28_comparison_results
     WHERE settlement_date = ?
     ORDER BY status, partner_id
   `).bind(date).all();
@@ -2040,18 +2073,18 @@ async function xpayGetComparison(db, dateRaw) {
 }
 
 async function xpayRunComparison(db, settlementDate) {
-  await db.prepare("DELETE FROM xpay_comparison_results WHERE settlement_date = ?").bind(settlementDate).run();
+  await db.prepare("DELETE FROM xpay28_comparison_results WHERE settlement_date = ?").bind(settlementDate).run();
 
   const expectedRows = (await db.prepare(`
     SELECT partner_id, SUM(record_value) AS total, COUNT(*) AS count
-    FROM xpay_transactions
+    FROM xpay28_transactions
     WHERE settlement_date = ?
     GROUP BY partner_id
   `).bind(settlementDate).all()).results || [];
 
   const actualRows = (await db.prepare(`
     SELECT partner_id, SUM(amount) AS total, COUNT(*) AS count
-    FROM xpay_settlement_details
+    FROM xpay28_settlement_details
     WHERE settlement_date = ?
     GROUP BY partner_id
   `).bind(settlementDate).all()).results || [];
@@ -2075,7 +2108,7 @@ async function xpayRunComparison(db, settlementDate) {
     else { status = "MISMATCH"; mismatch += 1; }
 
     statements.push(db.prepare(`
-      INSERT INTO xpay_comparison_results
+      INSERT INTO xpay28_comparison_results
         (settlement_date, partner_id, expected_amount, actual_amount, difference, status, transaction_count)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(settlementDate, partner, expectedAmount, actualAmount, difference, status, Number(e?.count || 0)));
@@ -2089,7 +2122,7 @@ async function xpayGetTransactions(db) {
     SELECT batch_id, transaction_id, record_date, record_value, record_fee, net_amount,
            merchant, member, payment_time, settlement_type, settlement_date, payment_date,
            partner_id, vendor_id, status_excel, ticket
-    FROM xpay_transactions
+    FROM xpay28_transactions
     ORDER BY payment_time DESC, id DESC
     LIMIT 10000
   `).all();
@@ -2108,11 +2141,11 @@ async function xpayDeleteBatch(request, db) {
   }
 
   if (fileType === "TRANSACTION") {
-    const result = await db.prepare("DELETE FROM xpay_transactions WHERE batch_id = ?").bind(batchId).run();
+    const result = await db.prepare("DELETE FROM xpay28_transactions WHERE batch_id = ?").bind(batchId).run();
     deleted = Number(result.meta?.changes || 0);
   }
 
-  await db.prepare("DELETE FROM xpay_upload_history WHERE batch_id = ?").bind(batchId).run();
+  await db.prepare("DELETE FROM xpay28_upload_history WHERE batch_id = ?").bind(batchId).run();
   return json({ success: true, deleted });
 }
 
@@ -2133,7 +2166,7 @@ async function xpayGetDisbursements(db, url) {
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const stmt = db.prepare(`
-    SELECT * FROM xpay_disbursements
+    SELECT * FROM xpay28_disbursements
     ${clause}
     ORDER BY date_disbursement DESC, id DESC
     LIMIT 10000
@@ -2147,7 +2180,7 @@ async function xpayGetDisbursements(db, url) {
       SUM(CASE WHEN vendor_status='failed - refund' THEN 1 ELSE 0 END) AS failed_count,
       SUM(CASE WHEN vendor_status='success' THEN 1 ELSE 0 END) AS success_count,
       SUM(CASE WHEN status_done=1 THEN 1 ELSE 0 END) AS done_count
-    FROM xpay_disbursements ${clause}
+    FROM xpay28_disbursements ${clause}
   `);
   const summary = binds.length ? await summaryStmt.bind(...binds).first() : await summaryStmt.first();
 
@@ -2175,7 +2208,7 @@ async function xpayUploadDisbursementChunk(request, db, user) {
   if (refs.length) {
     existing = (await db.prepare(`
       SELECT id, ref_id, vendor_status, status_done
-      FROM xpay_disbursements
+      FROM xpay28_disbursements
       WHERE ref_id IN (${placeholders})
     `).bind(...refs).all()).results || [];
   }
@@ -2206,7 +2239,7 @@ async function xpayUploadDisbursementChunk(request, db, user) {
     validRows.push({ refId, vendorStatus, old });
 
     statements.push(db.prepare(`
-      INSERT INTO xpay_disbursements (
+      INSERT INTO xpay28_disbursements (
         batch_id, transaction_id, date_disbursement, bank_code, bank_no,
         account_name, amount, ref_id, vendor_status, status_done,
         updated_by, created_at, updated_at
@@ -2244,7 +2277,7 @@ async function xpayUploadDisbursementChunk(request, db, user) {
     const refs2 = validRows.map(row => row.refId);
     const ph2 = refs2.map(() => "?").join(",");
     const idRows = (await db.prepare(`
-      SELECT id, ref_id FROM xpay_disbursements WHERE ref_id IN (${ph2})
+      SELECT id, ref_id FROM xpay28_disbursements WHERE ref_id IN (${ph2})
     `).bind(...refs2).all()).results || [];
     const idMap = new Map(idRows.map(row => [row.ref_id, row.id]));
     const logs = [];
@@ -2253,13 +2286,13 @@ async function xpayUploadDisbursementChunk(request, db, user) {
       if (!id) continue;
       if (!row.old) {
         logs.push(db.prepare(`
-          INSERT INTO xpay_disbursement_logs
+          INSERT INTO xpay28_disbursement_logs
             (disbursement_id, ref_id, batch_id, action_type, field_name, old_value, new_value, changed_by, changed_at)
           VALUES (?, ?, ?, 'INSERT', NULL, NULL, ?, ?, ?)
         `).bind(id, row.refId, batchId, row.vendorStatus, user.username, now));
       } else if (String(row.old.vendor_status) !== row.vendorStatus) {
         logs.push(db.prepare(`
-          INSERT INTO xpay_disbursement_logs
+          INSERT INTO xpay28_disbursement_logs
             (disbursement_id, ref_id, batch_id, action_type, field_name, old_value, new_value, changed_by, changed_at)
           VALUES (?, ?, ?, 'UPDATE', 'vendor_status', ?, ?, ?, ?)
         `).bind(id, row.refId, batchId, String(row.old.vendor_status || ""), row.vendorStatus, user.username, now));
@@ -2279,7 +2312,7 @@ async function xpayFinishDisbursementUpload(request, db, user) {
   if (!batchId || !filename) throw new AppError(400, "Finalize disbursement belum lengkap.", "xpay-disbursement-finish");
 
   await db.prepare(`
-    INSERT INTO xpay_upload_history
+    INSERT INTO xpay28_upload_history
       (batch_id, filename, file_type, total_records, total_amount, uploaded_by, uploaded_at)
     VALUES (?, ?, 'DISBURSEMENT', ?, 0, ?, ?)
     ON CONFLICT(batch_id) DO UPDATE SET
@@ -2292,7 +2325,7 @@ async function xpayFinishDisbursementUpload(request, db, user) {
 async function xpayGetDisbursementBatches(db) {
   const result = await db.prepare(`
     SELECT batch_id, filename, total_records, uploaded_by, uploaded_at
-    FROM xpay_upload_history
+    FROM xpay28_upload_history
     WHERE file_type = 'DISBURSEMENT'
     ORDER BY uploaded_at DESC
     LIMIT 1000
@@ -2305,7 +2338,7 @@ async function xpayGetDisbursementLogs(db, refIdRaw) {
   if (!refId) throw new AppError(400, "REF_ID tidak valid.", "xpay-log-ref");
   const result = await db.prepare(`
     SELECT action_type, field_name, old_value, new_value, changed_by, changed_at
-    FROM xpay_disbursement_logs
+    FROM xpay28_disbursement_logs
     WHERE ref_id = ?
     ORDER BY changed_at DESC
     LIMIT 500
@@ -2329,7 +2362,7 @@ async function xpayMarkDone(request, db, user) {
 
   const ph = ids.map(() => "?").join(",");
   const rows = (await db.prepare(`
-    SELECT id, ref_id, status_done FROM xpay_disbursements WHERE id IN (${ph})
+    SELECT id, ref_id, status_done FROM xpay28_disbursements WHERE id IN (${ph})
   `).bind(...ids).all()).results || [];
 
   const now = Date.now();
@@ -2339,21 +2372,21 @@ async function xpayMarkDone(request, db, user) {
   for (const row of rows) {
     if (actionType === "mark" && Number(row.status_done) === 0) {
       changed += 1;
-      statements.push(db.prepare("UPDATE xpay_disbursements SET status_done=1, updated_by=?, updated_at=? WHERE id=?").bind(user.username, now, row.id));
+      statements.push(db.prepare("UPDATE xpay28_disbursements SET status_done=1, updated_by=?, updated_at=? WHERE id=?").bind(user.username, now, row.id));
       statements.push(db.prepare(`
-        INSERT INTO xpay_disbursement_marks (disbursement_id, ref_id, marked_by, note, marked_at)
+        INSERT INTO xpay28_disbursement_marks (disbursement_id, ref_id, marked_by, note, marked_at)
         VALUES (?, ?, ?, NULL, ?)
       `).bind(row.id, row.ref_id, user.username, now));
       statements.push(db.prepare(`
-        INSERT INTO xpay_disbursement_logs
+        INSERT INTO xpay28_disbursement_logs
           (disbursement_id, ref_id, batch_id, action_type, field_name, old_value, new_value, changed_by, changed_at)
         VALUES (?, ?, '', 'MARK_DONE', 'status_done', '0', '1', ?, ?)
       `).bind(row.id, row.ref_id, user.username, now));
     } else if (actionType === "unmark" && Number(row.status_done) === 1) {
       changed += 1;
-      statements.push(db.prepare("UPDATE xpay_disbursements SET status_done=0, updated_by=?, updated_at=? WHERE id=?").bind(user.username, now, row.id));
+      statements.push(db.prepare("UPDATE xpay28_disbursements SET status_done=0, updated_by=?, updated_at=? WHERE id=?").bind(user.username, now, row.id));
       statements.push(db.prepare(`
-        INSERT INTO xpay_disbursement_logs
+        INSERT INTO xpay28_disbursement_logs
           (disbursement_id, ref_id, batch_id, action_type, field_name, old_value, new_value, changed_by, changed_at)
         VALUES (?, ?, '', 'UNMARK_DONE', 'status_done', '1', '0', ?, ?)
       `).bind(row.id, row.ref_id, user.username, now));
@@ -2371,17 +2404,17 @@ async function xpayDeleteDisbursementBatch(request, db) {
 }
 
 async function xpayDeleteDisbursementBatchBody(db, batchId) {
-  const count = await db.prepare("SELECT COUNT(*) AS total FROM xpay_disbursements WHERE batch_id=?").bind(batchId).first();
+  const count = await db.prepare("SELECT COUNT(*) AS total FROM xpay28_disbursements WHERE batch_id=?").bind(batchId).first();
   await db.prepare(`
-    DELETE FROM xpay_disbursement_marks
-    WHERE disbursement_id IN (SELECT id FROM xpay_disbursements WHERE batch_id = ?)
+    DELETE FROM xpay28_disbursement_marks
+    WHERE disbursement_id IN (SELECT id FROM xpay28_disbursements WHERE batch_id = ?)
   `).bind(batchId).run();
   await db.prepare(`
-    DELETE FROM xpay_disbursement_logs
-    WHERE disbursement_id IN (SELECT id FROM xpay_disbursements WHERE batch_id = ?)
+    DELETE FROM xpay28_disbursement_logs
+    WHERE disbursement_id IN (SELECT id FROM xpay28_disbursements WHERE batch_id = ?)
   `).bind(batchId).run();
-  await db.prepare("DELETE FROM xpay_disbursements WHERE batch_id=?").bind(batchId).run();
-  await db.prepare("DELETE FROM xpay_upload_history WHERE batch_id=? AND file_type='DISBURSEMENT'").bind(batchId).run();
+  await db.prepare("DELETE FROM xpay28_disbursements WHERE batch_id=?").bind(batchId).run();
+  await db.prepare("DELETE FROM xpay28_upload_history WHERE batch_id=? AND file_type='DISBURSEMENT'").bind(batchId).run();
   return json({ success: true, deleted: Number(count?.total || 0) });
 }
 
@@ -2399,7 +2432,7 @@ async function xpayUploadBalanceChunk(request, db, user) {
     if (!recordId || !dateCreated) continue;
     const signature = await sha256(`BAL:${batchId}:${Number(item.rowNo || 0)}:${recordId}:${dateCreated}`);
     statements.push(db.prepare(`
-      INSERT OR IGNORE INTO xpay_balance_history
+      INSERT OR IGNORE INTO xpay28_balance_history
         (signature, batch_id, record_id, date_created, note, credit, debit, balance, uploaded_by, uploaded_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -2418,14 +2451,14 @@ async function xpayGetBalanceHistory(db, dateRaw) {
   let result;
   if (date) {
     result = await db.prepare(`
-      SELECT * FROM xpay_balance_history
+      SELECT * FROM xpay28_balance_history
       WHERE substr(date_created,1,10)=?
       ORDER BY date_created DESC, id DESC
       LIMIT 10000
     `).bind(date).all();
   } else {
     result = await db.prepare(`
-      SELECT * FROM xpay_balance_history
+      SELECT * FROM xpay28_balance_history
       ORDER BY date_created DESC, id DESC
       LIMIT 10000
     `).all();
@@ -2478,7 +2511,7 @@ async function xpayGetBalanceHistory(db, dateRaw) {
 async function xpayGetBalanceBatches(db) {
   const result = await db.prepare(`
     SELECT batch_id, MIN(uploaded_at) AS uploaded_at, COUNT(*) AS total_records, MIN(uploaded_by) AS uploaded_by
-    FROM xpay_balance_history
+    FROM xpay28_balance_history
     GROUP BY batch_id
     ORDER BY uploaded_at DESC
     LIMIT 1000
@@ -2497,7 +2530,7 @@ async function xpayDeleteBalanceBatch(request, db) {
   const body = await readJson(request);
   const batchId = xpayText(body.batchId, 120);
   if (!batchId) throw new AppError(400, "Batch ID tidak valid.", "xpay-balance-delete");
-  const result = await db.prepare("DELETE FROM xpay_balance_history WHERE batch_id=?").bind(batchId).run();
+  const result = await db.prepare("DELETE FROM xpay28_balance_history WHERE batch_id=?").bind(batchId).run();
   return json({ success: true, deleted: Number(result.meta?.changes || 0) });
 }
 
