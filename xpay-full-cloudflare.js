@@ -68,7 +68,12 @@
     try{ data=text?JSON.parse(text):{}; }
     catch(_){ throw new Error(`Respons Cloudflare bukan JSON (HTTP ${response.status}).`); }
     if(!response.ok || data.success===false){
-      throw new Error(data.error || `Cloudflare API HTTP ${response.status}.`);
+      if(response.status===503){
+        throw new Error('Cloudflare Function timeout / sementara tidak tersedia (HTTP 503). V29 sudah mengurangi proses database saat membuka endpoint.');
+      }
+      const detail=[data.error,data.stage?`Tahap: ${data.stage}`:'',data.detail?`Detail: ${data.detail}`:'']
+        .filter(Boolean).join(' • ');
+      throw new Error(detail || `Cloudflare API HTTP ${response.status}.`);
     }
     return data;
   }

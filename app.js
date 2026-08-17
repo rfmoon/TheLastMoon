@@ -369,7 +369,7 @@ async function renderXpaySettlementCheckerWorkspace(menu) {
 
         <iframe
           class="xpay-frame xpay-full-frame"
-          src="/xpay-full-cloudflare.html?v=28.0.0"
+          src="/xpay-full-cloudflare.html?v=29.0.0"
           title="Xpay Checker"
           loading="eager"
           referrerpolicy="same-origin">
