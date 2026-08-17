@@ -16,7 +16,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v28-xpay-clean-two-files";
+const VERSION = "v29-xpay-fast-api";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -296,14 +296,33 @@ async function routeRequest(request, env, url) {
 
 async function initializeDatabase(env) {
   if (!schemaReady) {
-    await runSetupStep("db-ping", async () => {
-      const ping = await env.DB.prepare("SELECT 1 AS ok").first();
-      if (Number(ping?.ok) !== 1) {
-        throw new Error("Database tidak merespons SELECT 1.");
-      }
-    });
+    // V29: jangan menjalankan puluhan CREATE/ALTER setiap cold start.
+    // Coba jalur cepat terlebih dahulu. Database TheLastMoon yang sudah ada
+    // cukup divalidasi dengan query ringan.
+    let coreReady = false;
+    let xpayReady = false;
 
-    const statements = [
+    try {
+      const core = await env.DB.prepare(
+        "SELECT 1 AS ok FROM users LIMIT 1"
+      ).first();
+      coreReady = Boolean(core);
+    } catch (_) {
+      coreReady = false;
+    }
+
+    try {
+      await env.DB.prepare(
+        "SELECT 1 AS ok FROM xpay28_transactions LIMIT 1"
+      ).first();
+      xpayReady = true;
+    } catch (_) {
+      xpayReady = false;
+    }
+
+    if (!coreReady) {
+      // Hanya untuk instalasi yang benar-benar baru/kosong.
+      const statements = [
       `CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
         username TEXT NOT NULL,
@@ -497,15 +516,19 @@ async function initializeDatabase(env) {
         ON payout_accounts(account_name)`,
       `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at)`
-    ];
+      ];
 
-    for (let index = 0; index < statements.length; index += 1) {
-      await runSetupStep(`schema-${index + 1}`, async () => {
-        await env.DB.prepare(statements[index]).run();
+      await runSetupStep("schema-bootstrap", async () => {
+        await env.DB.batch(statements.map(sql => env.DB.prepare(sql)));
       });
     }
 
-    await ensureXpayV28Schema(env.DB);
+    if (!xpayReady) {
+      await runSetupStep("xpay28-bootstrap", async () => {
+        await ensureXpayV28Schema(env.DB);
+      });
+    }
+
     await migrateLegacySettings(env.DB);
     schemaReady = true;
   }
@@ -1974,33 +1997,40 @@ async function xpayCheckSettlement(db, dateRaw) {
   const date = xpayIsoDate(dateRaw);
   if (!date) throw new AppError(400, "Tanggal tidak valid.", "xpay-check-date");
 
-  const settlementResult = await db.prepare(`
-    SELECT * FROM xpay28_transactions
-    WHERE settlement_date = ? AND settlement_type = 'SETTLEMENT'
-    ORDER BY payment_time
+  // V29: satu query untuk semua transaksi yang cair pada tanggal target.
+  // Query ini memakai index (settlement_date, settlement_type).
+  const result = await db.prepare(`
+    SELECT
+      id, transaction_id, record_value, record_fee, net_amount,
+      merchant, member, payment_time, payment_date, payment_sec,
+      settlement_type, settlement_date, partner_id, vendor_id,
+      status_excel, ticket
+    FROM xpay28_transactions
+    WHERE settlement_date = ?
+    ORDER BY settlement_type, payment_time
   `).bind(date).all();
 
-  const cutoffResult = await db.prepare(`
-    SELECT * FROM xpay28_transactions
-    WHERE settlement_date = ? AND settlement_type = 'CUTOFF'
-    ORDER BY payment_time
-  `).bind(date).all();
+  const targetRows = result.results || [];
+  const settlement = targetRows.filter(row => row.settlement_type === "SETTLEMENT");
+  const cutoff = targetRows.filter(row => row.settlement_type === "CUTOFF");
 
   const yesterday = xpayAddDays(date, -1);
   const cutoffTodayResult = await db.prepare(`
-    SELECT * FROM xpay28_transactions
+    SELECT
+      id, transaction_id, record_value, record_fee, net_amount,
+      merchant, member, payment_time, payment_date, payment_sec,
+      settlement_type, settlement_date, partner_id, vendor_id,
+      status_excel, ticket
+    FROM xpay28_transactions
     WHERE payment_date = ? AND settlement_type = 'CUTOFF'
     ORDER BY payment_time
   `).bind(yesterday).all();
 
-  const settlement = settlementResult.results || [];
-  const cutoff = cutoffResult.results || [];
   const cutoffToday = cutoffTodayResult.results || [];
-
   const s = xpaySumTransactions(settlement);
   const c = xpaySumTransactions(cutoff);
   const ct = xpaySumTransactions(cutoffToday);
-  const all = [...settlement, ...cutoff].map(xpayFormatTransaction);
+  const all = targetRows.map(xpayFormatTransaction);
 
   return json({
     success: true,
