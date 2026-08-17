@@ -4,7 +4,6 @@
 
   const $ = id => document.getElementById(id);
   const $$ = selector => [...document.querySelectorAll(selector)];
-  const API = '/api/xpay-cloud';
 
   let transactionRows = [];
   let settlementRows = [];
@@ -50,32 +49,767 @@
       if(button.dataset.old) button.textContent=button.dataset.old;
     }
   }
-  async function api(action,{method='GET',params={},body=null}={}){
-    const url=new URL(API,location.origin);
-    url.searchParams.set('action',action);
-    for(const [k,v] of Object.entries(params)){
-      if(v!=='' && v!==null && v!==undefined) url.searchParams.set(k,v);
-    }
-    const response=await fetch(url,{
-      method,
-      credentials:'same-origin',
-      cache:'no-store',
-      headers:body?{'Content-Type':'application/json','Accept':'application/json'}:{'Accept':'application/json'},
-      body:body?JSON.stringify(body):undefined
+  const LOCAL_DB_NAME = 'TheLastMoonXpayV31';
+  const LOCAL_DB_VERSION = 1;
+
+  function openLocalDb(){
+    return new Promise((resolve,reject)=>{
+      const req=indexedDB.open(LOCAL_DB_NAME,LOCAL_DB_VERSION);
+
+      req.onupgradeneeded=()=>{
+        const db=req.result;
+
+        if(!db.objectStoreNames.contains('transactions')){
+          const s=db.createObjectStore('transactions',{keyPath:'id',autoIncrement:true});
+          s.createIndex('signature','signature',{unique:true});
+          s.createIndex('batchId','batchId',{unique:false});
+          s.createIndex('settlementDate','settlementDate',{unique:false});
+          s.createIndex('paymentDate','paymentDate',{unique:false});
+          s.createIndex('partnerId','partnerId',{unique:false});
+        }
+
+        if(!db.objectStoreNames.contains('upload_history')){
+          db.createObjectStore('upload_history',{keyPath:'batchId'});
+        }
+
+        if(!db.objectStoreNames.contains('settlement_files')){
+          const s=db.createObjectStore('settlement_files',{keyPath:'id',autoIncrement:true});
+          s.createIndex('settlementDate','settlementDate',{unique:false});
+        }
+
+        if(!db.objectStoreNames.contains('settlement_details')){
+          const s=db.createObjectStore('settlement_details',{keyPath:'id',autoIncrement:true});
+          s.createIndex('fileId','fileId',{unique:false});
+          s.createIndex('settlementDate','settlementDate',{unique:false});
+          s.createIndex('partnerId','partnerId',{unique:false});
+        }
+
+        if(!db.objectStoreNames.contains('comparison_results')){
+          const s=db.createObjectStore('comparison_results',{keyPath:'key'});
+          s.createIndex('settlementDate','settlementDate',{unique:false});
+        }
+
+        if(!db.objectStoreNames.contains('disbursements')){
+          const s=db.createObjectStore('disbursements',{keyPath:'id',autoIncrement:true});
+          s.createIndex('refId','refId',{unique:true});
+          s.createIndex('batchId','batchId',{unique:false});
+          s.createIndex('dateDisbursement','dateDisbursement',{unique:false});
+        }
+
+        if(!db.objectStoreNames.contains('disbursement_logs')){
+          const s=db.createObjectStore('disbursement_logs',{keyPath:'id',autoIncrement:true});
+          s.createIndex('refId','refId',{unique:false});
+          s.createIndex('disbursementId','disbursementId',{unique:false});
+        }
+
+        if(!db.objectStoreNames.contains('balance_history')){
+          const s=db.createObjectStore('balance_history',{keyPath:'id',autoIncrement:true});
+          s.createIndex('signature','signature',{unique:true});
+          s.createIndex('batchId','batchId',{unique:false});
+          s.createIndex('dateCreated','dateCreated',{unique:false});
+        }
+      };
+
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error||new Error('IndexedDB tidak dapat dibuka.'));
     });
-    const text=await response.text();
-    let data={};
-    try{ data=text?JSON.parse(text):{}; }
-    catch(_){ throw new Error(`Respons Cloudflare bukan JSON (HTTP ${response.status}).`); }
-    if(!response.ok || data.success===false){
-      if(response.status===503){
-        throw new Error('Endpoint Xpay mengembalikan HTTP 503. V30 memakai Function Xpay khusus; cek deployment dan Workers & Pages → Functions → Logs bila pesan ini masih muncul.');
-      }
-      const detail=[data.error,data.stage?`Tahap: ${data.stage}`:'',data.detail?`Detail: ${data.detail}`:'']
-        .filter(Boolean).join(' • ');
-      throw new Error(detail || `Cloudflare API HTTP ${response.status}.`);
+  }
+
+  function idbRequest(req){
+    return new Promise((resolve,reject)=>{
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error||new Error('IndexedDB error.'));
+    });
+  }
+
+  async function withStore(names,mode,fn){
+    const db=await openLocalDb();
+    try{
+      return await new Promise((resolve,reject)=>{
+        const list=Array.isArray(names)?names:[names];
+        const tx=db.transaction(list,mode);
+        const stores={};
+        list.forEach(name=>stores[name]=tx.objectStore(name));
+
+        let result;
+        let failed=false;
+
+        Promise.resolve()
+          .then(()=>fn(stores,tx))
+          .then(value=>{result=value;})
+          .catch(error=>{
+            failed=true;
+            try{tx.abort();}catch(_){}
+            reject(error);
+          });
+
+        tx.oncomplete=()=>{if(!failed)resolve(result);};
+        tx.onerror=()=>{if(!failed)reject(tx.error||new Error('IndexedDB transaction gagal.'));};
+        tx.onabort=()=>{if(!failed)reject(tx.error||new Error('IndexedDB transaction dibatalkan.'));};
+      });
+    }finally{
+      db.close();
     }
-    return data;
+  }
+
+  async function storeAll(name){
+    const db=await openLocalDb();
+    try{
+      const tx=db.transaction(name,'readonly');
+      return await idbRequest(tx.objectStore(name).getAll());
+    }finally{db.close();}
+  }
+
+  async function storeIndexAll(name,index,key){
+    const db=await openLocalDb();
+    try{
+      const tx=db.transaction(name,'readonly');
+      return await idbRequest(tx.objectStore(name).index(index).getAll(key));
+    }finally{db.close();}
+  }
+
+  function localHash(text){
+    let h1=0xdeadbeef ^ text.length;
+    let h2=0x41c6ce57 ^ text.length;
+    for(let i=0;i<text.length;i++){
+      const ch=text.charCodeAt(i);
+      h1=Math.imul(h1^ch,2654435761);
+      h2=Math.imul(h2^ch,1597334677);
+    }
+    h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+    h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+    return (h2>>>0).toString(16).padStart(8,'0')+(h1>>>0).toString(16).padStart(8,'0');
+  }
+
+  function localHistoryRow(batchId,filename,fileType,totalRecords,totalAmount){
+    return {
+      batchId, filename, fileType,
+      totalRecords:Number(totalRecords||0),
+      totalAmount:Number(totalAmount||0),
+      uploadedBy:'LOCAL',
+      uploadedAt:Date.now()
+    };
+  }
+
+  async function localRunComparison(settlementDate){
+    const transactions=await storeIndexAll('transactions','settlementDate',settlementDate);
+    const details=await storeIndexAll('settlement_details','settlementDate',settlementDate);
+
+    const expected=new Map();
+    for(const row of transactions){
+      const key=row.partnerId||'';
+      const cur=expected.get(key)||{total:0,count:0};
+      cur.total+=Number(row.recordValue||0); cur.count++;
+      expected.set(key,cur);
+    }
+
+    const actual=new Map();
+    for(const row of details){
+      const key=row.partnerId||'';
+      const cur=actual.get(key)||{total:0,count:0};
+      cur.total+=Number(row.amount||0); cur.count++;
+      actual.set(key,cur);
+    }
+
+    const partners=[...new Set([...expected.keys(),...actual.keys()])];
+    const rows=[];
+    let match=0,missingBank=0,missingSystem=0;
+
+    for(const partner of partners){
+      const e=expected.get(partner);
+      const a=actual.get(partner);
+      const expectedAmount=Number(e?.total||0);
+      const actualAmount=Number(a?.total||0);
+      const difference=expectedAmount-actualAmount;
+      let state='';
+
+      if(!e){state='MISSING_IN_SYSTEM';missingSystem++;}
+      else if(!a){state='MISSING_IN_BANK';missingBank++;}
+      else if(Math.abs(difference)<0.01){state='MATCH';match++;}
+      else state='MISMATCH';
+
+      rows.push({
+        key:`${settlementDate}|${partner}`,
+        settlementDate,partnerId:partner,
+        expectedAmount,actualAmount,difference,
+        status:state,transactionCount:Number(e?.count||0)
+      });
+    }
+
+    await withStore('comparison_results','readwrite',async stores=>{
+      const s=stores.comparison_results;
+      const old=await idbRequest(s.index('settlementDate').getAll(settlementDate));
+      old.forEach(row=>s.delete(row.key));
+      rows.forEach(row=>s.put(row));
+    });
+
+    return {rows,match,missingBank,missingSystem};
+  }
+
+  async function api(action,{method='GET',params={},body=null}={}){
+    switch(action){
+      case 'summary': {
+        const rows=await storeAll('transactions');
+        return {
+          success:true,
+          summary:rows.reduce((s,r)=>{
+            s.total++;
+            s.total_value+=Number(r.recordValue||0);
+            s.total_fee+=Number(r.recordFee||0);
+            s.total_net+=Number(r.netAmount||0);
+            return s;
+          },{total:0,total_value:0,total_fee:0,total_net:0})
+        };
+      }
+
+      case 'upload_transactions_chunk': {
+        const rows=Array.isArray(body?.rows)?body.rows:[];
+        let saved=0,totalNet=0;
+
+        await withStore(['transactions','upload_history'],'readwrite',async stores=>{
+          const txs=stores.transactions;
+          const hist=stores.upload_history;
+
+          for(const item of rows){
+            const paymentTime=String(item.paymentTime||'').trim();
+            const info=settlementInfo(paymentTime);
+            const parts=paymentParts(paymentTime);
+            if(!info||!parts||!uuid(item.partnerId)) continue;
+
+            const recordValue=Number(item.recordValue||0);
+            const recordFee=Number(item.recordFee||0);
+            const netAmount=recordValue-recordFee;
+            const signature='TX:'+localHash([
+              body.batchId,item.sourceFile||body.filename,item.rowNo,
+              item.transactionId||'',paymentTime,item.partnerId||''
+            ].join('|'));
+
+            const exists=await idbRequest(txs.index('signature').get(signature));
+            if(exists) continue;
+
+            txs.add({
+              signature,batchId:body.batchId,
+              transactionId:item.transactionId||'',
+              recordDate:item.recordDate||'',
+              recordValue,recordFee,netAmount,
+              merchant:item.merchant||'',
+              member:item.member||'',
+              paymentTime,paymentDate:parts.date,paymentSec:parts.sec,
+              settlementRaw:item.settlementRaw||'',
+              settlementType:info.type,
+              settlementDate:info.settlementDate,
+              partnerId:item.partnerId||'',
+              vendorId:item.vendorId||'',
+              statusExcel:item.statusExcel||'',
+              ticket:item.ticket||'',
+              source:item.sourceFile||body.filename||'',
+              createdAt:Date.now()
+            });
+
+            saved++; totalNet+=netAmount;
+          }
+
+          const old=await idbRequest(hist.get(body.batchId));
+          if(old){
+            old.totalRecords=Number(old.totalRecords||0)+saved;
+            old.totalAmount=Number(old.totalAmount||0)+totalNet;
+            hist.put(old);
+          }else{
+            hist.put(localHistoryRow(body.batchId,body.filename||'','TRANSACTION',saved,totalNet));
+          }
+        });
+
+        return {success:true,saved,totalNet};
+      }
+
+      case 'get_batches': {
+        const rows=(await storeAll('upload_history'))
+          .sort((a,b)=>Number(b.uploadedAt||0)-Number(a.uploadedAt||0))
+          .map(r=>({
+            batch_id:r.batchId,filename:r.filename,file_type:r.fileType,
+            total_records:r.totalRecords,total_amount:r.totalAmount,
+            uploaded_by:r.uploadedBy,uploaded_at:r.uploadedAt
+          }));
+        return {success:true,batches:rows};
+      }
+
+      case 'delete_batch': {
+        const batchId=body?.batchId||'';
+        const type=String(body?.fileType||'').toUpperCase();
+        let deleted=0;
+
+        if(type==='TRANSACTION'){
+          const rows=await storeIndexAll('transactions','batchId',batchId);
+          await withStore(['transactions','upload_history'],'readwrite',stores=>{
+            rows.forEach(row=>{stores.transactions.delete(row.id);deleted++;});
+            stores.upload_history.delete(batchId);
+          });
+        }else if(type==='DISBURSEMENT'){
+          return api('delete_disbursement_batch',{method:'POST',body:{batchId}});
+        }else{
+          await withStore('upload_history','readwrite',stores=>stores.upload_history.delete(batchId));
+        }
+
+        return {success:true,deleted};
+      }
+
+      case 'check_settlement': {
+        const date=params?.date||'';
+        const tx=await storeIndexAll('transactions','settlementDate',date);
+        const settlement=tx.filter(r=>r.settlementType==='SETTLEMENT');
+        const cutoff=tx.filter(r=>r.settlementType==='CUTOFF');
+
+        const sum=rows=>rows.reduce((s,r)=>{
+          s.value+=Number(r.recordValue||0);
+          s.fee+=Number(r.recordFee||0);
+          s.net+=Number(r.netAmount||0);
+          return s;
+        },{value:0,fee:0,net:0});
+
+        const s=sum(settlement),c=sum(cutoff);
+        const sourceYesterday=addDays(date,-1);
+        const cutoffToday=(await storeIndexAll('transactions','paymentDate',sourceYesterday))
+          .filter(r=>r.settlementType==='CUTOFF');
+        const ct=sum(cutoffToday);
+
+        const formatRow=r=>({
+          payment_date:displayDate(r.paymentDate),
+          payment_time:r.paymentTime,
+          merchant:r.merchant,
+          member:r.member,
+          partner_id:r.partnerId,
+          record_value_formatted:fmtRp(r.recordValue),
+          record_fee_formatted:fmtRp(r.recordFee),
+          net_amount_formatted:fmtRp(r.netAmount),
+          settlement_type:r.settlementType
+        });
+
+        return {
+          success:true,target_date:date,
+          settlement_source_date:displayDate(addDays(date,-1)),
+          cutoff_source_date:displayDate(addDays(date,-2)),
+          settlement_count:settlement.length,
+          settlement_amount:s.net,settlement_amount_formatted:fmtRp(s.net),
+          settlement_fee:s.fee,settlement_fee_formatted:fmtRp(s.fee),
+          settlement_value:s.value,settlement_value_formatted:fmtRp(s.value),
+          cutoff_count:cutoff.length,
+          cutoff_amount:c.net,cutoff_amount_formatted:fmtRp(c.net),
+          cutoff_fee:c.fee,cutoff_fee_formatted:fmtRp(c.fee),
+          cutoff_value:c.value,cutoff_value_formatted:fmtRp(c.value),
+          cutoff_today_count:cutoffToday.length,
+          cutoff_today_amount:ct.net,cutoff_today_amount_formatted:fmtRp(ct.net),
+          cutoff_today_fee:ct.fee,cutoff_today_fee_formatted:fmtRp(ct.fee),
+          cutoff_today_value:ct.value,cutoff_today_value_formatted:fmtRp(ct.value),
+          cutoff_today_date:sourceYesterday,
+          cutoff_today_cair_date:displayDate(addDays(date,1)),
+          total_count:settlement.length+cutoff.length,
+          total_amount:s.net+c.net,total_amount_formatted:fmtRp(s.net+c.net),
+          total_fee:s.fee+c.fee,total_fee_formatted:fmtRp(s.fee+c.fee),
+          total_value:s.value+c.value,total_value_formatted:fmtRp(s.value+c.value),
+          transactions:[...settlement,...cutoff].map(formatRow)
+        };
+      }
+
+      case 'get_transactions': {
+        const rows=(await storeAll('transactions'))
+          .sort((a,b)=>String(b.paymentTime).localeCompare(String(a.paymentTime)))
+          .map(r=>({
+            batch_id:r.batchId,transaction_id:r.transactionId,
+            record_date:r.recordDate,record_value:r.recordValue,
+            record_fee:r.recordFee,net_amount:r.netAmount,
+            merchant:r.merchant,member:r.member,payment_time:r.paymentTime,
+            settlement_type:r.settlementType,settlement_date:r.settlementDate,
+            payment_date:r.paymentDate,partner_id:r.partnerId,
+            vendor_id:r.vendorId,status_excel:r.statusExcel,ticket:r.ticket
+          }));
+        return {success:true,data:rows};
+      }
+
+      case 'upload_settlement_start': {
+        const date=body?.settlementDate||'';
+        const oldDetails=await storeIndexAll('settlement_details','settlementDate',date);
+        const oldFiles=await storeIndexAll('settlement_files','settlementDate',date);
+
+        let fileId=0;
+        const db=await openLocalDb();
+        try{
+          await new Promise((resolve,reject)=>{
+            const tx=db.transaction(['settlement_details','settlement_files'],'readwrite');
+            const details=tx.objectStore('settlement_details');
+            const files=tx.objectStore('settlement_files');
+            oldDetails.forEach(row=>details.delete(row.id));
+            oldFiles.forEach(row=>files.delete(row.id));
+
+            const req=files.add({
+              filename:body.filename||'',
+              settlementDate:date,totalRecords:0,totalAmount:0,
+              uploadedBy:'LOCAL',uploadedAt:Date.now()
+            });
+            req.onsuccess=()=>{fileId=req.result;};
+            tx.oncomplete=resolve;
+            tx.onerror=()=>reject(tx.error||new Error('Gagal membuat settlement lokal.'));
+          });
+        }finally{db.close();}
+
+        return {success:true,fileId};
+      }
+
+      case 'upload_settlement_chunk': {
+        const rows=Array.isArray(body?.rows)?body.rows:[];
+        const files=await storeAll('settlement_files');
+        const file=files.find(x=>Number(x.id)===Number(body.fileId));
+        if(!file) throw new Error('Settlement file tidak ditemukan.');
+
+        let saved=0,totalAmount=0;
+        await withStore('settlement_details','readwrite',stores=>{
+          for(const item of rows){
+            const amount=Number(item.amount||0);
+            if(!uuid(item.partnerId)||amount<=0) continue;
+            stores.settlement_details.add({
+              fileId:Number(body.fileId),partnerId:item.partnerId,
+              amount,settlementDate:file.settlementDate
+            });
+            saved++; totalAmount+=amount;
+          }
+        });
+
+        return {success:true,saved,totalAmount};
+      }
+
+      case 'upload_settlement_finish': {
+        await withStore(['settlement_files','upload_history'],'readwrite',async stores=>{
+          const file=await idbRequest(stores.settlement_files.get(Number(body.fileId)));
+          if(file){
+            file.totalRecords=Number(body.totalRecords||0);
+            file.totalAmount=Number(body.totalAmount||0);
+            stores.settlement_files.put(file);
+          }
+          stores.upload_history.put(localHistoryRow(
+            body.batchId,body.filename||'','SETTLEMENT',
+            Number(body.totalRecords||0),Number(body.totalAmount||0)
+          ));
+        });
+
+        const c=await localRunComparison(body.settlementDate);
+        return {success:true,comparison:{match:c.match,mismatch:c.rows.filter(r=>r.status!=='MATCH').length}};
+      }
+
+      case 'get_comparison': {
+        const date=params?.date||'';
+        const c=await localRunComparison(date);
+        const rows=c.rows.map(r=>({
+          settlement_date:r.settlementDate,
+          partner_id:r.partnerId,
+          expected_amount:r.expectedAmount,
+          actual_amount:r.actualAmount,
+          difference:r.difference,
+          status:r.status,
+          transaction_count:r.transactionCount
+        }));
+
+        return {
+          success:true,data:rows,
+          settlement_count:(await storeIndexAll('settlement_details','settlementDate',date)).length,
+          summary:{
+            match:c.match,
+            mismatch:rows.filter(r=>r.status==='MISMATCH').length,
+            missing_bank:c.missingBank,
+            missing_system:c.missingSystem,
+            total_expected:rows.reduce((n,r)=>n+Number(r.expected_amount||0),0),
+            total_actual:rows.reduce((n,r)=>n+Number(r.actual_amount||0),0),
+            total_diff:rows.reduce((n,r)=>n+Number(r.difference||0),0)
+          }
+        };
+      }
+
+      case 'upload_disbursement_chunk': {
+        const rows=Array.isArray(body?.rows)?body.rows:[];
+        let inserted=0,updated=0,statusChanged=0,preservedDone=0;
+
+        await withStore(['disbursements','disbursement_logs'],'readwrite',async stores=>{
+          const d=stores.disbursements,l=stores.disbursement_logs;
+
+          for(const item of rows){
+            const refId=String(item.refId||'').trim();
+            if(!refId) continue;
+
+            let vendorStatus=String(item.vendorStatus||'').trim().toLowerCase();
+            if(!vendorStatus||vendorStatus==='blank') vendorStatus='pending';
+            else if(vendorStatus.includes('failed')||vendorStatus.includes('refund')) vendorStatus='failed - refund';
+            else if(vendorStatus==='success') vendorStatus='success';
+
+            const old=await idbRequest(d.index('refId').get(refId));
+
+            if(old){
+              updated++;
+              if(Number(old.statusDone)===1) preservedDone++;
+              if(old.vendorStatus!==vendorStatus){
+                statusChanged++;
+                l.add({
+                  disbursementId:old.id,refId,batchId:body.batchId,
+                  actionType:'UPDATE',fieldName:'vendor_status',
+                  oldValue:old.vendorStatus,newValue:vendorStatus,
+                  changedBy:'LOCAL',changedAt:Date.now()
+                });
+              }
+
+              d.put({
+                ...old,batchId:body.batchId,
+                transactionId:item.transactionId||'',
+                dateDisbursement:item.dateDisbursement,
+                bankCode:item.bankCode||'',bankNo:item.bankNo||'',
+                accountName:item.accountName||'',amount:Number(item.amount||0),
+                vendorStatus,updatedAt:Date.now()
+              });
+            }else{
+              inserted++;
+              const req=d.add({
+                batchId:body.batchId,transactionId:item.transactionId||'',
+                dateDisbursement:item.dateDisbursement,
+                bankCode:item.bankCode||'',bankNo:item.bankNo||'',
+                accountName:item.accountName||'',amount:Number(item.amount||0),
+                refId,vendorStatus,statusDone:0,updatedBy:'LOCAL',
+                createdAt:Date.now(),updatedAt:Date.now()
+              });
+
+              req.onsuccess=()=>{
+                l.add({
+                  disbursementId:req.result,refId,batchId:body.batchId,
+                  actionType:'INSERT',fieldName:null,oldValue:null,
+                  newValue:vendorStatus,changedBy:'LOCAL',changedAt:Date.now()
+                });
+              };
+            }
+          }
+        });
+
+        return {success:true,inserted,updated,statusChanged,preservedDone};
+      }
+
+      case 'finish_disbursement_upload': {
+        await withStore('upload_history','readwrite',stores=>{
+          stores.upload_history.put(localHistoryRow(
+            body.batchId,body.filename||'','DISBURSEMENT',
+            Number(body.totalRecords||0),0
+          ));
+        });
+        return {success:true};
+      }
+
+      case 'get_disbursements': {
+        let rows=await storeAll('disbursements');
+        const date=params?.date||'';
+        const state=params?.status||'';
+        const done=params?.done;
+
+        if(date) rows=rows.filter(r=>r.dateDisbursement===date);
+        if(state&&state!=='all'){
+          if(state==='failed') rows=rows.filter(r=>r.vendorStatus==='failed - refund');
+          else rows=rows.filter(r=>r.vendorStatus===state);
+        }
+        if(done!==''&&done!==undefined) rows=rows.filter(r=>Number(r.statusDone)===Number(done));
+
+        const summary={
+          total:rows.length,
+          pending_count:rows.filter(r=>r.vendorStatus==='pending').length,
+          failed_count:rows.filter(r=>r.vendorStatus==='failed - refund').length,
+          success_count:rows.filter(r=>r.vendorStatus==='success').length,
+          done_count:rows.filter(r=>Number(r.statusDone)===1).length
+        };
+
+        return {
+          success:true,summary,
+          data:rows
+            .sort((a,b)=>String(b.dateDisbursement).localeCompare(String(a.dateDisbursement))||Number(b.id)-Number(a.id))
+            .map(r=>({
+              id:r.id,batch_id:r.batchId,transaction_id:r.transactionId,
+              date_disbursement:r.dateDisbursement,
+              date_formatted:displayDate(r.dateDisbursement),
+              bank_code:r.bankCode,bank_no:r.bankNo,
+              account_name:r.accountName,amount:r.amount,
+              amount_formatted:fmtRp(r.amount),ref_id:r.refId,
+              vendor_status:r.vendorStatus,status_done:r.statusDone
+            }))
+        };
+      }
+
+      case 'get_disbursement_logs': {
+        const rows=(await storeIndexAll('disbursement_logs','refId',params?.ref_id||''))
+          .sort((a,b)=>Number(b.changedAt)-Number(a.changedAt))
+          .map(r=>({
+            action_type:r.actionType,field_name:r.fieldName,
+            old_value:r.oldValue,new_value:r.newValue,
+            changed_by:r.changedBy,
+            changed_at_formatted:new Date(r.changedAt).toLocaleString('id-ID',{hour12:false})
+          }));
+        return {success:true,logs:rows};
+      }
+
+      case 'mark_disbursement_done': {
+        const ids=new Set((body?.ids||[]).map(Number));
+        const actionType=body?.actionType||'mark';
+        let changed=0;
+
+        await withStore(['disbursements','disbursement_logs'],'readwrite',async stores=>{
+          for(const id of ids){
+            const row=await idbRequest(stores.disbursements.get(id));
+            if(!row) continue;
+
+            if(actionType==='mark'&&Number(row.statusDone)===0){
+              row.statusDone=1;changed++;
+              stores.disbursements.put(row);
+              stores.disbursement_logs.add({
+                disbursementId:id,refId:row.refId,batchId:'',
+                actionType:'MARK_DONE',fieldName:'status_done',
+                oldValue:'0',newValue:'1',changedBy:'LOCAL',changedAt:Date.now()
+              });
+            }else if(actionType==='unmark'&&Number(row.statusDone)===1){
+              row.statusDone=0;changed++;
+              stores.disbursements.put(row);
+              stores.disbursement_logs.add({
+                disbursementId:id,refId:row.refId,batchId:'',
+                actionType:'UNMARK_DONE',fieldName:'status_done',
+                oldValue:'1',newValue:'0',changedBy:'LOCAL',changedAt:Date.now()
+              });
+            }
+          }
+        });
+
+        return {success:true,changed};
+      }
+
+      case 'get_disbursement_batches': {
+        const rows=(await storeAll('upload_history'))
+          .filter(r=>r.fileType==='DISBURSEMENT')
+          .sort((a,b)=>Number(b.uploadedAt)-Number(a.uploadedAt))
+          .map(r=>({
+            batch_id:r.batchId,filename:r.filename,
+            total_records:r.totalRecords,uploaded_by:r.uploadedBy,
+            uploaded_at:r.uploadedAt
+          }));
+        return {success:true,batches:rows};
+      }
+
+      case 'delete_disbursement_batch': {
+        const batchId=body?.batchId||'';
+        const rows=await storeIndexAll('disbursements','batchId',batchId);
+        const ids=new Set(rows.map(r=>r.id));
+
+        await withStore(['disbursements','disbursement_logs','upload_history'],'readwrite',async stores=>{
+          rows.forEach(row=>stores.disbursements.delete(row.id));
+          const logs=await idbRequest(stores.disbursement_logs.getAll());
+          logs.forEach(log=>{
+            if(ids.has(log.disbursementId)) stores.disbursement_logs.delete(log.id);
+          });
+          stores.upload_history.delete(batchId);
+        });
+
+        return {success:true,deleted:rows.length};
+      }
+
+      case 'upload_balance_chunk': {
+        const rows=Array.isArray(body?.rows)?body.rows:[];
+        let saved=0;
+
+        await withStore('balance_history','readwrite',async stores=>{
+          const s=stores.balance_history;
+
+          for(const item of rows){
+            const signature='BAL:'+localHash([
+              body.batchId,item.rowNo,item.recordId,item.dateCreated
+            ].join('|'));
+
+            const exists=await idbRequest(s.index('signature').get(signature));
+            if(exists) continue;
+
+            s.add({
+              signature,batchId:body.batchId,recordId:item.recordId||'',
+              dateCreated:item.dateCreated||'',note:item.note||'',
+              credit:Number(item.credit||0),debit:Number(item.debit||0),
+              balance:Number(item.balance||0),uploadedBy:'LOCAL',
+              uploadedAt:Date.now()
+            });
+            saved++;
+          }
+        });
+
+        return {success:true,saved};
+      }
+
+      case 'get_balance_history': {
+        let rows=await storeAll('balance_history');
+        const date=params?.date||'';
+        if(date) rows=rows.filter(r=>String(r.dateCreated||'').slice(0,10)===date);
+        rows.sort((a,b)=>String(b.dateCreated).localeCompare(String(a.dateCreated)));
+
+        let sumCredit=0,sumDebit=0,countCredit=0,countDebit=0,totalCreditAll=0,totalDebitAll=0;
+        const data=rows.map(r=>{
+          const credit=Number(r.credit||0),debit=Number(r.debit||0);
+          totalCreditAll+=Math.abs(credit); totalDebitAll+=debit;
+          const isFee=Math.abs(Math.abs(credit)-1500)<.01&&credit<0;
+          const isRefund=Math.abs(debit-1500)<.01&&debit>0;
+          if(isFee){sumCredit+=credit;countCredit++;}
+          if(isRefund){sumDebit+=debit;countDebit++;}
+          return {
+            record_id:r.recordId,date_formatted:r.dateCreated,note:r.note,
+            credit,credit_formatted:fmtRp(Math.abs(credit)),
+            debit,debit_formatted:fmtRp(debit),
+            balance:r.balance,balance_formatted:fmtRp(r.balance)
+          };
+        });
+
+        const totalBiaya=(sumCredit+sumDebit)*-1;
+
+        return {
+          success:true,data,
+          summary:{
+            total_records:data.length,
+            sum_credit:sumCredit,sum_credit_formatted:fmtRp(Math.abs(sumCredit)),count_credit:countCredit,
+            sum_debit:sumDebit,sum_debit_formatted:fmtRp(sumDebit),count_debit:countDebit,
+            total_biaya:totalBiaya,total_biaya_formatted:fmtRp(totalBiaya),
+            total_credit_all:totalCreditAll,total_credit_all_formatted:fmtRp(totalCreditAll),
+            total_debit_all:totalDebitAll,total_debit_all_formatted:fmtRp(totalDebitAll)
+          }
+        };
+      }
+
+      case 'get_balance_batches': {
+        const rows=await storeAll('balance_history');
+        const map=new Map();
+
+        for(const r of rows){
+          if(!map.has(r.batchId)){
+            map.set(r.batchId,{
+              batch_id:r.batchId,total_records:0,
+              uploaded_by:r.uploadedBy,uploaded_at:r.uploadedAt
+            });
+          }
+          map.get(r.batchId).total_records++;
+        }
+
+        return {
+          success:true,
+          batches:[...map.values()]
+            .sort((a,b)=>Number(b.uploaded_at)-Number(a.uploaded_at))
+            .map(r=>({...r,uploaded_at_formatted:new Date(r.uploaded_at).toLocaleString('id-ID',{hour12:false})}))
+        };
+      }
+
+      case 'delete_balance_batch': {
+        const rows=await storeIndexAll('balance_history','batchId',body?.batchId||'');
+        await withStore('balance_history','readwrite',stores=>{
+          rows.forEach(r=>stores.balance_history.delete(r.id));
+        });
+        return {success:true,deleted:rows.length};
+      }
+    }
+
+    throw new Error(`Action lokal tidak dikenal: ${action}`);
+  }
+
+  function displayDate(date){
+    const m=String(date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m?`${m[3]}/${m[2]}/${m[1]}`:String(date||'');
   }
 
   function updateClock(){
@@ -297,7 +1031,7 @@
         saved+=Number(r.saved||0); totalNet+=Number(r.totalNet||0);
       });
       status('transactionUploadStatus',`✅ BERHASIL! ${saved.toLocaleString('id-ID')} records • Batch ${batch} • Total Net ${fmtRp(totalNet)}`,'ok');
-      toast('Transaction berhasil masuk Cloudflare.','ok');
+      toast('Transaction berhasil disimpan di browser.','ok');
       await loadSummary();
     }catch(e){status('transactionUploadStatus',e.message,'err');toast(e.message,'err');}
     finally{setBusy(btn,false);}
@@ -337,7 +1071,7 @@
       });
       const done=await api('upload_settlement_finish',{method:'POST',body:{batchId:batch,fileId:start.fileId,filename:settlementUploadName,settlementDate,totalRecords:saved,totalAmount}});
       status('settlementUploadStatus',`✅ BERHASIL! ${saved.toLocaleString('id-ID')} records untuk ${settlementDate}. Match ${done.comparison.match} • Mismatch ${done.comparison.mismatch}`,'ok');
-      toast('Settlement berhasil masuk Cloudflare.','ok');
+      toast('Settlement berhasil disimpan di browser.','ok');
     }catch(e){status('settlementUploadStatus',e.message,'err');toast(e.message,'err');}
     finally{setBusy(btn,false);}
   });

@@ -1,108 +1,42 @@
-# TheLastMoon V30 — Xpay Dedicated Function
+# TheLastMoon V31 — Xpay Checker Tanpa API
 
-V30 memperbaiki HTTP 503 pada `Cek Settlement` dengan memisahkan seluruh API Xpay dari catch-all dashboard utama.
+Xpay Checker V31 tidak memakai API Xpay dan tidak memakai Cloudflare D1 untuk data Xpay.
 
-## Perubahan utama
-
-File baru:
+Database baru:
 
 ```text
-functions/api/xpay-cloud.js
+TheLastMoonXpayV31
 ```
 
-Endpoint:
+Karena database baru, pertama kali dibuka:
 
 ```text
-/api/xpay-cloud?action=...
+Total Transactions = 0
+Total Value = Rp 0
+Total Fee = Rp 0
+Net Amount = Rp 0
 ```
 
-sekarang ditangani oleh Function khusus tersebut.
+Upload Transaction tetap mendukung pilih 2 file atau lebih sekaligus.
 
-Cloudflare Pages menggunakan file-based routing dan route yang lebih spesifik mengalahkan route wildcard. Karena itu:
+Cek Settlement, Comparison, Semua Data, Disbursement, Mark Done, Audit Log, dan Balance semuanya membaca IndexedDB browser.
+
+Tidak ada lagi:
 
 ```text
-functions/api/xpay-cloud.js
+/api/xpay-cloud
+fetch()
+HTTP 503 dari Xpay Checker
 ```
 
-dipakai untuk `/api/xpay-cloud`, bukan:
+Catatan: data hanya tersedia di browser/perangkat yang sama.
+
+File `functions/api/xpay-cloud.js` dihapus karena tidak diperlukan.
+
+Setelah deploy tekan Ctrl + Shift + R.
+
+Versi health dashboard utama:
 
 ```text
-functions/api/[[path]].js
+v31-xpay-no-api-final
 ```
-
-## Apa yang dilewati V30
-
-Request Xpay tidak lagi menjalankan:
-
-- initializeDatabase dashboard utama
-- ensureMaster
-- migration background settings
-- bootstrap seluruh tabel/menu dashboard
-- logic lain yang tidak berhubungan dengan Xpay
-
-Request hanya melakukan:
-
-1. validasi D1 binding
-2. validasi session
-3. validasi permission `xpay-checker`
-4. pengecekan ringan tabel Xpay
-5. action Xpay yang diminta
-
-## Database
-
-Tetap menggunakan database bersih:
-
-```text
-xpay28_transactions
-xpay28_upload_history
-xpay28_settlement_files
-xpay28_settlement_details
-xpay28_comparison_results
-xpay28_disbursements
-xpay28_disbursement_logs
-xpay28_disbursement_marks
-xpay28_balance_history
-```
-
-Data Xpay lama tidak dipakai.
-
-## File yang wajib diupload
-
-```text
-functions/api/xpay-cloud.js
-functions/api/[[path]].js
-xpay-full-cloudflare.js
-xpay-full-cloudflare.html
-app.js
-README.md
-```
-
-Paling penting jangan sampai file baru ini tidak ikut GitHub:
-
-```text
-functions/api/xpay-cloud.js
-```
-
-Kalau file tersebut tidak terupload, `/api/xpay-cloud` akan kembali jatuh ke `[[path]].js`.
-
-## Setelah deploy
-
-Tekan:
-
-```text
-Ctrl + Shift + R
-```
-
-Cek:
-
-```text
-/api/health
-```
-
-versi:
-
-```text
-v30-xpay-dedicated-function
-```
-
-Lalu login dan coba `Xpay Checker → Cek Settlement`.

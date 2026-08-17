@@ -360,7 +360,7 @@ async function renderXpaySettlementCheckerWorkspace(menu) {
       <section class="xpay-workspace xpay-full-workspace">
         <header class="xpay-workspace-head">
           <div>
-            <span class="kicker">XPAY CHECKER • CLOUDFLARE D1</span>
+            <span class="kicker">XPAY CHECKER • LOCAL DATABASE</span>
             <h3>Xpay Checker</h3>
             <p>${escapeHtml(data.message)} Xpay V28 memakai database baru yang kosong. Upload 2+ file sekaligus didukung dan API tetap Cloudflare TheLastMoon.</p>
           </div>
@@ -369,7 +369,7 @@ async function renderXpaySettlementCheckerWorkspace(menu) {
 
         <iframe
           class="xpay-frame xpay-full-frame"
-          src="/xpay-full-cloudflare.html?v=30.0.0"
+          src="/xpay-full-cloudflare.html?v=31.0.0"
           title="Xpay Checker"
           loading="eager"
           referrerpolicy="same-origin">
