@@ -69,7 +69,7 @@
     catch(_){ throw new Error(`Respons Cloudflare bukan JSON (HTTP ${response.status}).`); }
     if(!response.ok || data.success===false){
       if(response.status===503){
-        throw new Error('Cloudflare Function timeout / sementara tidak tersedia (HTTP 503). V29 sudah mengurangi proses database saat membuka endpoint.');
+        throw new Error('Endpoint Xpay mengembalikan HTTP 503. V30 memakai Function Xpay khusus; cek deployment dan Workers & Pages → Functions → Logs bila pesan ini masih muncul.');
       }
       const detail=[data.error,data.stage?`Tahap: ${data.stage}`:'',data.detail?`Detail: ${data.detail}`:'']
         .filter(Boolean).join(' • ');
