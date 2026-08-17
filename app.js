@@ -362,14 +362,14 @@ async function renderXpaySettlementCheckerWorkspace(menu) {
           <div>
             <span class="kicker">XPAY CHECKER • CLOUDFLARE D1</span>
             <h3>Xpay Checker</h3>
-            <p>${escapeHtml(data.message)} Sistem PHP Xpay di-port ke Cloudflare Pages + D1. Semua API Xpay menggunakan endpoint same-origin TheLastMoon.</p>
+            <p>${escapeHtml(data.message)} Xpay V28 memakai database baru yang kosong. Upload 2+ file sekaligus didukung dan API tetap Cloudflare TheLastMoon.</p>
           </div>
           <span class="xpay-workspace-badge">DEPOSIT • WITHDRAW • BALANCE</span>
         </header>
 
         <iframe
           class="xpay-frame xpay-full-frame"
-          src="/xpay-full-cloudflare.html?v=27.0.0"
+          src="/xpay-full-cloudflare.html?v=28.0.0"
           title="Xpay Checker"
           loading="eager"
           referrerpolicy="same-origin">

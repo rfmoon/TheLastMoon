@@ -205,57 +205,90 @@
   }
   $('refreshSummary').addEventListener('click',loadSummary);
 
+  function normalizeHeader(value){
+    return String(value ?? '').replace(/^\uFEFF/,'').trim().toUpperCase().replace(/[_\-]+/g,' ').replace(/\s+/g,' ');
+  }
+  function locateHeader(data, requiredNames=[], maxRows=20){
+    const limit=Math.min(maxRows,data.length);
+    for(let rowIndex=0;rowIndex<limit;rowIndex++){
+      const headers=(data[rowIndex]||[]).map(normalizeHeader);
+      if(requiredNames.every(group=>group.some(name=>headers.includes(normalizeHeader(name))))) return {rowIndex,headers};
+    }
+    return null;
+  }
+  function headerIndex(headers,names,fallback=-1){
+    for(const name of names){const idx=headers.indexOf(normalizeHeader(name));if(idx>=0)return idx;}
+    return fallback;
+  }
+  function parseSheetDate(value){
+    const s=String(value ?? '').trim(); if(!s)return null; let m;
+    if((m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/))) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))){
+      const a=Number(m[1]),b=Number(m[2]);
+      if(a>12 || b<=12) return `${m[3]}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`;
+      return `${m[3]}-${String(a).padStart(2,'0')}-${String(b).padStart(2,'0')}`;
+    }
+    if((m=s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/))) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+    return null;
+  }
+  function transactionRowsFromSheet(data,fileName){
+    const located=locateHeader(data,[['PAYMENT'],['RECORD VALUE','VALUE','AMOUNT'],['PARTNER ID','PARTNER_ID','ORDER ID','ORDERID']]);
+    if(!located) throw new Error(`${fileName}: header PAYMENT / RECORD VALUE / PARTNER ID tidak ditemukan.`);
+    const H=located.headers;
+    const I={
+      id:headerIndex(H,['ID','TRANSACTION ID']), recordDate:headerIndex(H,['RECORD DATE']), value:headerIndex(H,['RECORD VALUE','VALUE','AMOUNT']),
+      fee:headerIndex(H,['RECORD FEE','FEE']), merchant:headerIndex(H,['MERCHANT']), member:headerIndex(H,['MEMBER','USER ID','USERID']),
+      payment:headerIndex(H,['PAYMENT','PAYMENT TIME']), settlement:headerIndex(H,['SETTLEMENT','SETTLEMENT DATE']),
+      partner:headerIndex(H,['PARTNER ID','ORDER ID','ORDERID']), vendor:headerIndex(H,['VENDOR ID']), status:headerIndex(H,['STATUS','STATUS EXCEL']), ticket:headerIndex(H,['TICKET'])
+    };
+    const rows=[];let invalid=0;
+    for(let i=located.rowIndex+1;i<data.length;i++){
+      const r=data[i]||[];const payment=I.payment>=0?String(r[I.payment]??'').trim():'';const partner=I.partner>=0?String(r[I.partner]??'').trim():'';
+      if(!payment||!partner||!uuid(partner))continue;const info=settlementInfo(payment);if(!info){invalid++;continue;}
+      rows.push({rowNo:i+1,transactionId:I.id>=0?String(r[I.id]??'').trim():'',recordDate:I.recordDate>=0?String(r[I.recordDate]??'').trim():'',
+        recordValue:I.value>=0?money(r[I.value]):0,recordFee:I.fee>=0?money(r[I.fee]):0,merchant:I.merchant>=0?String(r[I.merchant]??'').trim():'',
+        member:I.member>=0?String(r[I.member]??'').trim():'',paymentTime:payment,settlementRaw:I.settlement>=0?String(r[I.settlement]??'').trim():'',partnerId:partner,
+        vendorId:I.vendor>=0?String(r[I.vendor]??'').trim():'',statusExcel:I.status>=0?String(r[I.status]??'').trim():'',ticket:I.ticket>=0?String(r[I.ticket]??'').trim():'',
+        settlementType:info.type,settlementDate:info.settlementDate,paymentDate:info.paymentDate,sourceFile:fileName});
+    }
+    return {rows,invalid};
+  }
+  function settlementRowsFromSheet(data,fileName){
+    const located=locateHeader(data,[['SETTLEMENT','SETTLEMENT DATE'],['PARTNER ID'],['RECORD VALUE','AMOUNT','VALUE']]);
+    if(!located) throw new Error(`${fileName}: header SETTLEMENT / PARTNER ID / RECORD VALUE tidak ditemukan.`);
+    const H=located.headers;const sIdx=headerIndex(H,['SETTLEMENT','SETTLEMENT DATE']);const pIdx=headerIndex(H,['PARTNER ID']);const aIdx=headerIndex(H,['RECORD VALUE','AMOUNT','VALUE']);
+    const rows=[];const counts=new Map();
+    for(let i=located.rowIndex+1;i<data.length;i++){
+      const r=data[i]||[];const raw=String(r[sIdx]??'').trim();const d=parseSheetDate(raw);if(d)counts.set(d,(counts.get(d)||0)+1);
+      const partner=String(r[pIdx]??'').trim();const amount=money(r[aIdx]);if(uuid(partner)&&amount>0)rows.push({rowNo:i+1,partnerId:partner,amount,settlementRaw:raw,settlementDate:d,sourceFile:fileName});
+    }
+    return {rows,dateCounts:counts,headerRow:located.rowIndex+1};
+  }
+
   // ---------- TRANSACTION UPLOAD ----------
   $('transactionFile').addEventListener('change',async()=>{
-    const file=$('transactionFile').files[0];
-    $('transactionFileName').textContent=file?.name||'Pilih file transaksi';
-    transactionRows=[];
-    if(!file) return;
-    status('transactionUploadStatus','Membaca file...','wait');
+    const files=[...$('transactionFile').files];
+    $('transactionFileName').textContent=files.length?files.map(f=>f.name).join(' • '):'Pilih 2 file transaksi atau lebih';
+    transactionRows=[];if(!files.length)return;status('transactionUploadStatus',`Membaca ${files.length} file...`,'wait');
     try{
-      const data=await readRows(file);
-      if(data.length<2) throw new Error('File kosong atau tidak valid.');
-      data.shift();
-      const errors=[];
-      transactionRows=data.map((row,i)=>{
-        const payment=String(row[7]??'').trim();
-        const partner=String(row[9]??'').trim();
-        if(!payment||!partner||!uuid(partner)) return null;
-        const info=settlementInfo(payment);
-        if(!info){errors.push(i+2);return null;}
-        return {
-          rowNo:i+2,
-          transactionId:String(row[0]??'').trim(),
-          recordDate:String(row[1]??'').trim(),
-          recordValue:money(row[2]),
-          recordFee:money(row[3]),
-          merchant:String(row[4]??'').trim(),
-          member:String(row[5]??'').trim(),
-          paymentTime:payment,
-          settlementRaw:String(row[8]??'').trim(),
-          partnerId:partner,
-          vendorId:String(row[10]??'').trim(),
-          statusExcel:String(row[11]??'').trim(),
-          ticket:String(row[12]??'').trim(),
-          settlementType:info.type,
-          settlementDate:info.settlementDate,
-          paymentDate:info.paymentDate
-        };
-      }).filter(Boolean);
-      status('transactionUploadStatus',`${transactionRows.length.toLocaleString('id-ID')} transaksi valid siap di-upload${errors.length?` • ${errors.length} tanggal invalid`:''}.`,'ok');
+      let invalid=0;const details=[];
+      for(const file of files){const data=await readRows(file);const parsed=transactionRowsFromSheet(data,file.name);transactionRows.push(...parsed.rows);invalid+=parsed.invalid;details.push(`${file.name}: ${parsed.rows.length.toLocaleString('id-ID')} trx`);}
+      if(!transactionRows.length)throw new Error('Tidak ada transaksi valid dari file yang dipilih.');
+      status('transactionUploadStatus',`${files.length} file terbaca • ${transactionRows.length.toLocaleString('id-ID')} transaksi valid${invalid?` • ${invalid} PAYMENT invalid`:''}. ${details.join(' | ')}`,'ok');
     }catch(e){status('transactionUploadStatus',e.message,'err');}
   });
 
   $('uploadTransactionBtn').addEventListener('click',async()=>{
-    const file=$('transactionFile').files[0];
-    if(!file||!transactionRows.length){toast('Pilih dan baca file transaksi terlebih dahulu.','err');return;}
+    const files=[...$('transactionFile').files];
+    if(!files.length||!transactionRows.length){toast('Pilih dan baca file transaksi terlebih dahulu.','err');return;}
     const btn=$('uploadTransactionBtn'); setBusy(btn,true,'Uploading...');
     const batch=batchId();
+    const uploadName=files.map(f=>f.name).join(' + ');
     try{
       let saved=0,totalNet=0;
       await chunked(transactionRows,80,async(chunk,start)=>{
         status('transactionUploadStatus',`Upload ${Math.min(start+chunk.length,transactionRows.length).toLocaleString('id-ID')} / ${transactionRows.length.toLocaleString('id-ID')}...`,'wait');
-        const r=await api('upload_transactions_chunk',{method:'POST',body:{batchId:batch,filename:file.name,rows:chunk}});
+        const r=await api('upload_transactions_chunk',{method:'POST',body:{batchId:batch,filename:uploadName,rows:chunk}});
         saved+=Number(r.saved||0); totalNet+=Number(r.totalNet||0);
       });
       status('transactionUploadStatus',`✅ BERHASIL! ${saved.toLocaleString('id-ID')} records • Batch ${batch} • Total Net ${fmtRp(totalNet)}`,'ok');
@@ -267,64 +300,37 @@
 
   // ---------- SETTLEMENT UPLOAD ----------
   $('settlementFile').addEventListener('change',async()=>{
-    const file=$('settlementFile').files[0];
-    $('settlementFileName').textContent=file?.name||'Pilih file settlement';
-    settlementRows=[]; settlementDates=[];
-    $('settlementDateSelect').innerHTML='<option value="">Membaca...</option>';
-    if(!file) return;
-    status('settlementUploadStatus','Mendeteksi tanggal settlement...','wait');
+    const files=[...$('settlementFile').files];
+    $('settlementFileName').textContent=files.length?files.map(f=>f.name).join(' • '):'Pilih 1 atau beberapa file settlement';
+    settlementRows=[];settlementDates=[];$('settlementDateSelect').innerHTML='<option value="">Membaca...</option>';if(!files.length)return;
+    status('settlementUploadStatus',`Mendeteksi header + tanggal dari ${files.length} file...`,'wait');
     try{
-      let data=await readRows(file);
-      let skip=0;
-      while(skip<3&&data.length){
-        const first=String(data[0]?.[0]??'').trim().toUpperCase();
-        if(first==='ID'||first.includes('RECORD')||first.includes('PARTNER')||first.includes('SETTLEMENT')||String(data[0]?.[9]??'').trim().toUpperCase()==='PARTNER ID'){
-          data.shift(); skip++;
-        }else break;
-      }
-      const counts=new Map();
-      const candidates=new Set();
-      for(const row of data){
-        const raw=String(row[8]??'').trim();
-        if(!raw) continue;
-        const parsed=parseFlexibleDate(raw);
-        if(parsed&&parsed!=='AMBIGUOUS') counts.set(parsed,(counts.get(parsed)||0)+1);
-        if(isAmbiguousDate(raw)){
-          const m=raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-          candidates.add(`${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`);
-          candidates.add(`${m[3]}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`);
-        }
-      }
-      settlementDates=[...new Set([...counts.keys(),...candidates])];
-      settlementDates.sort((a,b)=>(counts.get(b)||0)-(counts.get(a)||0));
-      settlementRows=data.map((row,i)=>({
-        rowNo:i+2,
-        partnerId:String(row[9]??'').trim(),
-        amount:money(row[2])
-      })).filter(r=>uuid(r.partnerId)&&r.amount>0);
-      $('settlementDateSelect').innerHTML=settlementDates.length
-        ? settlementDates.map(d=>`<option value="${esc(d)}">${esc(d)}${counts.get(d)?` • ${counts.get(d)} records`:''}</option>`).join('')
-        : '<option value="">Tanggal tidak terdeteksi</option>';
-      if(!settlementDates.length) throw new Error('Tidak dapat mendeteksi tanggal settlement dari kolom SETTLEMENT.');
-      status('settlementUploadStatus',`${settlementRows.length.toLocaleString('id-ID')} data settlement valid • pilih/konfirmasi tanggal.`,'ok');
+      const counts=new Map();const details=[];
+      for(const file of files){const data=await readRows(file);const parsed=settlementRowsFromSheet(data,file.name);settlementRows.push(...parsed.rows);for(const [d,c] of parsed.dateCounts)counts.set(d,(counts.get(d)||0)+c);details.push(`${file.name}: ${parsed.rows.length.toLocaleString('id-ID')} rows`);}
+      settlementDates=[...counts.keys()].sort((a,b)=>(counts.get(b)||0)-(counts.get(a)||0));
+      $('settlementDateSelect').innerHTML=settlementDates.length?settlementDates.map(d=>`<option value="${esc(d)}">${esc(d)} • ${(counts.get(d)||0).toLocaleString('id-ID')} records</option>`).join(''):'<option value="">Tanggal SETTLEMENT tidak ditemukan</option>';
+      if(!settlementRows.length)throw new Error('Tidak ada PARTNER ID + amount valid pada file settlement.');
+      if(!settlementDates.length)throw new Error('Kolom SETTLEMENT ditemukan, tetapi isi tanggalnya tidak dapat dibaca.');
+      status('settlementUploadStatus',`${files.length} file terbaca • ${settlementRows.length.toLocaleString('id-ID')} data settlement • ${settlementDates.length} tanggal terdeteksi. ${details.join(' | ')}`,'ok');
     }catch(e){status('settlementUploadStatus',e.message,'err');}
   });
 
   $('uploadSettlementBtn').addEventListener('click',async()=>{
-    const file=$('settlementFile').files[0];
+    const files=[...$('settlementFile').files];
     const settlementDate=$('settlementDateSelect').value;
-    if(!file||!settlementRows.length||!settlementDate){toast('Pilih file dan tanggal settlement.','err');return;}
+    if(!files.length||!settlementRows.length||!settlementDate){toast('Pilih file dan tanggal settlement.','err');return;}
+    const settlementUploadName=files.map(f=>f.name).join(' + ');
     const btn=$('uploadSettlementBtn'); setBusy(btn,true,'Uploading...');
     const batch=batchId();
     try{
-      const start=await api('upload_settlement_start',{method:'POST',body:{batchId:batch,filename:file.name,settlementDate}});
+      const start=await api('upload_settlement_start',{method:'POST',body:{batchId:batch,filename:settlementUploadName,settlementDate}});
       let saved=0,totalAmount=0;
       await chunked(settlementRows,100,async(chunk,index)=>{
         status('settlementUploadStatus',`Upload ${Math.min(index+chunk.length,settlementRows.length).toLocaleString('id-ID')} / ${settlementRows.length.toLocaleString('id-ID')}...`,'wait');
         const r=await api('upload_settlement_chunk',{method:'POST',body:{fileId:start.fileId,rows:chunk}});
         saved+=Number(r.saved||0); totalAmount+=Number(r.totalAmount||0);
       });
-      const done=await api('upload_settlement_finish',{method:'POST',body:{batchId:batch,fileId:start.fileId,filename:file.name,settlementDate,totalRecords:saved,totalAmount}});
+      const done=await api('upload_settlement_finish',{method:'POST',body:{batchId:batch,fileId:start.fileId,filename:settlementUploadName,settlementDate,totalRecords:saved,totalAmount}});
       status('settlementUploadStatus',`✅ BERHASIL! ${saved.toLocaleString('id-ID')} records untuk ${settlementDate}. Match ${done.comparison.match} • Mismatch ${done.comparison.mismatch}`,'ok');
       toast('Settlement berhasil masuk Cloudflare.','ok');
     }catch(e){status('settlementUploadStatus',e.message,'err');toast(e.message,'err');}

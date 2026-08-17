@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Xpay Checker</title>
-  <link rel="stylesheet" href="/xpay-full-cloudflare.css?v=27.0.0">
+  <link rel="stylesheet" href="/xpay-full-cloudflare.css?v=28.0.0">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -52,9 +52,9 @@
         <article class="glass upload-card">
           <div class="section-head"><span class="section-icon">⇩</span><div><h2>Upload Transaction</h2><p>Format CSV / XLSX / XLS dari XPay.</p></div></div>
           <label class="drop">
-            <input id="transactionFile" type="file" accept=".csv,.xlsx,.xls,text/csv">
-            <strong id="transactionFileName">Pilih file transaksi</strong>
-            <span>ID, RECORD DATE, RECORD VALUE, RECORD FEE, MERCHANT, MEMBER, PAYMENT, PARTNER ID, dst.</span>
+            <input id="transactionFile" type="file" accept=".csv,.xlsx,.xls,text/csv" multiple>
+            <strong id="transactionFileName">Pilih 2 file transaksi atau lebih</strong>
+            <span>Bisa pilih 2+ file sekaligus. Header dibaca dari nama kolom, bukan posisi tetap.</span>
           </label>
           <button class="btn primary wide" id="uploadTransactionBtn" type="button">Upload Transaction ke Cloudflare</button>
           <div class="status" id="transactionUploadStatus">Belum ada file.</div>
@@ -63,9 +63,9 @@
         <article class="glass upload-card">
           <div class="section-head"><span class="section-icon green">≋</span><div><h2>Upload Settlement</h2><p>Settlement bank untuk Comparison Result.</p></div></div>
           <label class="drop">
-            <input id="settlementFile" type="file" accept=".csv,.xlsx,.xls,text/csv">
-            <strong id="settlementFileName">Pilih file settlement</strong>
-            <span>Kolom SETTLEMENT dibaca dari index 8, PARTNER ID index 9, amount index 2.</span>
+            <input id="settlementFile" type="file" accept=".csv,.xlsx,.xls,text/csv" multiple>
+            <strong id="settlementFileName">Pilih 1 atau beberapa file settlement</strong>
+            <span>SETTLEMENT, PARTNER ID, dan RECORD VALUE/AMOUNT dideteksi otomatis dari header.</span>
           </label>
           <div class="form-row">
             <label><span>Tanggal Settlement</span><select id="settlementDateSelect"><option value="">Pilih file dulu</option></select></label>
@@ -228,9 +228,9 @@
     </section>
   </main>
 
-  <footer>Cloudflare port • TheLastMoon • Xpay Checker V27</footer>
+  <footer>Cloudflare port • TheLastMoon • Xpay Checker V28</footer>
 </div>
 
-<script src="/xpay-full-cloudflare.js?v=27.0.0" defer></script>
+<script src="/xpay-full-cloudflare.js?v=28.0.0" defer></script>
 </body>
 </html>
