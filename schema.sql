@@ -107,3 +107,98 @@ CREATE INDEX IF NOT EXISTS idx_xpay_transactions_payment
 
 CREATE INDEX IF NOT EXISTS idx_xpay_transactions_member
   ON xpay_transactions(member);
+
+
+-- Xpay Checker V27 full Cloudflare port
+CREATE TABLE IF NOT EXISTS xpay_upload_history (
+  batch_id TEXT PRIMARY KEY,
+  filename TEXT NOT NULL DEFAULT '',
+  file_type TEXT NOT NULL DEFAULT '',
+  total_records INTEGER NOT NULL DEFAULT 0,
+  total_amount REAL NOT NULL DEFAULT 0,
+  uploaded_by TEXT NOT NULL DEFAULT '',
+  uploaded_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS xpay_settlement_files (
+  id INTEGER PRIMARY KEY,
+  filename TEXT NOT NULL DEFAULT '',
+  settlement_date TEXT NOT NULL,
+  total_records INTEGER NOT NULL DEFAULT 0,
+  total_amount REAL NOT NULL DEFAULT 0,
+  uploaded_by TEXT NOT NULL DEFAULT '',
+  uploaded_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS xpay_settlement_details (
+  id INTEGER PRIMARY KEY,
+  settlement_file_id INTEGER NOT NULL,
+  partner_id TEXT NOT NULL,
+  amount REAL NOT NULL DEFAULT 0,
+  settlement_date TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS xpay_comparison_results (
+  id INTEGER PRIMARY KEY,
+  settlement_date TEXT NOT NULL,
+  partner_id TEXT NOT NULL,
+  expected_amount REAL NOT NULL DEFAULT 0,
+  actual_amount REAL NOT NULL DEFAULT 0,
+  difference REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT '',
+  transaction_count INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(settlement_date, partner_id)
+);
+
+CREATE TABLE IF NOT EXISTS xpay_disbursements (
+  id INTEGER PRIMARY KEY,
+  batch_id TEXT NOT NULL DEFAULT '',
+  transaction_id TEXT NOT NULL DEFAULT '',
+  date_disbursement TEXT NOT NULL,
+  bank_code TEXT NOT NULL DEFAULT '',
+  bank_no TEXT NOT NULL DEFAULT '',
+  account_name TEXT NOT NULL DEFAULT '',
+  amount REAL NOT NULL DEFAULT 0,
+  ref_id TEXT NOT NULL UNIQUE,
+  vendor_status TEXT NOT NULL DEFAULT 'pending',
+  status_done INTEGER NOT NULL DEFAULT 0,
+  updated_by TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS xpay_disbursement_logs (
+  id INTEGER PRIMARY KEY,
+  disbursement_id INTEGER NOT NULL,
+  ref_id TEXT NOT NULL,
+  batch_id TEXT NOT NULL DEFAULT '',
+  action_type TEXT NOT NULL,
+  field_name TEXT,
+  old_value TEXT,
+  new_value TEXT,
+  changed_by TEXT NOT NULL DEFAULT '',
+  changed_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS xpay_disbursement_marks (
+  id INTEGER PRIMARY KEY,
+  disbursement_id INTEGER NOT NULL,
+  ref_id TEXT NOT NULL,
+  marked_by TEXT NOT NULL DEFAULT '',
+  note TEXT,
+  marked_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS xpay_balance_history (
+  id INTEGER PRIMARY KEY,
+  signature TEXT NOT NULL UNIQUE,
+  batch_id TEXT NOT NULL,
+  record_id TEXT NOT NULL DEFAULT '',
+  date_created TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  credit REAL NOT NULL DEFAULT 0,
+  debit REAL NOT NULL DEFAULT 0,
+  balance REAL NOT NULL DEFAULT 0,
+  uploaded_by TEXT NOT NULL DEFAULT '',
+  uploaded_at INTEGER NOT NULL
+);

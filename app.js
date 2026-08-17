@@ -357,19 +357,19 @@ async function renderXpaySettlementCheckerWorkspace(menu) {
     const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
 
     $("#pageContent").innerHTML = `
-      <section class="xpay-workspace xpay-settlement-workspace">
+      <section class="xpay-workspace xpay-full-workspace">
         <header class="xpay-workspace-head">
           <div>
-            <span class="kicker">CLOUDFLARE D1 • SETTLEMENT</span>
+            <span class="kicker">XPAY CHECKER • CLOUDFLARE D1</span>
             <h3>Xpay Checker</h3>
-            <p>${escapeHtml(data.message)} Upload CSV disimpan langsung ke IndexedDB browser. Mode database membaca data lokal tanpa API sehingga lebih cepat.</p>
+            <p>${escapeHtml(data.message)} Sistem PHP Xpay di-port ke Cloudflare Pages + D1. Semua API Xpay menggunakan endpoint same-origin TheLastMoon.</p>
           </div>
-          <span class="xpay-workspace-badge">SETTLEMENT • CUTOFF • V26 LOCAL</span>
+          <span class="xpay-workspace-badge">DEPOSIT • WITHDRAW • BALANCE</span>
         </header>
 
         <iframe
-          class="xpay-frame xpay-settlement-frame"
-          src="/xpay-settlement-checker.html?v=26.0.0"
+          class="xpay-frame xpay-full-frame"
+          src="/xpay-full-cloudflare.html?v=27.0.0"
           title="Xpay Checker"
           loading="eager"
           referrerpolicy="same-origin">

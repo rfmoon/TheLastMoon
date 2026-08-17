@@ -643,3 +643,5 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
 .xpay-settlement-workspace .xpay-workspace-head{
   background:linear-gradient(120deg,rgba(231,75,151,.08),rgba(87,165,255,.08)),rgba(5,12,25,.22)
 }
+
+.xpay-full-frame{min-height:1250px}
