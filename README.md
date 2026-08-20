@@ -1,39 +1,73 @@
-# TheLastMoon V33 — MEMO Save Fix
+# TheLastMoon V34 — MEMO Button Fix
 
-V33 memisahkan MEMO dari backend catch-all besar.
+Penyebab tombol MEMO V33 tidak bekerja ditemukan:
 
-File baru WAJIB:
+`_headers` menggunakan Content-Security-Policy:
 
-functions/api/memos.js
+```text
+script-src 'self' https://cdn.jsdelivr.net
+```
 
-Semua operasi menggunakan endpoint exact:
+dan tidak mengizinkan inline JavaScript.
 
-GET  /api/memos?action=list
-POST /api/memos?action=create
-POST /api/memos?action=update
-POST /api/memos?action=trash
-POST /api/memos?action=restore
-POST /api/memos?action=delete
-POST /api/memos?action=empty-trash
+Script MEMO sumber masih memakai:
+
+```html
+onclick="saveMemo()"
+onclick="toggleAllMemos()"
+onclick="toggleRecycleBin()"
+```
+
+Akibatnya browser memblokir klik tombol.
+
+V34 menghapus seluruh inline `onclick` dan menggantinya dengan
+`addEventListener()` dari `memo.js`.
+
+Yang sekarang aktif:
+
+- SIMPAN
+- RESET
+- SEARCH
+- LIHAT SEMUA / TUTUP SEMUA
+- RECYCLE BIN / TUTUP RECYCLE BIN
+- COPY
+- EDIT
+- HAPUS
+- PULIHKAN
+- HAPUS PERMANEN
+- KOSONGKAN RECYCLE BIN
 
 Database tetap Cloudflare D1:
 
+```text
 memo_records
+```
 
-Function MEMO sendiri akan membuat tabel/index jika belum ada.
+Dedicated API tetap:
 
-Permission tetap ai-chat, tetapi label menu tetap MEMO.
-
-Timpa/upload:
-
+```text
 functions/api/memos.js
-functions/api/[[path]].js
+```
+
+File utama yang perlu ditimpa/upload:
+
+```text
 memo.html
 memo.js
 app.js
+functions/api/memos.js
+functions/api/[[path]].js
 README.md
+```
 
-Setelah deploy tekan Ctrl + Shift + R.
+Setelah deploy:
+
+```text
+Ctrl + Shift + R
+```
 
 Health version:
-v33-memo-dedicated-api
+
+```text
+v34-memo-button-fix
+```

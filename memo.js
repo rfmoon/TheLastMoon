@@ -195,9 +195,9 @@ function renderMemos(data) {
             <div class="memo-keyword">${escapeHTML(memo.keyword)}</div>
             <div class="memo-content">${escapeHTML(memo.content)}</div>
             <div class="memo-actions">
-                <button class="btn-green" onclick="copyMemo(${memo.id})">📋 COPY</button>
-                <button class="btn-gray" onclick="editMemo(${memo.id})">✏ EDIT</button>
-                <button class="btn-red" onclick="moveToTrash(${memo.id})">🗑 HAPUS</button>
+                <button class="btn-green" type="button" data-memo-action="copy" data-memo-id="${memo.id}">📋 COPY</button>
+                <button class="btn-gray" type="button" data-memo-action="edit" data-memo-id="${memo.id}">✏ EDIT</button>
+                <button class="btn-red" type="button" data-memo-action="trash" data-memo-id="${memo.id}">🗑 HAPUS</button>
             </div>
         </div>`).join('');
 }
@@ -215,14 +215,14 @@ function renderRecycleBin() {
     }
 
     results.innerHTML = `
-        <div class="trash-toolbar"><button class="btn-red" onclick="emptyRecycleBin()">🗑 KOSONGKAN RECYCLE BIN</button></div>
+        <div class="trash-toolbar"><button class="btn-red" type="button" data-memo-action="empty-trash">🗑 KOSONGKAN RECYCLE BIN</button></div>
         ${data.map(memo => `
             <div class="memo trash">
                 <div class="memo-keyword">🗑 ${escapeHTML(memo.keyword)}</div>
                 <div class="memo-content">${escapeHTML(memo.content)}</div>
                 <div class="memo-actions">
-                    <button class="btn-green" onclick="restoreMemo(${memo.id})">♻ PULIHKAN</button>
-                    <button class="btn-red" onclick="permanentDelete(${memo.id})">❌ HAPUS PERMANEN</button>
+                    <button class="btn-green" type="button" data-memo-action="restore" data-memo-id="${memo.id}">♻ PULIHKAN</button>
+                    <button class="btn-red" type="button" data-memo-action="delete" data-memo-id="${memo.id}">❌ HAPUS PERMANEN</button>
                 </div>
             </div>`).join('')}`;
 }
@@ -341,4 +341,94 @@ function escapeHTML(text) {
     return div.innerHTML;
 }
 
+
+function bindMemoEvents() {
+    const searchButton = document.querySelector(
+        '.search-box button:not(#toggleAllButton):not(#trashButton)'
+    );
+    const toggleAllButton = document.getElementById('toggleAllButton');
+    const trashButton = document.getElementById('trashButton');
+    const saveButton = document.getElementById('saveButton');
+    const resetButton = document.querySelector(
+        '.button-row .btn-gray'
+    );
+    const results = document.getElementById('results');
+
+    if (searchButton) {
+        searchButton.addEventListener('click', searchMemos);
+    }
+
+    if (toggleAllButton) {
+        toggleAllButton.addEventListener(
+            'click',
+            toggleAllMemos
+        );
+    }
+
+    if (trashButton) {
+        trashButton.addEventListener(
+            'click',
+            toggleRecycleBin
+        );
+    }
+
+    if (saveButton) {
+        saveButton.addEventListener(
+            'click',
+            saveMemo
+        );
+    }
+
+    if (resetButton) {
+        resetButton.addEventListener(
+            'click',
+            () => resetForm()
+        );
+    }
+
+    if (results) {
+        results.addEventListener('click', async event => {
+            const button = event.target.closest(
+                '[data-memo-action]'
+            );
+
+            if (!button) return;
+
+            const action = button.dataset.memoAction;
+            const id = Number(button.dataset.memoId || 0);
+
+            if (action === 'copy') {
+                await copyMemo(id);
+                return;
+            }
+
+            if (action === 'edit') {
+                editMemo(id);
+                return;
+            }
+
+            if (action === 'trash') {
+                await moveToTrash(id);
+                return;
+            }
+
+            if (action === 'restore') {
+                await restoreMemo(id);
+                return;
+            }
+
+            if (action === 'delete') {
+                await permanentDelete(id);
+                return;
+            }
+
+            if (action === 'empty-trash') {
+                await emptyRecycleBin();
+            }
+        });
+    }
+}
+
+
+bindMemoEvents();
 loadDatabase();

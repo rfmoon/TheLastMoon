@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
 <title>MEMO DATABASE</title>
-<link rel="stylesheet" href="/memo.css?v=33.0.0">
+<link rel="stylesheet" href="/memo.css?v=34.0.0">
 </head>
 <body>
 <div class="container">
@@ -31,14 +31,13 @@
                 autocomplete="off"
             >
 
-            <button onclick="searchMemos()">
+            <button>
                 🔎 SEARCH
             </button>
 
             <button
                 class="btn-purple"
                 id="toggleAllButton"
-                onclick="toggleAllMemos()"
             >
                 👁 LIHAT SEMUA
             </button>
@@ -46,7 +45,6 @@
             <button
                 class="btn-orange"
                 id="trashButton"
-                onclick="toggleRecycleBin()"
             >
                 🗑 RECYCLE BIN
             </button>
@@ -101,14 +99,12 @@
                 <button
                     class="btn-green"
                     id="saveButton"
-                    onclick="saveMemo()"
                 >
                     💾 SIMPAN
                 </button>
 
                 <button
                     class="btn-gray"
-                    onclick="resetForm()"
                 >
                     RESET
                 </button>
@@ -153,6 +149,6 @@
     </div>
 
 </div>
-<script src="/memo.js?v=33.0.0" defer></script>
+<script src="/memo.js?v=34.0.0" defer></script>
 </body>
 </html>

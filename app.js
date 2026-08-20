@@ -520,7 +520,7 @@ async function renderMemoWorkspace(menu) {
 
         <iframe
           class="xpay-frame memo-frame"
-          src="/memo.html?v=33.0.0"
+          src="/memo.html?v=34.0.0"
           title="MEMO DATABASE"
           loading="eager"
           referrerpolicy="same-origin">
