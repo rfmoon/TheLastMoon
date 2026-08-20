@@ -1,4 +1,4 @@
-const VERSION = "v33-memo-dedicated-api";
+const VERSION = "v34-memo-button-fix";
 const COOKIE_NAME = "thelastmoon_session";
 const MAX_JSON_BYTES = 1024 * 1024;
 
