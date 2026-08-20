@@ -7,9 +7,12 @@ let statusTimeout = null;
 
 const MEMO_API = '/api/memos';
 
-async function memoApi(path = '', options = {}) {
-    const response = await fetch(MEMO_API + path, {
-        method: options.method || 'GET',
+async function memoApi(action = 'list', options = {}) {
+    const url = new URL(MEMO_API, location.origin);
+    url.searchParams.set('action', action);
+
+    const response = await fetch(url, {
+        method: options.method || (action === 'list' ? 'GET' : 'POST'),
         credentials: 'same-origin',
         cache: 'no-store',
         headers: options.body
@@ -22,17 +25,31 @@ async function memoApi(path = '', options = {}) {
     let payload = {};
 
     if (raw) {
-        try { payload = JSON.parse(raw); }
-        catch (_) { throw new Error(`Server MEMO mengembalikan respons tidak valid (HTTP ${response.status}).`); }
+        try {
+            payload = JSON.parse(raw);
+        } catch (_) {
+            throw new Error(
+                `Server MEMO mengembalikan respons tidak valid (HTTP ${response.status}).`
+            );
+        }
     }
 
-    if (!response.ok) throw new Error(payload.error || `MEMO HTTP ${response.status}.`);
+    if (!response.ok || payload.success === false) {
+        const parts = [
+            payload.error || `MEMO HTTP ${response.status}.`,
+            payload.stage ? `Tahap: ${payload.stage}` : '',
+            payload.detail ? `Detail: ${payload.detail}` : ''
+        ].filter(Boolean);
+
+        throw new Error(parts.join(' • '));
+    }
+
     return payload;
 }
 
 async function loadDatabase(callback = null) {
     try {
-        const payload = await memoApi();
+        const payload = await memoApi('list');
         memos = Array.isArray(payload.memos) ? payload.memos : [];
         memos = memos.map(memo => ({ ...memo, deleted: memo.deleted === true }));
         memos.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -79,13 +96,9 @@ async function saveMemo() {
 
     try {
         if (editId) {
-            await memoApi('/' + encodeURIComponent(editId), {
-                method: 'PUT', body: { keyword, content }
-            });
+            await memoApi('update', { body: { id: Number(editId), keyword, content } });
         } else {
-            await memoApi('', {
-                method: 'POST', body: { keyword, content }
-            });
+            await memoApi('create', { body: { keyword, content } });
         }
 
         const wasEdit = !!editId;
@@ -219,7 +232,7 @@ async function moveToTrash(id) {
     if (!memo) return;
     if (!confirm('Pindahkan memo ke Recycle Bin?\n\n' + memo.keyword)) return;
     try {
-        await memoApi('/' + id + '/trash', { method: 'POST' });
+        await memoApi('trash', { body: { id } });
         await loadDatabase();
         clearResult();
         showStatus('✓ Memo dipindahkan ke Recycle Bin.', true);
@@ -228,7 +241,7 @@ async function moveToTrash(id) {
 
 async function restoreMemo(id) {
     try {
-        await memoApi('/' + id + '/restore', { method: 'POST' });
+        await memoApi('restore', { body: { id } });
         await loadDatabase();
         renderRecycleBin();
         showStatus('✓ Memo berhasil dipulihkan.', true);
@@ -240,7 +253,7 @@ async function permanentDelete(id) {
     if (!memo) return;
     if (!confirm('HAPUS PERMANEN memo ini?\n\n' + memo.keyword + '\n\nData tidak dapat dipulihkan lagi.')) return;
     try {
-        await memoApi('/' + id, { method: 'DELETE' });
+        await memoApi('delete', { body: { id } });
         await loadDatabase();
         renderRecycleBin();
         showStatus('✓ Memo dihapus permanen.', true);
@@ -252,7 +265,7 @@ async function emptyRecycleBin() {
     if (!trash.length) return;
     if (!confirm('Kosongkan seluruh Recycle Bin?\n\n' + trash.length + ' memo akan dihapus permanen.')) return;
     try {
-        await memoApi('/trash', { method: 'DELETE' });
+        await memoApi('empty-trash', { body: {} });
         await loadDatabase();
         renderRecycleBin();
         showStatus('✓ Recycle Bin berhasil dikosongkan.', true);

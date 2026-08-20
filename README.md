@@ -1,72 +1,39 @@
-# TheLastMoon V32 — MEMO Cloudflare D1
+# TheLastMoon V33 — MEMO Save Fix
 
-Menu **AI Chat** diubah tampilannya menjadi **MEMO**.
+V33 memisahkan MEMO dari backend catch-all besar.
 
-ID permission tetap `ai-chat` supaya user yang sebelumnya sudah memiliki akses AI Chat tidak kehilangan akses. Di User Admin label yang tampil sekarang `MEMO`.
+File baru WAJIB:
 
-## Database
+functions/api/memos.js
 
-MEMO sekarang tersimpan di Cloudflare D1, bukan IndexedDB browser.
+Semua operasi menggunakan endpoint exact:
 
-```text
+GET  /api/memos?action=list
+POST /api/memos?action=create
+POST /api/memos?action=update
+POST /api/memos?action=trash
+POST /api/memos?action=restore
+POST /api/memos?action=delete
+POST /api/memos?action=empty-trash
+
+Database tetap Cloudflare D1:
+
 memo_records
-```
 
-Fitur:
-- Tambah Memo
-- Search keyword + isi
-- Lihat Semua / Tutup Semua
-- Copy
-- Edit
-- Recycle Bin
-- Pulihkan
-- Hapus Permanen
-- Kosongkan Recycle Bin
-- Database dipakai bersama user yang punya akses MEMO
+Function MEMO sendiri akan membuat tabel/index jika belum ada.
 
-## API internal
+Permission tetap ai-chat, tetapi label menu tetap MEMO.
 
-```text
-GET    /api/memos
-POST   /api/memos
-PUT    /api/memos/:id
-POST   /api/memos/:id/trash
-POST   /api/memos/:id/restore
-DELETE /api/memos/:id
-DELETE /api/memos/trash
-```
+Timpa/upload:
 
-Semua endpoint membutuhkan login TheLastMoon + permission `ai-chat` (label MEMO).
-
-## File baru
-
-```text
+functions/api/memos.js
+functions/api/[[path]].js
 memo.html
-memo.css
-memo.js
-```
-
-## File yang ditimpa/upload
-
-```text
-memo.html
-memo.css
 memo.js
 app.js
-styles.css
-schema.sql
 README.md
-functions/api/[[path]].js
-```
 
-Setelah deploy:
-
-```text
-Ctrl + Shift + R
-```
+Setelah deploy tekan Ctrl + Shift + R.
 
 Health version:
-
-```text
-v32-memo-d1
-```
+v33-memo-dedicated-api
