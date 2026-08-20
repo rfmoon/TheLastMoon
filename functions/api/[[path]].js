@@ -16,7 +16,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v32-memo-d1";
+const VERSION = "v33-memo-dedicated-api";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -232,44 +232,6 @@ async function routeRequest(request, env, url) {
       env.DB,
       eventScatterDateMatch[1]
     );
-  }
-
-  if (url.pathname === "/api/memos" && request.method === "GET") {
-    requireMenuAccess(user, "ai-chat");
-    return listMemos(env.DB);
-  }
-
-  if (url.pathname === "/api/memos" && request.method === "POST") {
-    requireMenuAccess(user, "ai-chat");
-    return createMemo(request, env.DB, user);
-  }
-
-  if (url.pathname === "/api/memos/trash" && request.method === "DELETE") {
-    requireMenuAccess(user, "ai-chat");
-    return emptyMemoTrash(env.DB);
-  }
-
-  const memoRestoreMatch = url.pathname.match(/^\/api\/memos\/(\d+)\/restore$/);
-  if (memoRestoreMatch && request.method === "POST") {
-    requireMenuAccess(user, "ai-chat");
-    return restoreMemoRecord(env.DB, user, Number(memoRestoreMatch[1]));
-  }
-
-  const memoTrashMatch = url.pathname.match(/^\/api\/memos\/(\d+)\/trash$/);
-  if (memoTrashMatch && request.method === "POST") {
-    requireMenuAccess(user, "ai-chat");
-    return trashMemoRecord(env.DB, user, Number(memoTrashMatch[1]));
-  }
-
-  const memoMatch = url.pathname.match(/^\/api\/memos\/(\d+)$/);
-  if (memoMatch && request.method === "PUT") {
-    requireMenuAccess(user, "ai-chat");
-    return updateMemoRecord(request, env.DB, user, Number(memoMatch[1]));
-  }
-
-  if (memoMatch && request.method === "DELETE") {
-    requireMenuAccess(user, "ai-chat");
-    return permanentDeleteMemo(env.DB, Number(memoMatch[1]));
   }
 
   if (url.pathname === "/api/users" && request.method === "GET") {
@@ -553,145 +515,11 @@ async function initializeDatabase(env) {
     }
 
 
-    await runSetupStep("memo-schema", () => ensureMemoSchema(env.DB));
     await migrateLegacySettings(env.DB);
     schemaReady = true;
   }
 
   await ensureMaster(env);
-}
-
-async function ensureMemoSchema(db) {
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS memo_records (
-      id INTEGER PRIMARY KEY,
-      keyword TEXT NOT NULL,
-      content TEXT NOT NULL,
-      deleted INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      deleted_at INTEGER,
-      created_by INTEGER,
-      updated_by INTEGER
-    )`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_memo_records_deleted_updated
-      ON memo_records(deleted, updated_at DESC)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_memo_records_updated
-      ON memo_records(updated_at DESC)`)
-  ]);
-}
-
-async function listMemos(db) {
-  const result = await db.prepare(`
-    SELECT id, keyword, content, deleted, created_at, updated_at, deleted_at,
-           created_by, updated_by
-    FROM memo_records
-    ORDER BY updated_at DESC, id DESC
-  `).all();
-
-  return json({
-    success: true,
-    memos: (result.results || []).map(row => ({
-      id: Number(row.id),
-      keyword: row.keyword || "",
-      content: row.content || "",
-      deleted: Number(row.deleted) === 1,
-      createdAt: Number(row.created_at || 0),
-      updatedAt: Number(row.updated_at || 0),
-      deletedAt: row.deleted_at == null ? null : Number(row.deleted_at),
-      createdBy: row.created_by == null ? null : Number(row.created_by),
-      updatedBy: row.updated_by == null ? null : Number(row.updated_by)
-    }))
-  });
-}
-
-async function createMemo(request, db, user) {
-  const body = await readJson(request);
-  const keyword = validateMemoKeyword(body.keyword);
-  const content = validateMemoContent(body.content);
-  const now = Date.now();
-
-  const result = await db.prepare(`
-    INSERT INTO memo_records
-      (keyword, content, deleted, created_at, updated_at, deleted_at, created_by, updated_by)
-    VALUES (?, ?, 0, ?, ?, NULL, ?, ?)
-  `).bind(keyword, content, now, now, user.id, user.id).run();
-
-  return json({ success: true, id: Number(result.meta?.last_row_id || 0) }, 201);
-}
-
-async function updateMemoRecord(request, db, user, id) {
-  const existing = await db.prepare(`SELECT id, deleted FROM memo_records WHERE id = ? LIMIT 1`).bind(id).first();
-  if (!existing) throw new AppError(404, "Memo tidak ditemukan.", "memo-update-not-found");
-  if (Number(existing.deleted) === 1) {
-    throw new AppError(409, "Memo berada di Recycle Bin. Pulihkan terlebih dahulu.", "memo-update-trash");
-  }
-
-  const body = await readJson(request);
-  const keyword = validateMemoKeyword(body.keyword);
-  const content = validateMemoContent(body.content);
-
-  await db.prepare(`
-    UPDATE memo_records
-    SET keyword = ?, content = ?, updated_at = ?, updated_by = ?
-    WHERE id = ?
-  `).bind(keyword, content, Date.now(), user.id, id).run();
-
-  return json({ success: true });
-}
-
-async function trashMemoRecord(db, user, id) {
-  const existing = await db.prepare(`SELECT id FROM memo_records WHERE id = ? LIMIT 1`).bind(id).first();
-  if (!existing) throw new AppError(404, "Memo tidak ditemukan.", "memo-trash-not-found");
-
-  const now = Date.now();
-  await db.prepare(`
-    UPDATE memo_records
-    SET deleted = 1, deleted_at = ?, updated_at = ?, updated_by = ?
-    WHERE id = ?
-  `).bind(now, now, user.id, id).run();
-
-  return json({ success: true });
-}
-
-async function restoreMemoRecord(db, user, id) {
-  const existing = await db.prepare(`SELECT id FROM memo_records WHERE id = ? LIMIT 1`).bind(id).first();
-  if (!existing) throw new AppError(404, "Memo tidak ditemukan.", "memo-restore-not-found");
-
-  await db.prepare(`
-    UPDATE memo_records
-    SET deleted = 0, deleted_at = NULL, updated_at = ?, updated_by = ?
-    WHERE id = ?
-  `).bind(Date.now(), user.id, id).run();
-
-  return json({ success: true });
-}
-
-async function permanentDeleteMemo(db, id) {
-  const result = await db.prepare(`DELETE FROM memo_records WHERE id = ? AND deleted = 1`).bind(id).run();
-  if (Number(result.meta?.changes || 0) === 0) {
-    throw new AppError(409, "Memo harus berada di Recycle Bin sebelum dihapus permanen.", "memo-permanent-delete");
-  }
-  return json({ success: true });
-}
-
-async function emptyMemoTrash(db) {
-  const result = await db.prepare(`DELETE FROM memo_records WHERE deleted = 1`).run();
-  return json({ success: true, deleted: Number(result.meta?.changes || 0) });
-}
-
-function validateMemoKeyword(value) {
-  const keyword = String(value || "").trim();
-  if (!keyword) throw new AppError(400, "Kata kunci belum diisi.", "memo-keyword");
-  if (keyword.length > 300) throw new AppError(400, "Kata kunci maksimal 300 karakter.", "memo-keyword-length");
-  return keyword;
-}
-
-function validateMemoContent(value) {
-  const content = String(value || "").trim();
-  if (!content) throw new AppError(400, "Isi memo belum diisi.", "memo-content");
-  if (content.length > 200000) throw new AppError(400, "Isi memo terlalu panjang.", "memo-content-length");
-  return content;
 }
 
 async function ensureMaster(env) {
