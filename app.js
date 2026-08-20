@@ -289,6 +289,7 @@ async function navigate(menuId) {
   if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
   if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
   if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
+  if (menuId === "ai-chat") return renderMemoWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -491,6 +492,36 @@ async function renderEventScatterWorkspace(menu) {
           class="xpay-frame event-scatter-frame"
           src="/event-scatter.html?v=15.0.0"
           title="EVENT SCATTER"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
+
+async function renderMemoWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="xpay-workspace memo-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">SHARED MEMO DATABASE</span>
+            <h3>MEMO</h3>
+            <p>${escapeHtml(data.message)} Memo tersimpan di Cloudflare D1 dan dapat dicari berdasarkan kata kunci.</p>
+          </div>
+          <span class="xpay-workspace-badge">SEARCH • EDIT • RECYCLE BIN</span>
+        </header>
+
+        <iframe
+          class="xpay-frame memo-frame"
+          src="/memo.html?v=32.0.0"
+          title="MEMO DATABASE"
           loading="eager"
           referrerpolicy="same-origin">
         </iframe>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>MEMO DATABASE</title>
+<link rel="stylesheet" href="/memo.css?v=32.0.0">
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <h1>📝 MEMO DATABASE</h1>
+        <p>Simpan memo berdasarkan kata kunci dan cari kapan saja.</p>
+    </div>
+
+    <div class="memo-db-badge">☁ MEMO tersimpan di Cloudflare D1 TheLastMoon dan dapat dibaca oleh user yang memiliki akses menu MEMO.</div>
+
+    <!-- SEARCH -->
+    <div class="card">
+
+        <label>SEARCH MEMO</label>
+
+        <div class="search-box">
+
+            <input
+                type="text"
+                id="search"
+                placeholder="Contoh: bonus senin"
+                autocomplete="off"
+            >
+
+            <button onclick="searchMemos()">
+                🔎 SEARCH
+            </button>
+
+            <button
+                class="btn-purple"
+                id="toggleAllButton"
+                onclick="toggleAllMemos()"
+            >
+                👁 LIHAT SEMUA
+            </button>
+
+            <button
+                class="btn-orange"
+                id="trashButton"
+                onclick="toggleRecycleBin()"
+            >
+                🗑 RECYCLE BIN
+            </button>
+
+        </div>
+
+        <div class="search-help">
+            Contoh: kata kunci tersimpan <b>BONUS HARI SENIN</b>,
+            cukup cari <b>bonus senin</b>.
+        </div>
+
+    </div>
+
+
+    <div class="grid">
+
+        <!-- FORM -->
+        <div class="card">
+
+            <h2 id="formTitle" style="margin-top:0;">
+                Tambah Memo
+            </h2>
+
+            <input type="hidden" id="editId">
+
+            <div class="field">
+
+                <label>KATA KUNCI</label>
+
+                <input
+                    type="text"
+                    id="keyword"
+                    placeholder="Contoh: BONUS HARI SENIN"
+                    autocomplete="off"
+                >
+
+            </div>
+
+            <div class="field">
+
+                <label>ISI MEMO</label>
+
+                <textarea
+                    id="content"
+                    placeholder="Masukkan isi memo..."
+                ></textarea>
+
+            </div>
+
+            <div class="button-row">
+
+                <button
+                    class="btn-green"
+                    id="saveButton"
+                    onclick="saveMemo()"
+                >
+                    💾 SIMPAN
+                </button>
+
+                <button
+                    class="btn-gray"
+                    onclick="resetForm()"
+                >
+                    RESET
+                </button>
+
+            </div>
+
+            <div class="status" id="status"></div>
+
+        </div>
+
+
+        <!-- RESULTS -->
+        <div class="card">
+
+            <div class="result-title">
+
+                <h2 id="resultTitle">
+                    Memo
+                </h2>
+
+                <span
+                    class="count"
+                    id="memoCount"
+                    style="display:none;"
+                >
+                    0 Memo
+                </span>
+
+            </div>
+
+            <div id="results">
+
+                <div class="empty">
+                    Memo masih disembunyikan.<br><br>
+                    Gunakan Search, LIHAT SEMUA atau RECYCLE BIN.
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<script src="/memo.js?v=32.0.0" defer></script>
+</body>
+</html>

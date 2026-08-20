@@ -1,42 +1,72 @@
-# TheLastMoon V31 — Xpay Checker Tanpa API
+# TheLastMoon V32 — MEMO Cloudflare D1
 
-Xpay Checker V31 tidak memakai API Xpay dan tidak memakai Cloudflare D1 untuk data Xpay.
+Menu **AI Chat** diubah tampilannya menjadi **MEMO**.
 
-Database baru:
+ID permission tetap `ai-chat` supaya user yang sebelumnya sudah memiliki akses AI Chat tidak kehilangan akses. Di User Admin label yang tampil sekarang `MEMO`.
+
+## Database
+
+MEMO sekarang tersimpan di Cloudflare D1, bukan IndexedDB browser.
 
 ```text
-TheLastMoonXpayV31
+memo_records
 ```
 
-Karena database baru, pertama kali dibuka:
+Fitur:
+- Tambah Memo
+- Search keyword + isi
+- Lihat Semua / Tutup Semua
+- Copy
+- Edit
+- Recycle Bin
+- Pulihkan
+- Hapus Permanen
+- Kosongkan Recycle Bin
+- Database dipakai bersama user yang punya akses MEMO
+
+## API internal
 
 ```text
-Total Transactions = 0
-Total Value = Rp 0
-Total Fee = Rp 0
-Net Amount = Rp 0
+GET    /api/memos
+POST   /api/memos
+PUT    /api/memos/:id
+POST   /api/memos/:id/trash
+POST   /api/memos/:id/restore
+DELETE /api/memos/:id
+DELETE /api/memos/trash
 ```
 
-Upload Transaction tetap mendukung pilih 2 file atau lebih sekaligus.
+Semua endpoint membutuhkan login TheLastMoon + permission `ai-chat` (label MEMO).
 
-Cek Settlement, Comparison, Semua Data, Disbursement, Mark Done, Audit Log, dan Balance semuanya membaca IndexedDB browser.
-
-Tidak ada lagi:
+## File baru
 
 ```text
-/api/xpay-cloud
-fetch()
-HTTP 503 dari Xpay Checker
+memo.html
+memo.css
+memo.js
 ```
 
-Catatan: data hanya tersedia di browser/perangkat yang sama.
-
-File `functions/api/xpay-cloud.js` dihapus karena tidak diperlukan.
-
-Setelah deploy tekan Ctrl + Shift + R.
-
-Versi health dashboard utama:
+## File yang ditimpa/upload
 
 ```text
-v31-xpay-no-api-final
+memo.html
+memo.css
+memo.js
+app.js
+styles.css
+schema.sql
+README.md
+functions/api/[[path]].js
+```
+
+Setelah deploy:
+
+```text
+Ctrl + Shift + R
+```
+
+Health version:
+
+```text
+v32-memo-d1
 ```

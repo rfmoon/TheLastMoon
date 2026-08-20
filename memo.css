@@ -1,0 +1,257 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: Arial, Helvetica, sans-serif;
+    background:
+        radial-gradient(circle at top left, #243046, transparent 40%),
+        radial-gradient(circle at bottom right, #1d2940, transparent 40%),
+        #0c111b;
+    color: #fff;
+}
+
+.container {
+    width: min(1150px, 94%);
+    margin: 35px auto;
+}
+
+.header {
+    margin-bottom: 22px;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 28px;
+}
+
+.header p {
+    color: #91a0b6;
+    margin: 8px 0 0;
+    font-size: 14px;
+}
+
+.card {
+    background: rgba(20, 29, 44, 0.92);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 15px 40px rgba(0,0,0,.25);
+    margin-bottom: 20px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 390px 1fr;
+    gap: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 7px;
+    color: #b9c5d8;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.field {
+    margin-bottom: 15px;
+}
+
+input,
+textarea {
+    width: 100%;
+    border: 1px solid #34425a;
+    background: #111927;
+    color: white;
+    border-radius: 10px;
+    padding: 13px;
+    font-size: 14px;
+    outline: none;
+}
+
+input:focus,
+textarea:focus {
+    border-color: #5f8cff;
+    box-shadow: 0 0 0 3px rgba(95,140,255,.12);
+}
+
+textarea {
+    min-height: 280px;
+    resize: vertical;
+    line-height: 1.55;
+}
+
+button {
+    border: 0;
+    border-radius: 9px;
+    padding: 11px 16px;
+    cursor: pointer;
+    color: white;
+    font-weight: bold;
+    background: #3267ff;
+    transition: .15s;
+}
+
+button:hover {
+    filter: brightness(1.12);
+}
+
+.btn-green {
+    background: #168c61;
+}
+
+.btn-red {
+    background: #c63c48;
+}
+
+.btn-gray {
+    background: #3a465b;
+}
+
+.btn-purple {
+    background: #7157d9;
+}
+
+.btn-orange {
+    background: #c47a23;
+}
+
+.button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.search-box {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 10px;
+}
+
+.search-box input {
+    font-size: 16px;
+    padding: 15px;
+}
+
+.status {
+    margin-top: 12px;
+    min-height: 20px;
+    color: #78d6ad;
+    font-size: 13px;
+}
+
+.result-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+.result-title h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.count {
+    font-size: 12px;
+    background: #273650;
+    padding: 6px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+.memo {
+    background: #111a29;
+    border: 1px solid #303e55;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.memo.trash {
+    border-color: #6b3c42;
+    background: #1b161d;
+}
+
+.memo-keyword {
+    color: #78a4ff;
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.memo.trash .memo-keyword {
+    color: #ff9299;
+}
+
+.memo-content {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    color: #e2e8f3;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+.memo-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 15px;
+}
+
+.memo-actions button {
+    font-size: 12px;
+    padding: 8px 12px;
+}
+
+.empty {
+    padding: 55px 15px;
+    text-align: center;
+    color: #78869b;
+    border: 1px dashed #34425a;
+    border-radius: 12px;
+}
+
+.search-help {
+    color: #7f8ea5;
+    font-size: 12px;
+    margin-top: 9px;
+    line-height: 1.5;
+}
+
+.trash-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+@media(max-width: 1000px) {
+    .search-box {
+        grid-template-columns: 1fr auto;
+    }
+}
+
+@media(max-width: 850px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .search-box {
+        grid-template-columns: 1fr;
+    }
+
+    .search-box button {
+        width: 100%;
+    }
+}
+
+html, body { background: transparent !important; }
+body { min-height:100%; }
+.container { width:100%; margin:0; padding:4px 4px 38px; }
+.header { display:none; }
+.card { background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.025)),rgba(7,13,27,.48); border-color:rgba(255,255,255,.13); backdrop-filter:blur(22px) saturate(140%); -webkit-backdrop-filter:blur(22px) saturate(140%); }
+.memo-db-badge { margin:0 0 12px; padding:10px 12px; border:1px solid rgba(120,214,173,.18); border-radius:10px; background:rgba(22,140,97,.08); color:#9ce2bf; font-size:12px; }

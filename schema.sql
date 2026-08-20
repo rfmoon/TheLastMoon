@@ -202,3 +202,23 @@ CREATE TABLE IF NOT EXISTS xpay_balance_history (
   uploaded_by TEXT NOT NULL DEFAULT '',
   uploaded_at INTEGER NOT NULL
 );
+
+
+-- MEMO V32 — shared Cloudflare D1 database
+CREATE TABLE IF NOT EXISTS memo_records (
+  id INTEGER PRIMARY KEY,
+  keyword TEXT NOT NULL,
+  content TEXT NOT NULL,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
+  created_by INTEGER,
+  updated_by INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_memo_records_deleted_updated
+  ON memo_records(deleted, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_memo_records_updated
+  ON memo_records(updated_at DESC);
