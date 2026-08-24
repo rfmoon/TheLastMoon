@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <title>Pencairan XPAY</title>
-  <link rel="stylesheet" href="/pencairan-xpay.css?v=16.0.0">
+  <link rel="stylesheet" href="/pencairan-xpay.css?v=35.0.0">
 </head>
 <body>
 <main class="wrap">
@@ -13,6 +13,81 @@
   <p class="subtitle">
     Tambah satu atau banyak rekening tanpa nominal. Database disimpan di Cloudflare D1 dan dipakai bersama oleh semua user yang memiliki akses Pencairan XPAY.
   </p>
+
+
+  <section class="card quick-converter-card">
+    <div class="card-head quick-converter-head">
+      <div>
+        <h2>Konversi Data Rekening</h2>
+        <div class="quick-subtitle">
+          Nominal | Kode Bank | Nomor Rekening | Nama Rekening
+          <span>→</span>
+          Nama Rekening | Nomor Rekening | Nominal
+        </div>
+      </div>
+      <span class="pill">Cepat</span>
+    </div>
+
+    <div class="card-body quick-converter-body">
+      <div class="quick-converter-grid">
+        <div class="quick-input-side">
+          <textarea
+            id="quickConvertInput"
+            class="quick-textarea"
+            spellcheck="false"
+            placeholder="Contoh:
+25,000,000	6	051665123654	Fabian Aditya
+25,000,000	6	6546454151	Desi Nurul Hikmah
+5,000,000	1	05846948944651	Chika Amalia"></textarea>
+
+          <div class="toolbar quick-toolbar">
+            <button class="primary" id="quickProcessBtn">Proses Data</button>
+            <button class="secondary" id="quickPasteBtn">Tempel Clipboard</button>
+            <button class="danger" id="quickClearBtn">Bersihkan</button>
+          </div>
+
+          <div class="message" id="quickInputStatus">
+            Belum ada data diproses.
+          </div>
+        </div>
+
+        <div class="quick-output-side">
+          <div class="quick-result-head">
+            <div>
+              <strong>Hasil</strong>
+              <div class="quick-result-status" id="quickResultStatus">
+                Berhasil: <span class="count">0</span> baris
+              </div>
+            </div>
+
+            <div class="toolbar quick-result-toolbar">
+              <button class="success" id="quickCopyBtn">Copy Hasil</button>
+              <button class="secondary" id="quickCopySheetBtn">Copy Spreadsheet</button>
+            </div>
+          </div>
+
+          <div class="table-wrap quick-table-wrap">
+            <table class="quick-table">
+              <thead>
+                <tr>
+                  <th>Nama Rekening</th>
+                  <th>Nomor Rekening</th>
+                  <th>Nominal</th>
+                </tr>
+              </thead>
+              <tbody id="quickResultBody">
+                <tr>
+                  <td colspan="3" class="empty quick-empty">
+                    Belum ada hasil.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section class="layout">
     <div>
@@ -128,7 +203,8 @@ Imam Mustakim 65414994165 25.000.000"></textarea>
       </div>
     </div>
   </section>
+  <div id="quickCopyToast" class="quick-copy-toast">Berhasil disalin ✓</div>
 </main>
-<script src="/pencairan-xpay.js?v=16.0.0" defer></script>
+<script src="/pencairan-xpay.js?v=35.0.0" defer></script>
 </body>
 </html>

@@ -1,73 +1,62 @@
-# TheLastMoon V34 — MEMO Button Fix
+# TheLastMoon V35 — Pencairan XPAY + Konversi Rekening Cepat
 
-Penyebab tombol MEMO V33 tidak bekerja ditemukan:
+V35 menambahkan tool baru langsung di dalam halaman Pencairan XPAY.
 
-`_headers` menggunakan Content-Security-Policy:
+## Posisi
 
-```text
-script-src 'self' https://cdn.jsdelivr.net
-```
+Tool berada di bagian atas Pencairan XPAY, tepat di bawah judul/subtitle
+dan sebelum Database & Konversi Rekening yang sudah ada.
 
-dan tidak mengizinkan inline JavaScript.
+Tampilannya dibuat compact:
+- desktop: input kiri, hasil kanan
+- layar lebih kecil: otomatis turun menjadi 1 kolom
+- hasil tabel dibatasi tinggi supaya tidak membuat halaman terlalu panjang
 
-Script MEMO sumber masih memakai:
+## Input
 
-```html
-onclick="saveMemo()"
-onclick="toggleAllMemos()"
-onclick="toggleRecycleBin()"
-```
+Nominal | Kode Bank | Nomor Rekening | Nama Rekening
 
-Akibatnya browser memblokir klik tombol.
+Contoh:
 
-V34 menghapus seluruh inline `onclick` dan menggantinya dengan
-`addEventListener()` dari `memo.js`.
+25,000,000    6    051665123654    Fabian Aditya
 
-Yang sekarang aktif:
+## Output
 
-- SIMPAN
-- RESET
-- SEARCH
-- LIHAT SEMUA / TUTUP SEMUA
-- RECYCLE BIN / TUTUP RECYCLE BIN
-- COPY
-- EDIT
-- HAPUS
-- PULIHKAN
-- HAPUS PERMANEN
-- KOSONGKAN RECYCLE BIN
+Nama Rekening | Nomor Rekening | Nominal
 
-Database tetap Cloudflare D1:
+Nominal otomatis diformat dengan koma.
 
-```text
-memo_records
-```
+Nomor rekening dipertahankan sebagai string agar leading zero tidak hilang.
 
-Dedicated API tetap:
+## Tombol
 
-```text
-functions/api/memos.js
-```
+- Proses Data
+- Tempel Clipboard
+- Bersihkan
+- Copy Hasil
+- Copy Spreadsheet
 
-File utama yang perlu ditimpa/upload:
+Copy Spreadsheet memberi apostrof pada rekening agar leading zero aman
+saat ditempel ke spreadsheet.
 
-```text
-memo.html
-memo.js
+## CSP
+
+Tidak menggunakan inline onclick.
+Semua tombol memakai addEventListener di pencairan-xpay.js.
+
+## File yang perlu ditimpa/upload
+
+pencairan-xpay.html
+pencairan-xpay.css
+pencairan-xpay.js
 app.js
-functions/api/memos.js
 functions/api/[[path]].js
 README.md
-```
 
 Setelah deploy:
 
-```text
 Ctrl + Shift + R
-```
 
 Health version:
 
-```text
-v34-memo-button-fix
-```
+v35-pencairan-quick-converter

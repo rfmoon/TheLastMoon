@@ -1095,3 +1095,304 @@ renderDatabase();
 renderResults();
 loadSharedDatabase({silent:false,migrate:true});
 startAutoSync();
+
+/* =========================================================
+   V35 — KONVERSI DATA REKENING CEPAT
+   Input : Nominal | Kode Bank | Nomor Rekening | Nama
+   Output: Nama | Nomor Rekening | Nominal
+========================================================= */
+let quickConvertRows = [];
+
+function quickCleanCell(value){
+  return String(value ?? "")
+    .replace(/\u00A0/g," ")
+    .replace(/<br\s*\/?>/gi," ")
+    .trim();
+}
+
+function quickNormalizeAmount(value){
+  const raw=quickCleanCell(value);
+  const digits=raw.replace(/[^\d]/g,"");
+
+  if(!digits) return null;
+
+  try{
+    const numericValue=BigInt(digits);
+    return {
+      value:numericValue,
+      formatted:numericValue
+        .toString()
+        .replace(/\B(?=(\d{3})+(?!\d))/g,",")
+    };
+  }catch(_){
+    return null;
+  }
+}
+
+function quickParseLine(line){
+  const original=String(line ?? "")
+    .replace(/\r/g,"")
+    .trim();
+
+  if(!original) return null;
+
+  let parts=original
+    .split("\t")
+    .map(quickCleanCell);
+
+  while(parts.length && parts.at(-1)===""){
+    parts.pop();
+  }
+
+  if(parts.length>=4){
+    return {
+      amount:parts[0],
+      bankCode:parts[1],
+      account:parts[2],
+      name:parts.slice(3).filter(Boolean).join(" ")
+    };
+  }
+
+  parts=original
+    .split(/\s{2,}/)
+    .map(quickCleanCell)
+    .filter(Boolean);
+
+  if(parts.length>=4){
+    return {
+      amount:parts[0],
+      bankCode:parts[1],
+      account:parts[2],
+      name:parts.slice(3).join(" ")
+    };
+  }
+
+  const match=original.match(
+    /^([Rp\s\d.,]+?)\s+(\d+)\s+(\d+)\s+(.+)$/i
+  );
+
+  if(match){
+    return {
+      amount:match[1],
+      bankCode:match[2],
+      account:match[3],
+      name:match[4]
+    };
+  }
+
+  return null;
+}
+
+function quickProcessData(){
+  const input=$("quickConvertInput")?.value ?? "";
+  const lines=input.split(/\n/);
+  const rows=[];
+  let skipped=0;
+
+  for(const line of lines){
+    if(!line.trim()) continue;
+
+    const parsed=quickParseLine(line);
+
+    if(!parsed){
+      skipped++;
+      continue;
+    }
+
+    // Nomor rekening sengaja tetap string.
+    // Leading zero tidak boleh hilang.
+    const account=quickCleanCell(parsed.account);
+    const name=quickCleanCell(parsed.name);
+    const amountData=quickNormalizeAmount(parsed.amount);
+
+    if(!name || !account || !amountData){
+      skipped++;
+      continue;
+    }
+
+    rows.push({
+      name,
+      account,
+      amountValue:amountData.value,
+      amount:amountData.formatted
+    });
+  }
+
+  quickConvertRows=rows;
+  quickRenderRows();
+
+  const status=$("quickInputStatus");
+  if(status){
+    status.innerHTML=
+      `Berhasil: <strong>${rows.length}</strong> baris`+
+      (skipped
+        ? ` &nbsp;|&nbsp; Dilewati: <strong>${skipped}</strong> baris`
+        : "");
+  }
+
+  const resultStatus=$("quickResultStatus");
+  if(resultStatus){
+    resultStatus.innerHTML=
+      `Berhasil: <span class="count">${rows.length}</span> baris`;
+  }
+}
+
+function quickRenderRows(){
+  const tbody=$("quickResultBody");
+  if(!tbody) return;
+
+  if(!quickConvertRows.length){
+    tbody.innerHTML=`
+      <tr>
+        <td colspan="3" class="empty quick-empty">
+          Belum ada hasil.
+        </td>
+      </tr>`;
+    return;
+  }
+
+  tbody.innerHTML=quickConvertRows
+    .map(row=>`
+      <tr>
+        <td>${quickEscapeHtml(row.name)}</td>
+        <td class="quick-account">${quickEscapeHtml(row.account)}</td>
+        <td class="quick-amount">${quickEscapeHtml(row.amount)}</td>
+      </tr>
+    `)
+    .join("");
+}
+
+function quickEscapeHtml(text){
+  return String(text)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+async function quickWriteClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(_){
+    const textarea=document.createElement("textarea");
+    textarea.value=text;
+    textarea.style.position="fixed";
+    textarea.style.left="-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+}
+
+async function quickCopyOutput(){
+  if(!quickConvertRows.length) return;
+
+  const text=quickConvertRows
+    .map(row=>
+      `${row.name}\t${row.account}\t${row.amount}`
+    )
+    .join("\n");
+
+  await quickWriteClipboard(text);
+  quickShowToast("Hasil berhasil disalin ✓");
+}
+
+async function quickCopySpreadsheet(){
+  if(!quickConvertRows.length) return;
+
+  // Nomor rekening diberi apostrof supaya leading zero
+  // tetap aman saat ditempel ke Spreadsheet.
+  const text=quickConvertRows
+    .map(row=>
+      `${row.name}\t'${row.account}\t${row.amount}`
+    )
+    .join("\n");
+
+  await quickWriteClipboard(text);
+  quickShowToast("Berhasil disalin untuk Spreadsheet ✓");
+}
+
+async function quickPasteClipboard(){
+  try{
+    const text=await navigator.clipboard.readText();
+    $("quickConvertInput").value=text;
+    quickProcessData();
+  }catch(_){
+    const status=$("quickInputStatus");
+    if(status){
+      status.textContent=
+        "Clipboard tidak bisa dibaca otomatis. Tekan Ctrl+V langsung di kolom input.";
+    }
+  }
+}
+
+function quickClearAll(){
+  $("quickConvertInput").value="";
+  quickConvertRows=[];
+  quickRenderRows();
+
+  const inputStatus=$("quickInputStatus");
+  if(inputStatus){
+    inputStatus.textContent="Belum ada data diproses.";
+  }
+
+  const resultStatus=$("quickResultStatus");
+  if(resultStatus){
+    resultStatus.innerHTML=
+      'Berhasil: <span class="count">0</span> baris';
+  }
+}
+
+function quickShowToast(message){
+  const toast=$("quickCopyToast");
+  if(!toast) return;
+
+  toast.textContent=message || "Berhasil disalin ✓";
+  toast.classList.remove("show");
+  void toast.offsetWidth;
+  toast.classList.add("show");
+
+  clearTimeout(window.__quickCopyToastTimer);
+  window.__quickCopyToastTimer=setTimeout(()=>{
+    toast.classList.remove("show");
+  },1400);
+}
+
+$("quickProcessBtn")?.addEventListener(
+  "click",
+  quickProcessData
+);
+
+$("quickPasteBtn")?.addEventListener(
+  "click",
+  quickPasteClipboard
+);
+
+$("quickClearBtn")?.addEventListener(
+  "click",
+  quickClearAll
+);
+
+$("quickCopyBtn")?.addEventListener(
+  "click",
+  quickCopyOutput
+);
+
+$("quickCopySheetBtn")?.addEventListener(
+  "click",
+  quickCopySpreadsheet
+);
+
+$("quickConvertInput")?.addEventListener(
+  "keydown",
+  event=>{
+    if(event.ctrlKey && event.key==="Enter"){
+      event.preventDefault();
+      quickProcessData();
+    }
+  }
+);
+
+quickRenderRows();
