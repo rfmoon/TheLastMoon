@@ -1490,3 +1490,39 @@ $("quickConvertInput")?.addEventListener(
 );
 
 quickRenderRows();
+
+/* V38 — DATA PENCAIRAN KE DOCS QRIS */
+const WD_DB_NAME="WD_BERSIH_DATABASE";
+const WD_DB_VERSION=1;
+const WD_STORE_NAME="names";
+let wdDb=null;
+let wdCurrentRows=[];
+
+function wdCleanEdges(value){return String(value??"").replace(/\u00A0/g," ").replace(/<br\s*\/?>/gi," ").trim()}
+function wdMatchKey(value){return wdCleanEdges(value).toUpperCase().replace(/\s+/g," ").trim()}
+function wdEscapeHtml(text){return String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}
+function wdOpenDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open(WD_DB_NAME,WD_DB_VERSION);request.onupgradeneeded=event=>{const database=event.target.result;if(!database.objectStoreNames.contains(WD_STORE_NAME)){const store=database.createObjectStore(WD_STORE_NAME,{keyPath:"key"});store.createIndex("name","name",{unique:false})}};request.onsuccess=()=>{wdDb=request.result;resolve(wdDb)};request.onerror=()=>reject(request.error)})}
+function wdExtractDatabaseItem(line){const full=wdCleanEdges(line);if(!full)return null;let name=full;const slashIndex=name.indexOf("/");if(slashIndex!==-1)name=name.slice(slashIndex+1);name=name.replace(/\(\s*WD\s*BERSIH\s*\)/ig,"").replace(/\bWD\s*BERSIH\b/ig,"").trim();if(!name)return null;return{key:wdMatchKey(name),name:name.trim(),full}}
+async function wdSaveDatabase(){if(!wdDb)await wdOpenDb();const raw=$("wdDatabaseInput")?.value??"";const items=[];for(const line of raw.split(/\r?\n/)){const item=wdExtractDatabaseItem(line);if(item)items.push(item)}if(!items.length){wdSetStatus("wdDbStatus","Tidak ada nama database yang valid.");return}await new Promise((resolve,reject)=>{const tx=wdDb.transaction(WD_STORE_NAME,"readwrite");const store=tx.objectStore(WD_STORE_NAME);items.forEach(item=>store.put(item));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});$("wdDatabaseInput").value="";await wdUpdateDatabaseCount();wdToggleDatabasePanel(false);quickShowToast("Database WD Bersih berhasil disimpan ✓")}
+async function wdGetAllDatabaseItems(){if(!wdDb)await wdOpenDb();return new Promise((resolve,reject)=>{const tx=wdDb.transaction(WD_STORE_NAME,"readonly");const req=tx.objectStore(WD_STORE_NAME).getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error)})}
+async function wdUpdateDatabaseCount(){const items=await wdGetAllDatabaseItems();if($("wdDbCount"))$("wdDbCount").textContent=items.length;if($("wdDbStatus"))$("wdDbStatus").innerHTML=`Database tersimpan: <strong>${items.length}</strong> nama`}
+function wdParseTransactionLine(line){const original=String(line||"").replace(/\r/g,"").trim();if(!original)return null;let parts=original.split("\t").map(wdCleanEdges);if(parts.length>=4)return{amount:parts[0],bankCode:parts[1],account:parts[2],name:parts.slice(3).filter(Boolean).join(" ").trim()};parts=original.split(/\s{2,}/).map(wdCleanEdges).filter(Boolean);if(parts.length>=4)return{amount:parts[0],bankCode:parts[1],account:parts[2],name:parts.slice(3).join(" ").trim()};const match=original.match(/^([Rp\s\d.,]+?)\s+(\d+)\s+(\d+)\s+(.+)$/i);if(!match)return null;return{amount:match[1],bankCode:match[2],account:match[3],name:wdCleanEdges(match[4])}}
+function wdParseAmount(value){const digits=wdCleanEdges(value).replace(/[^\d]/g,"");if(!digits)return null;try{const number=BigInt(digits);return{raw:number.toString(),formatted:number.toString().replace(/\B(?=(\d{3})+(?!\d))/g,",")}}catch(_){return null}}
+async function wdProcessData(){const databaseItems=await wdGetAllDatabaseItems();const databaseMap=new Map();databaseItems.forEach(item=>databaseMap.set(item.key,item));const raw=$("wdTransactions")?.value??"";const results=[];let totalValid=0,notFound=0,skipped=0;for(const line of raw.split(/\r?\n/)){if(!line.trim())continue;const transaction=wdParseTransactionLine(line);if(!transaction){skipped++;continue}const amount=wdParseAmount(transaction.amount);const txName=wdCleanEdges(transaction.name);if(!amount||!txName){skipped++;continue}totalValid++;const found=databaseMap.get(wdMatchKey(txName));if(!found){notFound++;continue}results.push({databaseText:found.full,amountRaw:amount.raw,amountFormatted:amount.formatted})}wdCurrentRows=results;wdRenderResults();if($("wdInputStatus"))$("wdInputStatus").innerHTML=`Data: <strong>${totalValid}</strong> | Ketemu: <strong>${results.length}</strong> | Tidak ketemu: <strong>${notFound}</strong>`+(skipped?` | Dilewati: <strong>${skipped}</strong>`:"");if($("wdResultStatus"))$("wdResultStatus").innerHTML=`Berhasil: <strong>${results.length}</strong> baris`}
+function wdRenderResults(){const tbody=$("wdResultBody");if(!tbody)return;if(!wdCurrentRows.length){tbody.innerHTML='<tr><td colspan="3" class="empty">Belum ada hasil.</td></tr>';return}tbody.innerHTML=wdCurrentRows.map(row=>`<tr><td>${wdEscapeHtml(row.databaseText)}</td><td></td><td>${wdEscapeHtml(row.amountFormatted)}</td></tr>`).join("")}
+async function wdCopyResults(){if(!wdCurrentRows.length)return;const plain=wdCurrentRows.map(row=>`${row.databaseText}\t\t${row.amountRaw}`).join("\n");const htmlRows=wdCurrentRows.map(row=>`<tr><td>${wdEscapeHtml(row.databaseText)}</td><td></td><td style="mso-number-format:'#,##0'">${row.amountRaw}</td></tr>`).join("");const htmlTable=`<table><tbody>${htmlRows}</tbody></table>`;try{if(navigator.clipboard&&window.ClipboardItem){const item=new ClipboardItem({"text/plain":new Blob([plain],{type:"text/plain"}),"text/html":new Blob([htmlTable],{type:"text/html"})});await navigator.clipboard.write([item])}else{await navigator.clipboard.writeText(plain)}}catch(_){const textarea=document.createElement("textarea");textarea.value=plain;textarea.style.position="fixed";textarea.style.left="-9999px";document.body.appendChild(textarea);textarea.select();document.execCommand("copy");textarea.remove()}quickShowToast("Hasil Docs Qris berhasil disalin ✓")}
+async function wdPasteDatabase(){try{$("wdDatabaseInput").value=await navigator.clipboard.readText()}catch(_){wdSetStatus("wdDbStatus","Tekan Ctrl+V langsung di database.")}}
+async function wdPasteTransactions(){try{$("wdTransactions").value=await navigator.clipboard.readText();await wdProcessData()}catch(_){wdSetStatus("wdInputStatus","Tekan Ctrl+V langsung pada Data Pencairan.")}}
+function wdClearDatabaseInput(){if($("wdDatabaseInput"))$("wdDatabaseInput").value=""}
+function wdClearTransactions(){if($("wdTransactions"))$("wdTransactions").value="";wdCurrentRows=[];wdRenderResults();wdSetStatus("wdInputStatus","Belum ada data diproses.");if($("wdResultStatus"))$("wdResultStatus").innerHTML="Berhasil: <strong>0</strong> baris"}
+function wdToggleDatabasePanel(force){const panel=$("wdDbPanel"),button=$("wdDbToggleBtn");if(!panel||!button)return;const shouldOpen=typeof force==="boolean"?force:!panel.classList.contains("open");panel.classList.toggle("open",shouldOpen);button.textContent=shouldOpen?"TUTUP DATABASE":"BUKA DATABASE";if(shouldOpen)setTimeout(()=>$("wdDatabaseInput")?.focus(),50)}
+function wdSetStatus(id,message){const element=$(id);if(element)element.textContent=message}
+$("wdDbToggleBtn")?.addEventListener("click",()=>wdToggleDatabasePanel());
+$("wdSaveDbBtn")?.addEventListener("click",wdSaveDatabase);
+$("wdPasteDbBtn")?.addEventListener("click",wdPasteDatabase);
+$("wdClearDbInputBtn")?.addEventListener("click",wdClearDatabaseInput);
+$("wdProcessBtn")?.addEventListener("click",wdProcessData);
+$("wdPasteTxBtn")?.addEventListener("click",wdPasteTransactions);
+$("wdClearTxBtn")?.addEventListener("click",wdClearTransactions);
+$("wdCopyBtn")?.addEventListener("click",wdCopyResults);
+(async function initWdDocsQris(){wdToggleDatabasePanel(false);try{await wdOpenDb();await wdUpdateDatabaseCount()}catch(error){wdSetStatus("wdDbStatus","Database WD Bersih gagal dibuka: "+(error?.message||String(error)))}wdRenderResults()})();

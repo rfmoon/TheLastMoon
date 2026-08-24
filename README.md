@@ -1,52 +1,14 @@
-# TheLastMoon V37 — Pencairan XPAY 3 Kolom
+# TheLastMoon V38 — Pencairan XPAY Docs Qris
 
-V37 memperbaiki layout V36.
+Perubahan judul:
+- Tambah Database Banyak Sekaligus -> Tambahkan Rekening Baru atau Hapus
+- Tempel Data Transaksi -> Data Pencairan
+- Konversi Data Rekening -> Data Pencairan ke Docs Qris
 
-Yang dimaksud sekarang:
+Tulisan KOLOM A / KOLOM B / KOLOM C dihapus dari tampilan.
 
-KOLOM A
-1. Tambah Database Banyak Sekaligus
+Bagian Data Pencairan ke Docs Qris memakai logika WD Bersih Matcher. Database Nama WD Bersih disimpan di IndexedDB `WD_BERSIH_DATABASE`. Output: Kolom A = teks database lengkap, Kolom B = kosong, Kolom C = nominal angka.
 
-KOLOM B
-2. Tempel Data Transaksi
+Setelah deploy tekan Ctrl + Shift + R.
 
-KOLOM C
-3. Konversi Data Rekening
-
-Ketiga kolom berada berdampingan dari kiri ke kanan.
-
-Tetapi isi di DALAM masing-masing kolom disusun atas ke bawah:
-
-judul
-textarea
-tombol
-status
-hasil
-
-Jadi tidak ada lagi input dan hasil yang dipaksa menyamping di dalam satu card.
-
-Daftar Database tetap:
-- Master Administrator only
-- default Hide
-- Master bisa Show / Hide
-- delete satu / hapus semua tetap dilindungi backend Master
-
-Responsive:
-- desktop lebar: 3 kolom A/B/C
-- layar kecil: otomatis 1 kolom ke bawah
-
-File yang perlu ditimpa:
-
-pencairan-xpay.html
-pencairan-xpay.css
-app.js
-functions/api/[[path]].js
-README.md
-
-pencairan-xpay.js tetap kompatibel dan sudah disertakan di ZIP lengkap.
-
-Setelah deploy:
-Ctrl + Shift + R
-
-Health version:
-v37-pencairan-3kolom
+Health: v38-pencairan-docs-qris
