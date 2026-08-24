@@ -1,51 +1,52 @@
-# TheLastMoon V36 — Pencairan XPAY 3 Baris + Master DB
+# TheLastMoon V37 — Pencairan XPAY 3 Kolom
 
-Tampilan Pencairan XPAY dibuat lebih pendek dan disusun vertikal menjadi 3 baris.
+V37 memperbaiki layout V36.
 
-## Susunan
+Yang dimaksud sekarang:
 
-Baris 1:
+KOLOM A
 1. Tambah Database Banyak Sekaligus
 
-Baris 2:
+KOLOM B
 2. Tempel Data Transaksi
-- hasil spreadsheet langsung berada di sisi kanan
-- tidak menjadi card terpisah lagi
 
-Baris 3:
+KOLOM C
 3. Konversi Data Rekening
-- input kiri
-- hasil kanan
 
-Pada layar kecil otomatis berubah menjadi 1 kolom.
+Ketiga kolom berada berdampingan dari kiri ke kanan.
 
-## Daftar Database
+Tetapi isi di DALAM masing-masing kolom disusun atas ke bawah:
 
-Daftar Database sekarang:
+judul
+textarea
+tombol
+status
+hasil
 
-- hanya tampil untuk Master Administrator
-- default dalam keadaan HIDE
-- Master punya tombol `Lihat Daftar Database`
-- setelah dibuka dapat ditekan `Hide`
-- tombol `Salin Semua Database` hanya tampil ke Master
-- tombol `Hapus Semua` hanya tampil ke Master
-- hapus satu rekening dan hapus seluruh database juga dilindungi `requireMaster()` di backend
+Jadi tidak ada lagi input dan hasil yang dipaksa menyamping di dalam satu card.
 
-User biasa tetap dapat memakai proses transaksi dan sinkron database untuk pencocokan, tetapi panel Daftar Database tidak tampil di UI.
+Daftar Database tetap:
+- Master Administrator only
+- default Hide
+- Master bisa Show / Hide
+- delete satu / hapus semua tetap dilindungi backend Master
 
-## File yang perlu ditimpa/upload
+Responsive:
+- desktop lebar: 3 kolom A/B/C
+- layar kecil: otomatis 1 kolom ke bawah
+
+File yang perlu ditimpa:
 
 pencairan-xpay.html
 pencairan-xpay.css
-pencairan-xpay.js
 app.js
 functions/api/[[path]].js
 README.md
 
-Setelah deploy:
+pencairan-xpay.js tetap kompatibel dan sudah disertakan di ZIP lengkap.
 
+Setelah deploy:
 Ctrl + Shift + R
 
 Health version:
-
-v36-pencairan-3baris-master-db
+v37-pencairan-3kolom

@@ -684,3 +684,275 @@ code {
     flex-direction:column;
   }
 }
+
+
+/* =========================================================
+   V37 — PENCAIRAN XPAY 3 KOLOM A / B / C
+   Setiap kolom isinya tersusun ATAS -> BAWAH.
+========================================================= */
+.payout-columns-wrap{
+  padding-bottom:22px;
+}
+
+.payout-columns{
+  display:grid !important;
+  grid-template-columns:
+    minmax(280px,.78fr)
+    minmax(390px,1.12fr)
+    minmax(390px,1.10fr) !important;
+  gap:10px !important;
+  align-items:start !important;
+}
+
+.payout-column{
+  min-width:0;
+  margin:0 !important;
+  border-radius:13px !important;
+  overflow:hidden;
+}
+
+.payout-column .compact-head{
+  min-height:52px;
+  padding:9px 10px !important;
+  align-items:center;
+}
+
+.payout-column .compact-head h2{
+  margin:0;
+  font-size:13px !important;
+  line-height:1.22;
+}
+
+.column-label{
+  display:block;
+  margin-bottom:3px;
+  color:#91b0ef;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.14em;
+}
+
+.master-label{
+  color:#85e7b3;
+}
+
+.column-body{
+  padding:9px 10px 10px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:6px !important;
+}
+
+.column-textarea{
+  width:100%;
+  height:116px !important;
+  min-height:116px !important;
+  max-height:190px;
+  resize:vertical;
+  padding:9px 10px !important;
+  border-radius:8px !important;
+  font-size:10.8px !important;
+  line-height:1.42 !important;
+}
+
+.db-column-textarea{
+  height:150px !important;
+  min-height:150px !important;
+}
+
+.transaction-column-textarea,
+.converter-column-textarea{
+  height:116px !important;
+  min-height:116px !important;
+}
+
+.column-help{
+  padding:7px 8px;
+  border:1px solid rgba(91,139,255,.18);
+  border-radius:7px;
+  background:rgba(91,139,255,.055);
+  color:rgba(238,245,255,.78);
+  font-size:9.5px;
+  line-height:1.35;
+}
+
+.column-toolbar{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:5px !important;
+  margin:0 !important;
+}
+
+.column-toolbar button{
+  padding:7px 8px !important;
+  border-radius:7px !important;
+  font-size:9.5px !important;
+  line-height:1.1;
+}
+
+.column-message{
+  min-height:12px !important;
+  margin:0 !important;
+  font-size:9.5px !important;
+}
+
+.column-stat{
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.column-stat span{
+  padding:4px 6px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:999px;
+  background:rgba(5,12,26,.32);
+  color:rgba(238,244,255,.70);
+  font-size:8.5px;
+  white-space:nowrap;
+}
+
+.column-stat strong{
+  color:#fff;
+}
+
+.column-result-block{
+  margin-top:3px;
+  min-width:0;
+}
+
+.column-result-head{
+  min-height:30px;
+  margin-bottom:5px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:7px;
+}
+
+.column-result-head > strong{
+  font-size:10.5px;
+  white-space:nowrap;
+}
+
+.mini-result-toolbar{
+  display:flex !important;
+  gap:4px !important;
+  margin:0 !important;
+  flex-wrap:nowrap !important;
+}
+
+.mini-result-toolbar button{
+  padding:5px 7px !important;
+  border-radius:6px !important;
+  font-size:8.5px !important;
+}
+
+.column-table-wrap{
+  width:100%;
+  min-height:155px !important;
+  max-height:210px !important;
+  overflow:auto !important;
+}
+
+.column-table-wrap table{
+  min-width:650px !important;
+}
+
+.column-table-wrap th,
+.column-table-wrap td{
+  padding:5px 6px !important;
+  font-size:9px !important;
+}
+
+.column-table-wrap .empty{
+  padding:34px 8px !important;
+}
+
+.column-c .quick-result-status{
+  margin:0;
+  font-size:9px !important;
+  white-space:nowrap;
+}
+
+.column-c .quick-table-wrap{
+  min-height:155px !important;
+  max-height:210px !important;
+}
+
+#masterDbToggleBtn{
+  padding:5px 7px !important;
+  font-size:8.5px !important;
+}
+
+.master-db-card{
+  margin-top:10px !important;
+}
+
+.master-db-actions{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.master-db-table{
+  max-height:260px !important;
+}
+
+.master-db-table table{
+  min-width:760px !important;
+}
+
+.master-db-table th,
+.master-db-table td{
+  padding:6px 7px !important;
+  font-size:9.5px !important;
+}
+
+/* Override V36's vertical-grid rules */
+.db-add-grid,
+.transaction-row-grid,
+.compact-converter-grid{
+  display:block !important;
+}
+
+@media(max-width:1250px){
+  .payout-columns{
+    grid-template-columns:
+      minmax(250px,.72fr)
+      minmax(350px,1.14fr)
+      minmax(350px,1.14fr) !important;
+    gap:8px !important;
+  }
+
+  .column-textarea{
+    font-size:10px !important;
+  }
+
+  .column-toolbar button{
+    font-size:8.8px !important;
+  }
+}
+
+@media(max-width:980px){
+  .payout-columns{
+    grid-template-columns:1fr !important;
+  }
+
+  .payout-column{
+    width:100%;
+  }
+
+  .db-column-textarea,
+  .transaction-column-textarea,
+  .converter-column-textarea{
+    height:105px !important;
+    min-height:105px !important;
+  }
+
+  .column-table-wrap{
+    min-height:140px !important;
+    max-height:190px !important;
+  }
+}
