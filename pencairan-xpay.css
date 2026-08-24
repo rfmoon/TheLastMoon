@@ -432,3 +432,255 @@ code {
     display:none;
   }
 }
+
+
+/* =========================================================
+   V36 — PENCAIRAN XPAY 3 BARIS COMPACT
+========================================================= */
+.compact-payout{
+  display:grid;
+  gap:10px;
+  padding-bottom:22px;
+}
+
+.compact-payout > .card{
+  margin:0 !important;
+}
+
+.step-card{
+  border-radius:13px;
+}
+
+.compact-head{
+  min-height:48px;
+  padding:9px 12px !important;
+}
+
+.compact-head h2{
+  font-size:14px !important;
+  line-height:1.2;
+}
+
+.step-kicker{
+  display:block;
+  margin-bottom:2px;
+  color:rgba(169,191,239,.72);
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.13em;
+}
+
+.master-kicker{
+  color:#8ff0bf;
+}
+
+.compact-body{
+  padding:10px 12px !important;
+}
+
+.compact-textarea{
+  min-height:0 !important;
+  height:108px !important;
+  padding:9px 10px !important;
+  border-radius:8px !important;
+  font-size:11.5px !important;
+  line-height:1.42 !important;
+}
+
+.db-textarea{
+  height:112px !important;
+}
+
+.transaction-textarea{
+  height:118px !important;
+}
+
+.db-add-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.6fr) minmax(220px,.48fr);
+  gap:10px;
+  align-items:stretch;
+}
+
+.compact-side{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+
+.mini-help{
+  padding:8px 9px;
+  border:1px solid rgba(92,141,255,.20);
+  border-radius:8px;
+  background:rgba(92,141,255,.06);
+  color:rgba(242,247,255,.80);
+  font-size:10px;
+  line-height:1.45;
+}
+
+.vertical-toolbar{
+  display:grid !important;
+  grid-template-columns:1fr 1fr;
+  gap:6px !important;
+  margin-top:7px !important;
+}
+
+.vertical-toolbar button,
+.compact-toolbar button{
+  padding:7px 9px !important;
+  border-radius:7px !important;
+  font-size:10px !important;
+}
+
+.compact-message{
+  min-height:14px !important;
+  margin-top:5px !important;
+  font-size:10.5px !important;
+}
+
+.transaction-row-grid{
+  display:grid;
+  grid-template-columns:minmax(320px,.76fr) minmax(560px,1.45fr);
+  gap:10px;
+  align-items:start;
+}
+
+.transaction-input-panel,
+.transaction-output-panel{
+  min-width:0;
+}
+
+.inline-result-head{
+  min-height:34px;
+  margin-bottom:6px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.inline-result-head strong{
+  display:block;
+  font-size:11.5px;
+}
+
+.inline-result-head span{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font-size:9px;
+}
+
+.compact-toolbar{
+  gap:5px !important;
+  margin-top:6px !important;
+}
+
+.no-margin{
+  margin:0 !important;
+}
+
+.compact-result-table{
+  min-height:0 !important;
+  max-height:150px !important;
+}
+
+.compact-result-table table{
+  min-width:650px;
+  font-size:10px !important;
+}
+
+.compact-result-table th,
+.compact-result-table td{
+  padding:6px 7px !important;
+  font-size:10px !important;
+}
+
+.compact-result-table .empty{
+  padding:30px 10px !important;
+}
+
+.quick-converter-card{
+  margin:0 !important;
+}
+
+.compact-converter-grid{
+  grid-template-columns:minmax(320px,.82fr) minmax(520px,1.32fr) !important;
+  gap:10px !important;
+}
+
+.compact-converter-grid .quick-textarea{
+  height:118px !important;
+  min-height:118px !important;
+}
+
+.compact-converter-grid .quick-table-wrap{
+  min-height:0 !important;
+  max-height:150px !important;
+}
+
+.quick-result-status{
+  font-size:10px !important;
+}
+
+.master-db-card{
+  margin-top:0 !important;
+}
+
+.master-db-table{
+  max-height:250px !important;
+}
+
+.master-db-table table{
+  min-width:720px;
+}
+
+.master-db-table th,
+.master-db-table td{
+  padding:7px 8px !important;
+  font-size:10.5px !important;
+}
+
+#masterDbToggleBtn,
+#masterDbHideBtn{
+  white-space:nowrap;
+}
+
+@media(max-width:1050px){
+  .db-add-grid,
+  .transaction-row-grid,
+  .compact-converter-grid{
+    grid-template-columns:1fr !important;
+  }
+
+  .compact-textarea,
+  .db-textarea,
+  .transaction-textarea,
+  .compact-converter-grid .quick-textarea{
+    height:105px !important;
+  }
+
+  .compact-result-table{
+    max-height:170px !important;
+  }
+}
+
+@media(max-width:620px){
+  .compact-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .compact-head .stats{
+    width:100%;
+  }
+
+  .vertical-toolbar{
+    grid-template-columns:1fr;
+  }
+
+  .inline-result-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}

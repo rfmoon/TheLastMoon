@@ -1,48 +1,37 @@
-# TheLastMoon V35 — Pencairan XPAY + Konversi Rekening Cepat
+# TheLastMoon V36 — Pencairan XPAY 3 Baris + Master DB
 
-V35 menambahkan tool baru langsung di dalam halaman Pencairan XPAY.
+Tampilan Pencairan XPAY dibuat lebih pendek dan disusun vertikal menjadi 3 baris.
 
-## Posisi
+## Susunan
 
-Tool berada di bagian atas Pencairan XPAY, tepat di bawah judul/subtitle
-dan sebelum Database & Konversi Rekening yang sudah ada.
+Baris 1:
+1. Tambah Database Banyak Sekaligus
 
-Tampilannya dibuat compact:
-- desktop: input kiri, hasil kanan
-- layar lebih kecil: otomatis turun menjadi 1 kolom
-- hasil tabel dibatasi tinggi supaya tidak membuat halaman terlalu panjang
+Baris 2:
+2. Tempel Data Transaksi
+- hasil spreadsheet langsung berada di sisi kanan
+- tidak menjadi card terpisah lagi
 
-## Input
+Baris 3:
+3. Konversi Data Rekening
+- input kiri
+- hasil kanan
 
-Nominal | Kode Bank | Nomor Rekening | Nama Rekening
+Pada layar kecil otomatis berubah menjadi 1 kolom.
 
-Contoh:
+## Daftar Database
 
-25,000,000    6    051665123654    Fabian Aditya
+Daftar Database sekarang:
 
-## Output
+- hanya tampil untuk Master Administrator
+- default dalam keadaan HIDE
+- Master punya tombol `Lihat Daftar Database`
+- setelah dibuka dapat ditekan `Hide`
+- tombol `Salin Semua Database` hanya tampil ke Master
+- tombol `Hapus Semua` hanya tampil ke Master
+- hapus satu rekening dan hapus seluruh database juga dilindungi `requireMaster()` di backend
 
-Nama Rekening | Nomor Rekening | Nominal
-
-Nominal otomatis diformat dengan koma.
-
-Nomor rekening dipertahankan sebagai string agar leading zero tidak hilang.
-
-## Tombol
-
-- Proses Data
-- Tempel Clipboard
-- Bersihkan
-- Copy Hasil
-- Copy Spreadsheet
-
-Copy Spreadsheet memberi apostrof pada rekening agar leading zero aman
-saat ditempel ke spreadsheet.
-
-## CSP
-
-Tidak menggunakan inline onclick.
-Semua tombol memakai addEventListener di pencairan-xpay.js.
+User biasa tetap dapat memakai proses transaksi dan sinkron database untuk pencocokan, tetapi panel Daftar Database tidak tampil di UI.
 
 ## File yang perlu ditimpa/upload
 
@@ -59,4 +48,4 @@ Ctrl + Shift + R
 
 Health version:
 
-v35-pencairan-quick-converter
+v36-pencairan-3baris-master-db

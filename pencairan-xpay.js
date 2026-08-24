@@ -68,6 +68,79 @@ let syncTimer = null;
 let loadingDatabase = false;
 let syncFailureCount = 0;
 let lastSyncAt = null;
+let currentUserIsMaster = false;
+let masterDatabaseVisible = false;
+
+
+async function loadPencairanRole(){
+  try{
+    const session=await api("/api/session");
+    currentUserIsMaster=Boolean(
+      session?.authenticated &&
+      session?.user?.isMaster
+    );
+  }catch(_){
+    currentUserIsMaster=false;
+  }
+
+  applyMasterDatabaseUi();
+}
+
+function applyMasterDatabaseUi(){
+  const toggle=$("masterDbToggleBtn");
+  const card=$("masterDatabaseCard");
+  const masterActions=document.querySelectorAll(
+    ".master-only-action"
+  );
+
+  if(toggle){
+    toggle.classList.toggle(
+      "hidden",
+      !currentUserIsMaster
+    );
+  }
+
+  masterActions.forEach(button=>{
+    button.classList.toggle(
+      "hidden",
+      !currentUserIsMaster
+    );
+  });
+
+  if(!currentUserIsMaster){
+    masterDatabaseVisible=false;
+  }
+
+  if(card){
+    card.classList.toggle(
+      "hidden",
+      !currentUserIsMaster ||
+      !masterDatabaseVisible
+    );
+  }
+
+  if(toggle && currentUserIsMaster){
+    toggle.textContent=masterDatabaseVisible
+      ? "🙈 Hide Daftar Database"
+      : "👁 Lihat Daftar Database";
+  }
+
+  if(currentUserIsMaster){
+    renderDatabase();
+  }
+}
+
+function toggleMasterDatabase(force){
+  if(!currentUserIsMaster) return;
+
+  masterDatabaseVisible=
+    typeof force==="boolean"
+      ? force
+      : !masterDatabaseVisible;
+
+  applyMasterDatabaseUi();
+}
+
 
 function normalize(value){
   return String(value ?? "")
@@ -294,6 +367,11 @@ function renderDatabase(){
   $("dbCount").textContent=database.length;
   const body=$("dbBody");
   body.innerHTML="";
+
+  if(!currentUserIsMaster){
+    body.innerHTML='<tr><td colspan="5" class="empty">Khusus Master Administrator.</td></tr>';
+    return;
+  }
 
   if(!database.length){
     body.innerHTML='<tr><td colspan="5" class="empty">Database masih kosong.</td></tr>';
@@ -1031,6 +1109,14 @@ function downloadExcel(){
   );
 }
 
+$("masterDbToggleBtn")?.addEventListener("click",()=>{
+  toggleMasterDatabase();
+});
+
+$("masterDbHideBtn")?.addEventListener("click",()=>{
+  toggleMasterDatabase(false);
+});
+
 $("importDbBtn").addEventListener("click",importDatabase);
 $("exportDbBtn").addEventListener("click",exportDatabase);
 $("refreshDbBtn").addEventListener("click",()=>{
@@ -1091,10 +1177,18 @@ $("inputData").addEventListener("keydown",event=>{
   if(event.ctrlKey && event.key==="Enter") processTransactions();
 });
 
-renderDatabase();
-renderResults();
-loadSharedDatabase({silent:false,migrate:true});
-startAutoSync();
+async function initPencairanXpay(){
+  await loadPencairanRole();
+  renderDatabase();
+  renderResults();
+  await loadSharedDatabase({
+    silent:false,
+    migrate:true
+  });
+  startAutoSync();
+}
+
+initPencairanXpay();
 
 /* =========================================================
    V35 — KONVERSI DATA REKENING CEPAT

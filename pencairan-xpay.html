@@ -5,184 +5,115 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <title>Pencairan XPAY</title>
-  <link rel="stylesheet" href="/pencairan-xpay.css?v=35.0.0">
+  <link rel="stylesheet" href="/pencairan-xpay.css?v=36.0.0">
 </head>
 <body>
-<main class="wrap">
-  <h1>Database & Konversi Rekening</h1>
-  <p class="subtitle">
-    Tambah satu atau banyak rekening tanpa nominal. Database disimpan di Cloudflare D1 dan dipakai bersama oleh semua user yang memiliki akses Pencairan XPAY.
-  </p>
+<main class="wrap compact-payout">
 
-
-  <section class="card quick-converter-card">
-    <div class="card-head quick-converter-head">
+  <!-- BARIS 1 -->
+  <section class="card step-card">
+    <div class="card-head compact-head">
       <div>
-        <h2>Konversi Data Rekening</h2>
-        <div class="quick-subtitle">
-          Nominal | Kode Bank | Nomor Rekening | Nama Rekening
-          <span>→</span>
-          Nama Rekening | Nomor Rekening | Nominal
-        </div>
+        <span class="step-kicker">BARIS 1</span>
+        <h2>1. Tambah Database Banyak Sekaligus</h2>
       </div>
-      <span class="pill">Cepat</span>
+
+      <button
+        class="secondary small hidden"
+        id="masterDbToggleBtn"
+        type="button">
+        👁 Lihat Daftar Database
+      </button>
     </div>
 
-    <div class="card-body quick-converter-body">
-      <div class="quick-converter-grid">
-        <div class="quick-input-side">
-          <textarea
-            id="quickConvertInput"
-            class="quick-textarea"
-            spellcheck="false"
-            placeholder="Contoh:
-25,000,000	6	051665123654	Fabian Aditya
-25,000,000	6	6546454151	Desi Nurul Hikmah
-5,000,000	1	05846948944651	Chika Amalia"></textarea>
+    <div class="card-body compact-body">
+      <div class="db-add-grid">
+        <textarea
+          id="bulkDatabase"
+          class="compact-textarea db-textarea"
+          spellcheck="false"
+          placeholder="BCA	Fabian Aditya	46545464564
+DANAMON	Imam Mustakim	65414994165
+BRI Fajrian Aditya 46545464564"></textarea>
 
-          <div class="toolbar quick-toolbar">
-            <button class="primary" id="quickProcessBtn">Proses Data</button>
-            <button class="secondary" id="quickPasteBtn">Tempel Clipboard</button>
-            <button class="danger" id="quickClearBtn">Bersihkan</button>
+        <div class="compact-side">
+          <div class="mini-help">
+            Format: <b>BANK | NAMA | NOMOR REKENING</b><br>
+            Bisa tempel banyak baris sekaligus.
           </div>
 
-          <div class="message" id="quickInputStatus">
-            Belum ada data diproses.
-          </div>
-        </div>
-
-        <div class="quick-output-side">
-          <div class="quick-result-head">
-            <div>
-              <strong>Hasil</strong>
-              <div class="quick-result-status" id="quickResultStatus">
-                Berhasil: <span class="count">0</span> baris
-              </div>
-            </div>
-
-            <div class="toolbar quick-result-toolbar">
-              <button class="success" id="quickCopyBtn">Copy Hasil</button>
-              <button class="secondary" id="quickCopySheetBtn">Copy Spreadsheet</button>
-            </div>
-          </div>
-
-          <div class="table-wrap quick-table-wrap">
-            <table class="quick-table">
-              <thead>
-                <tr>
-                  <th>Nama Rekening</th>
-                  <th>Nomor Rekening</th>
-                  <th>Nominal</th>
-                </tr>
-              </thead>
-              <tbody id="quickResultBody">
-                <tr>
-                  <td colspan="3" class="empty quick-empty">
-                    Belum ada hasil.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="toolbar vertical-toolbar">
+            <button class="primary" id="importDbBtn" type="button">
+              Masukkan ke Database
+            </button>
+            <button class="secondary" id="refreshDbBtn" type="button">
+              Sinkronkan Sekarang
+            </button>
+            <button class="secondary master-only-action hidden" id="exportDbBtn" type="button">
+              Salin Semua Database
+            </button>
+            <button class="danger master-only-action hidden" id="clearDbBtn" type="button">
+              Hapus Semua
+            </button>
           </div>
         </div>
       </div>
+
+      <div id="bulkMessage" class="message compact-message"></div>
     </div>
   </section>
 
-  <section class="layout">
-    <div>
-            <div class="card">
-        <div class="card-head"><h2>1. Tambah Database Banyak Sekaligus</h2></div>
-        <div class="card-body">
-          <textarea id="bulkDatabase" spellcheck="false" placeholder="Bisa tambah 1 rekening:
-BCA	Fabian Aditya	46545464564
-
-Atau banyak rekening sekaligus:
-BCA	Fabian Aditya	46545464564
-DANAMON	Imam Mustakim	65414994165
-
-Bisa juga pakai satu spasi:
-BCA Fabian Aditya 46545464564"></textarea>
-          <div class="toolbar">
-            <button class="primary" id="importDbBtn">Masukkan ke Database</button>
-            <button class="secondary" id="exportDbBtn">Salin Semua Database</button>
-            <button class="secondary" id="refreshDbBtn">Sinkronkan Sekarang</button>
-            <button class="danger" id="clearDbBtn">Hapus Semua</button>
-          </div>
-          <div id="bulkMessage" class="message"></div>
-        </div>
+  <!-- BARIS 2 -->
+  <section class="card step-card">
+    <div class="card-head compact-head">
+      <div>
+        <span class="step-kicker">BARIS 2</span>
+        <h2>2. Tempel Data Transaksi</h2>
       </div>
 
-      <div class="card">
-        <div class="card-head">
-          <h2>Daftar Database</h2>
-          <span class="pill">Total: <strong id="dbCount">0</strong></span>
-        </div>
-        <div class="card-body">
-          <div class="table-wrap">
-            <table style="min-width:700px">
-              <thead>
-                <tr>
-                  <th>Bank</th>
-                  <th>Code</th>
-                  <th>Nama Rekening</th>
-                  <th>Nomor Rekening</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="dbBody">
-                <tr><td colspan="5" class="empty">Database masih kosong.</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div id="dbMessage" class="message"></div>
-        </div>
+      <div class="stats">
+        <span class="pill">Berhasil: <strong id="successCount">0</strong></span>
+        <span class="pill">Bermasalah: <strong id="errorCount">0</strong></span>
       </div>
     </div>
 
-    <div>
-      <div class="card">
-        <div class="card-head"><h2>2. Tempel Data Transaksi</h2></div>
-        <div class="card-body">
-          <textarea id="inputData" spellcheck="false" placeholder="Tempel transaksi dengan nominal:
-Fabian Aditya 46545464564 25.000.000
+    <div class="card-body compact-body">
+      <div class="transaction-row-grid">
+        <div class="transaction-input-panel">
+          <textarea
+            id="inputData"
+            class="compact-textarea transaction-textarea"
+            spellcheck="false"
+            placeholder="Fabian Aditya 46545464564 25.000.000
 Imam Mustakim 65414994165 25.000.000"></textarea>
 
-          <div class="toolbar">
-            <button class="primary" id="processBtn">Proses Data</button>
-            <button class="secondary" id="sampleBtn">Isi Contoh</button>
-            <button class="danger" id="clearInputBtn">Bersihkan</button>
+          <div class="toolbar compact-toolbar">
+            <button class="primary" id="processBtn" type="button">Proses Data</button>
+            <button class="secondary" id="sampleBtn" type="button">Isi Contoh</button>
+            <button class="danger" id="clearInputBtn" type="button">Bersihkan</button>
           </div>
 
-          <div class="note">
-            Sistem mencari bank dan kode berdasarkan <b>nomor rekening</b> di database bersama.
-            Nominal wajib ditulis pada setiap baris transaksi.
-          </div>
-          <div id="inputMessage" class="message"></div>
+          <div id="inputMessage" class="message compact-message"></div>
         </div>
-      </div>
 
-      <div class="card">
-        <div class="card-head">
-          <h2>3. Hasil Spreadsheet</h2>
-          <div class="stats">
-            <span class="pill">Berhasil: <strong id="successCount">0</strong></span>
-            <span class="pill">Bermasalah: <strong id="errorCount">0</strong></span>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="toolbar" style="margin-top:0;margin-bottom:12px">
-            <button class="success" id="copyBtn">Salin ke Spreadsheet</button>
-            <button class="secondary" id="downloadExcelBtn">Download Excel (.xlsx)</button>
-          </div>
+        <div class="transaction-output-panel">
+          <div class="inline-result-head">
+            <div>
+              <strong>Hasil Spreadsheet</strong>
+              <span>Bank & kode dicocokkan dari database rekening.</span>
+            </div>
 
-          <div class="note" style="margin-top:0;margin-bottom:12px">
-            File Excel otomatis dibuat dengan kolom:
-            <b>No — Amount — Bank Code — Bank Account — Bank Account Name</b>.
-            Kolom <b>Bank Account</b> disimpan sebagai <b>Text</b> agar nomor rekening yang diawali 0 tetap utuh.
+            <div class="toolbar compact-toolbar no-margin">
+              <button class="success" id="copyBtn" type="button">
+                Salin ke Spreadsheet
+              </button>
+              <button class="secondary" id="downloadExcelBtn" type="button">
+                Download Excel
+              </button>
+            </div>
           </div>
 
-          <div class="table-wrap">
+          <div class="table-wrap compact-result-table">
             <table>
               <thead>
                 <tr>
@@ -194,17 +125,131 @@ Imam Mustakim 65414994165 25.000.000"></textarea>
                 </tr>
               </thead>
               <tbody id="resultBody">
-                <tr><td colspan="5" class="empty">Belum ada data yang diproses.</td></tr>
+                <tr>
+                  <td colspan="5" class="empty">Belum ada data yang diproses.</td>
+                </tr>
               </tbody>
             </table>
           </div>
-          <div id="outputMessage" class="message"></div>
+
+          <div id="outputMessage" class="message compact-message"></div>
         </div>
       </div>
     </div>
   </section>
+
+  <!-- BARIS 3 -->
+  <section class="card step-card quick-converter-card">
+    <div class="card-head compact-head">
+      <div>
+        <span class="step-kicker">BARIS 3</span>
+        <h2>3. Konversi Data Rekening</h2>
+      </div>
+
+      <div class="quick-result-status" id="quickResultStatus">
+        Berhasil: <span class="count">0</span> baris
+      </div>
+    </div>
+
+    <div class="card-body compact-body">
+      <div class="quick-converter-grid compact-converter-grid">
+        <div class="quick-input-side">
+          <textarea
+            id="quickConvertInput"
+            class="quick-textarea compact-textarea"
+            spellcheck="false"
+            placeholder="25,000,000	6	051665123654	Fabian Aditya
+25,000,000	6	6546454151	Desi Nurul Hikmah
+5,000,000	1	05846948944651	Chika Amalia"></textarea>
+
+          <div class="toolbar compact-toolbar">
+            <button class="primary" id="quickProcessBtn" type="button">Proses Data</button>
+            <button class="secondary" id="quickPasteBtn" type="button">Tempel Clipboard</button>
+            <button class="danger" id="quickClearBtn" type="button">Bersihkan</button>
+          </div>
+
+          <div class="message compact-message" id="quickInputStatus">
+            Belum ada data diproses.
+          </div>
+        </div>
+
+        <div class="quick-output-side">
+          <div class="inline-result-head">
+            <div>
+              <strong>Hasil Konversi</strong>
+              <span>Nama Rekening | Nomor Rekening | Nominal</span>
+            </div>
+
+            <div class="toolbar compact-toolbar no-margin">
+              <button class="success" id="quickCopyBtn" type="button">Copy Hasil</button>
+              <button class="secondary" id="quickCopySheetBtn" type="button">Copy Spreadsheet</button>
+            </div>
+          </div>
+
+          <div class="table-wrap quick-table-wrap compact-result-table">
+            <table class="quick-table">
+              <thead>
+                <tr>
+                  <th>Nama Rekening</th>
+                  <th>Nomor Rekening</th>
+                  <th>Nominal</th>
+                </tr>
+              </thead>
+              <tbody id="quickResultBody">
+                <tr>
+                  <td colspan="3" class="empty">Belum ada hasil.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MASTER ADMINISTRATOR ONLY -->
+  <section class="card master-db-card hidden" id="masterDatabaseCard">
+    <div class="card-head compact-head">
+      <div>
+        <span class="step-kicker master-kicker">MASTER ADMINISTRATOR</span>
+        <h2>Daftar Database</h2>
+      </div>
+
+      <div class="stats">
+        <span class="pill">Total: <strong id="dbCount">0</strong></span>
+        <button class="secondary small" id="masterDbHideBtn" type="button">
+          🙈 Hide
+        </button>
+      </div>
+    </div>
+
+    <div class="card-body compact-body">
+      <div class="table-wrap master-db-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Bank</th>
+              <th>Code</th>
+              <th>Nama Rekening</th>
+              <th>Nomor Rekening</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="dbBody">
+            <tr>
+              <td colspan="5" class="empty">Database masih kosong.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="dbMessage" class="message compact-message"></div>
+    </div>
+  </section>
+
   <div id="quickCopyToast" class="quick-copy-toast">Berhasil disalin ✓</div>
 </main>
-<script src="/pencairan-xpay.js?v=35.0.0" defer></script>
+
+<script src="/pencairan-xpay.js?v=36.0.0" defer></script>
 </body>
 </html>
