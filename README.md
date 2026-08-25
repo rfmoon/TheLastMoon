@@ -1,39 +1,35 @@
-# TheLastMoon V41 — WD Bersih Shared Realtime
+# TheLastMoon V42 — Excel Sama dengan Contoh1.xlsx
 
-DATABASE NAMA WD BERSIH sekarang disimpan di Cloudflare D1,
-bukan hanya IndexedDB browser.
+Hasil Excel Data Pencairan disamakan dengan file contoh yang diberikan.
 
-Tabel:
-wd_bersih_names
+Format yang dipakai:
 
-Semua user yang memiliki akses Pencairan XPAY membaca database yang sama.
+- Sheet: Data
+- Font seluruh sel: Calibri 11 regular
+- Tidak bold
+- Tidak ada fill/background
+- Tidak ada border tambahan
+- Tidak ada AutoFilter
+- Tidak ada freeze header
+- Default row height: 15
+- Kolom A: lebar default Excel
+- Kolom B: width 11.140625
+- Kolom C: lebar default Excel
+- Kolom D: width 16.5703125
+- Kolom E: lebar default Excel
+- Amount: number format #,##0
+- Bank Code: General
+- Bank Account: Text (@), supaya leading zero aman
+- Bank Account Name: General
 
-Sinkron otomatis:
-setiap 3 detik.
+Header:
+No | Amount | Bank Code | Bank Account | Bank Account Name
 
-Migrasi:
-Saat V41 pertama dibuka, browser akan mencoba membaca database lama
-`WD_BERSIH_DATABASE` dari IndexedDB dan otomatis menggabungkannya ke D1.
-Data lokal lama tidak dihapus.
-
-API dedicated:
-GET  /api/wd-bersih?action=list
-POST /api/wd-bersih?action=bulk
-
-File baru WAJIB:
-functions/api/wd-bersih.js
-
-File utama:
-functions/api/wd-bersih.js
-pencairan-xpay.html
-pencairan-xpay.js
-app.js
-schema.sql
-functions/api/[[path]].js
-README.md
+Default nama file tetap:
+Nama Excel.xlsx
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v41-wd-bersih-shared-realtime
+v42-excel-match-contoh

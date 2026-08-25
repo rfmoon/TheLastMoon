@@ -911,12 +911,14 @@ function createZip(files){
 }
 
 function makeInlineStringCell(ref,value,styleId="0"){
-  return `<c r="${ref}" s="${styleId}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+  const style=String(styleId)==="0" ? "" : ` s="${styleId}"`;
+  return `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
 }
 
 function makeNumberCell(ref,value,styleId="0"){
   const number=Number(value);
-  return `<c r="${ref}" s="${styleId}"><v>${Number.isFinite(number) ? number : 0}</v></c>`;
+  const style=String(styleId)==="0" ? "" : ` s="${styleId}"`;
+  return `<c r="${ref}"${style}><v>${Number.isFinite(number) ? number : 0}</v></c>`;
 }
 
 function getExcelDownloadName(){
@@ -956,9 +958,9 @@ function downloadExcel(){
   const headers=["No","Amount","Bank Code","Bank Account","Bank Account Name"];
 
   let sheetRows="";
-  sheetRows+=`<row r="1" ht="20" customHeight="1">`;
+  sheetRows+=`<row r="1">`;
   headers.forEach((header,index)=>{
-    sheetRows+=makeInlineStringCell(`${excelColumnName(index+1)}1`,header,"1");
+    sheetRows+=makeInlineStringCell(`${excelColumnName(index+1)}1`,header,"0");
   });
   sheetRows+="</row>";
 
@@ -966,12 +968,12 @@ function downloadExcel(){
     const excelRow=index+2;
     sheetRows+=`<row r="${excelRow}">`;
     sheetRows+=makeNumberCell(`A${excelRow}`,index+1,"0");
-    sheetRows+=makeNumberCell(`B${excelRow}`,row.amountNumeric,"2");
+    sheetRows+=makeNumberCell(`B${excelRow}`,row.amountNumeric,"1");
     sheetRows+=makeNumberCell(`C${excelRow}`,row.code,"0");
 
     // Sangat penting: nomor rekening ditulis sebagai STRING/TEXT,
     // bukan sebagai angka, sehingga 0 di depan tetap tersimpan.
-    sheetRows+=makeInlineStringCell(`D${excelRow}`,row.account,"3");
+    sheetRows+=makeInlineStringCell(`D${excelRow}`,row.account,"2");
     sheetRows+=makeInlineStringCell(`E${excelRow}`,row.name,"0");
     sheetRows+="</row>";
   });
@@ -982,78 +984,50 @@ function downloadExcel(){
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <dimension ref="A1:E${lastRow}"/>
   <sheetViews>
-    <sheetView workbookViewId="0"/>
+    <sheetView tabSelected="1" workbookViewId="0"/>
   </sheetViews>
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>
-    <col min="1" max="1" width="7" customWidth="1"/>
-    <col min="2" max="2" width="18" customWidth="1"/>
-    <col min="3" max="3" width="13" customWidth="1"/>
-    <col min="4" max="4" width="22" customWidth="1"/>
-    <col min="5" max="5" width="30" customWidth="1"/>
+    <col min="2" max="2" width="11.140625" customWidth="1"/>
+    <col min="4" max="4" width="16.5703125" customWidth="1"/>
   </cols>
   <sheetData>${sheetRows}</sheetData>
+  <pageMargins left="0.75" right="0.75" top="1" bottom="1" header="0.5" footer="0.5"/>
 </worksheet>`;
 
   const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <numFmts count="2">
-    <numFmt numFmtId="164" formatCode="#,##0"/>
-    <numFmt numFmtId="165" formatCode="@"/>
-  </numFmts>
-  <fonts count="2">
+  <fonts count="1">
     <font>
       <sz val="11"/>
-      <name val="Calibri"/>
-      <family val="2"/>
-      <scheme val="minor"/>
-    </font>
-    <font>
-      
-      <sz val="11"/>
+      <color theme="1"/>
       <name val="Calibri"/>
       <family val="2"/>
       <scheme val="minor"/>
     </font>
   </fonts>
-  <fills count="3">
+  <fills count="2">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
-    <fill>
-      <patternFill patternType="solid">
-        <fgColor rgb="FFE7E6E6"/>
-        <bgColor indexed="64"/>
-      </patternFill>
-    </fill>
   </fills>
-  <borders count="2">
+  <borders count="1">
     <border>
       <left/><right/><top/><bottom/><diagonal/>
-    </border>
-    <border>
-      <left style="thin"><color rgb="FFBFBFBF"/></left>
-      <right style="thin"><color rgb="FFBFBFBF"/></right>
-      <top style="thin"><color rgb="FFBFBFBF"/></top>
-      <bottom style="thin"><color rgb="FFBFBFBF"/></bottom>
-      <diagonal/>
     </border>
   </borders>
   <cellStyleXfs count="1">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
   </cellStyleXfs>
-  <cellXfs count="4">
+  <cellXfs count="3">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0"
-        applyNumberFormat="1"/>
-    <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0"
-        applyNumberFormat="1"/>
+    <xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+    <xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
   </cellXfs>
   <cellStyles count="1">
     <cellStyle name="Normal" xfId="0" builtinId="0"/>
   </cellStyles>
   <dxfs count="0"/>
-  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium9" defaultPivotStyle="PivotStyleLight16"/>
 </styleSheet>`;
 
   const workbookXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1063,7 +1037,7 @@ function downloadExcel(){
     <workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/>
   </bookViews>
   <sheets>
-    <sheet name="DATA REKENING" sheetId="1" r:id="rId1"/>
+    <sheet name="Data" sheetId="1" r:id="rId1"/>
   </sheets>
 </workbook>`;
 
@@ -1123,7 +1097,7 @@ function downloadExcel(){
 
   setMessage(
     $("outputMessage"),
-    `${rows.length} baris berhasil dibuat menjadi Excel biasa tanpa Filter. Bank Account disimpan sebagai Text.`,
+    `${rows.length} baris berhasil dibuat dengan format sama seperti Contoh1.xlsx. Bank Account tetap Text.`,
     "ok"
   );
 }
