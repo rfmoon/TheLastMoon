@@ -919,6 +919,31 @@ function makeNumberCell(ref,value,styleId="0"){
   return `<c r="${ref}" s="${styleId}"><v>${Number.isFinite(number) ? number : 0}</v></c>`;
 }
 
+function getExcelDownloadName(){
+  const raw=String(
+    $("excelFileName")?.value || ""
+  ).trim();
+
+  let name=raw || "hasil-rekening";
+
+  name=name
+    .replace(/\.xlsx$/i,"")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+
+  if(!name){
+    name="hasil-rekening";
+  }
+
+  // Windows menyulitkan nama file yang berakhir titik/spasi.
+  name=name
+    .replace(/[. ]+$/g,"")
+    .slice(0,80);
+
+  return `${name || "hasil-rekening"}.xlsx`;
+}
+
 function downloadExcel(){
   if(!processedRows.length) processTransactions();
 
@@ -957,9 +982,7 @@ function downloadExcel(){
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <dimension ref="A1:E${lastRow}"/>
   <sheetViews>
-    <sheetView workbookViewId="0">
-      <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
-    </sheetView>
+    <sheetView workbookViewId="0"/>
   </sheetViews>
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>
@@ -970,7 +993,6 @@ function downloadExcel(){
     <col min="5" max="5" width="30" customWidth="1"/>
   </cols>
   <sheetData>${sheetRows}</sheetData>
-  <autoFilter ref="A1:E${lastRow}"/>
 </worksheet>`;
 
   const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1021,10 +1043,8 @@ function downloadExcel(){
   </cellStyleXfs>
   <cellXfs count="4">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0"
-        applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
-      <alignment horizontal="center" vertical="center"/>
-    </xf>
+    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"
+        applyFont="1"/>
     <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0"
         applyNumberFormat="1"/>
     <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0"
@@ -1095,7 +1115,7 @@ function downloadExcel(){
   const url=URL.createObjectURL(blob);
   const link=document.createElement("a");
   link.href=url;
-  link.download="hasil-rekening.xlsx";
+  link.download=getExcelDownloadName();
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -1104,7 +1124,7 @@ function downloadExcel(){
 
   setMessage(
     $("outputMessage"),
-    `${rows.length} baris berhasil dibuat menjadi Excel (.xlsx). Bank Account disimpan sebagai Text.`,
+    `${rows.length} baris berhasil dibuat menjadi Excel biasa tanpa Filter. Bank Account disimpan sebagai Text.`,
     "ok"
   );
 }
@@ -1125,6 +1145,13 @@ $("refreshDbBtn").addEventListener("click",()=>{
 $("processBtn").addEventListener("click",processTransactions);
 $("copyBtn").addEventListener("click",copyResults);
 $("downloadExcelBtn").addEventListener("click",downloadExcel);
+
+$("excelFileName")?.addEventListener("keydown",event=>{
+  if(event.key==="Enter"){
+    event.preventDefault();
+    downloadExcel();
+  }
+});
 
 $("clearDbBtn").addEventListener("click",async()=>{
   if(!database.length){

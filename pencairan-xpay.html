@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <title>Pencairan XPAY</title>
-  <link rel="stylesheet" href="/pencairan-xpay.css?v=38.0.0">
+  <link rel="stylesheet" href="/pencairan-xpay.css?v=39.0.0">
 </head>
 <body>
 <main class="wrap payout-columns-wrap">
@@ -108,13 +108,25 @@ Imam Mustakim 65414994165 25.000.000"></textarea>
           <div class="column-result-head">
             <strong>Hasil Spreadsheet</strong>
 
-            <div class="toolbar mini-result-toolbar">
-              <button class="success" id="copyBtn" type="button">
-                Copy
-              </button>
-              <button class="secondary" id="downloadExcelBtn" type="button">
-                Excel
-              </button>
+            <div class="spreadsheet-actions">
+              <label class="excel-name-field">
+                <span>Nama :</span>
+                <input
+                  id="excelFileName"
+                  type="text"
+                  maxlength="80"
+                  placeholder="hasil-rekening"
+                  autocomplete="off">
+              </label>
+
+              <div class="toolbar mini-result-toolbar">
+                <button class="success" id="copyBtn" type="button">
+                  Copy
+                </button>
+                <button class="secondary" id="downloadExcelBtn" type="button">
+                  Excel
+                </button>
+              </div>
             </div>
           </div>
 
@@ -249,6 +261,6 @@ BRIMO / GILANG ILHAM BINTANG (WD BERSIH)"></textarea>
 
 </main>
 
-<script src="/pencairan-xpay.js?v=38.0.0" defer></script>
+<script src="/pencairan-xpay.js?v=39.0.0" defer></script>
 </body>
 </html>

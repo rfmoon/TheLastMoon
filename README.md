@@ -1,14 +1,58 @@
-# TheLastMoon V38 — Pencairan XPAY Docs Qris
+# TheLastMoon V39 — Excel Plain + Nama File
 
-Perubahan judul:
-- Tambah Database Banyak Sekaligus -> Tambahkan Rekening Baru atau Hapus
-- Tempel Data Transaksi -> Data Pencairan
-- Konversi Data Rekening -> Data Pencairan ke Docs Qris
+Perubahan di `Data Pencairan → Hasil Spreadsheet`.
 
-Tulisan KOLOM A / KOLOM B / KOLOM C dihapus dari tampilan.
+## Excel tanpa Filter
 
-Bagian Data Pencairan ke Docs Qris memakai logika WD Bersih Matcher. Database Nama WD Bersih disimpan di IndexedDB `WD_BERSIH_DATABASE`. Output: Kolom A = teks database lengkap, Kolom B = kosong, Kolom C = nominal angka.
+Excel sekarang dibuat sebagai worksheet biasa.
 
-Setelah deploy tekan Ctrl + Shift + R.
+Dihapus:
+- AutoFilter pada header
+- tombol dropdown/filter di No, Amount, Bank Code, Bank Account, Bank Account Name
+- freeze header
+- warna/background/border tabel pada header
 
-Health: v38-pencairan-docs-qris
+Header tetap berupa tulisan biasa:
+
+No
+Amount
+Bank Code
+Bank Account
+Bank Account Name
+
+Bank Account tetap disimpan sebagai TEXT supaya leading zero aman.
+
+## Nama File
+
+Di sebelah kiri tombol Copy sekarang ada:
+
+Nama : [________________]
+
+Contoh isi:
+
+Pencairan 24 Agustus
+
+Saat tombol Excel ditekan hasilnya:
+
+Pencairan 24 Agustus.xlsx
+
+Kalau Nama kosong, default:
+
+hasil-rekening.xlsx
+
+Karakter yang tidak valid untuk nama file otomatis dibersihkan.
+
+## File yang perlu ditimpa
+
+pencairan-xpay.html
+pencairan-xpay.css
+pencairan-xpay.js
+app.js
+functions/api/[[path]].js
+README.md
+
+Setelah deploy:
+Ctrl + Shift + R
+
+Health version:
+v39-pencairan-excel-plain-name

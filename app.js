@@ -459,7 +459,7 @@ async function renderPencairanXpayWorkspace(menu) {
 
         <iframe
           class="xpay-frame pencairan-xpay-frame"
-          src="/pencairan-xpay.html?v=38.0.0"
+          src="/pencairan-xpay.html?v=39.0.0"
           title="Pencairan XPAY"
           loading="eager"
           referrerpolicy="same-origin">
