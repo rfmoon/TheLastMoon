@@ -222,3 +222,21 @@ CREATE INDEX IF NOT EXISTS idx_memo_records_deleted_updated
 
 CREATE INDEX IF NOT EXISTS idx_memo_records_updated
   ON memo_records(updated_at DESC);
+
+
+-- V41 shared WD Bersih database
+CREATE TABLE IF NOT EXISTS wd_bersih_names (
+  match_key TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  full_text TEXT NOT NULL,
+  created_by INTEGER,
+  updated_by INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_wd_bersih_updated
+  ON wd_bersih_names(updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_wd_bersih_name
+  ON wd_bersih_names(name);
