@@ -924,7 +924,7 @@ function getExcelDownloadName(){
     $("excelFileName")?.value || ""
   ).trim();
 
-  let name=raw || "hasil-rekening";
+  let name=raw || "Nama Excel";
 
   name=name
     .replace(/\.xlsx$/i,"")
@@ -933,7 +933,7 @@ function getExcelDownloadName(){
     .trim();
 
   if(!name){
-    name="hasil-rekening";
+    name="Nama Excel";
   }
 
   // Windows menyulitkan nama file yang berakhir titik/spasi.
@@ -941,7 +941,7 @@ function getExcelDownloadName(){
     .replace(/[. ]+$/g,"")
     .slice(0,80);
 
-  return `${name || "hasil-rekening"}.xlsx`;
+  return `${name || "Nama Excel"}.xlsx`;
 }
 
 function downloadExcel(){
@@ -1009,7 +1009,7 @@ function downloadExcel(){
       <scheme val="minor"/>
     </font>
     <font>
-      <b/>
+      
       <sz val="11"/>
       <name val="Calibri"/>
       <family val="2"/>
@@ -1043,8 +1043,7 @@ function downloadExcel(){
   </cellStyleXfs>
   <cellXfs count="4">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"
-        applyFont="1"/>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0"
         applyNumberFormat="1"/>
     <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0"
