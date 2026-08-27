@@ -1,4 +1,4 @@
-const VERSION="v41-wd-bersih-shared-realtime";
+const VERSION="v43-wd-database-manage";
 const COOKIE_NAME="thelastmoon_session";
 const MAX_JSON_BYTES=1024*1024;
 
@@ -46,6 +46,15 @@ export async function onRequest(context){
 
     if(request.method==="POST"&&action==="bulk"){
       return bulkUpsert(request,env.DB,user);
+    }
+    if(request.method==="POST"&&action==="delete"){
+      return deleteOne(request,env.DB);
+    }
+    if(request.method==="POST"&&action==="clear"){
+      return clearAll(request,env.DB);
+    }
+    if(request.method==="POST"&&action==="replace"){
+      return replaceAll(request,env.DB,user);
     }
 
     throw new AppError(404,`Action WD Bersih tidak ditemukan: ${action}`,"action");
@@ -188,6 +197,44 @@ async function bulkUpsert(request,db,user){
     revision:now,
     version:VERSION
   });
+}
+
+async function deleteOne(request,db){
+  const body=await readJson(request);
+  const key=matchKey(body.key||"");
+  if(!key)throw new AppError(400,"Nama/key database tidak valid.","delete-key");
+  const result=await db.prepare(`DELETE FROM wd_bersih_names WHERE match_key=?`).bind(key).run();
+  if(Number(result.meta?.changes||0)===0)throw new AppError(404,"Database tidak ditemukan.","delete-not-found");
+  return json({success:true,deleted:1,revision:Date.now(),version:VERSION});
+}
+
+async function clearAll(request,db){
+  const body=await readJson(request);
+  if(body.confirm!==true)throw new AppError(400,"Konfirmasi hapus semua tidak valid.","clear-confirm");
+  const result=await db.prepare(`DELETE FROM wd_bersih_names`).run();
+  return json({success:true,deleted:Number(result.meta?.changes||0),total:0,revision:Date.now(),version:VERSION});
+}
+
+async function replaceAll(request,db,user){
+  const body=await readJson(request);
+  if(body.confirm!==true)throw new AppError(400,"Konfirmasi ganti semua tidak valid.","replace-confirm");
+  const input=Array.isArray(body.items)?body.items:[];
+  if(!input.length)throw new AppError(400,"Database pengganti masih kosong.","replace-empty");
+  if(input.length>1000)throw new AppError(400,"Maksimal 1000 nama per ganti database.","replace-limit");
+  const unique=new Map();
+  for(const raw of input){
+    const full=cleanText(raw?.full,600);let name=cleanText(raw?.name,300);
+    if(!full)continue;if(!name)name=extractName(full);
+    const key=matchKey(name);if(!key||!name)continue;unique.set(key,{key,name,full});
+  }
+  if(!unique.size)throw new AppError(400,"Tidak ada database pengganti yang valid.","replace-invalid");
+  const now=Date.now();
+  const statements=[db.prepare(`DELETE FROM wd_bersih_names`)];
+  for(const item of unique.values()){
+    statements.push(db.prepare(`INSERT INTO wd_bersih_names(match_key,name,full_text,created_by,updated_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`).bind(item.key,item.name,item.full,user.id,user.id,now,now));
+  }
+  await db.batch(statements);
+  return json({success:true,total:unique.size,received:unique.size,revision:now,version:VERSION});
 }
 
 function extractName(fullText){
