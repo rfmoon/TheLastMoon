@@ -1561,7 +1561,8 @@ function wdApplySharedItems(items,revision=0){
   wdLastRevision=Number(revision||0);
 
   if($("wdDbCount"))$("wdDbCount").textContent=wdSharedItems.length;
-  if($("wdDbStatus"))$("wdDbStatus").innerHTML=`Database bersama: <strong>${wdSharedItems.length}</strong> nama • sinkron otomatis`
+  if($("wdDbStatus"))$("wdDbStatus").innerHTML=`Database bersama: <strong>${wdSharedItems.length}</strong> nama • sinkron otomatis`;
+  wdRenderDatabaseList();
 }
 
 async function wdLoadSharedDatabase({silent=false,migrateLegacy=false}={}){
@@ -1578,6 +1579,57 @@ async function wdLoadSharedDatabase({silent=false,migrateLegacy=false}={}){
     if(!silent)wdSetStatus("wdDbStatus","Gagal sinkron database bersama: "+(error?.message||String(error)));
     throw error
   }
+}
+
+function wdRenderDatabaseList(){
+  const container=$("wdDbList");
+  if(!container)return;
+  const query=wdMatchKey($("wdDbSearch")?.value||"");
+  const visible=wdSharedItems.filter(item=>!query||wdMatchKey(item.name).includes(query)||wdMatchKey(item.full).includes(query));
+  if(!visible.length){
+    container.innerHTML=`<div class="wd-db-empty">${wdSharedItems.length?"Nama tidak ditemukan.":"Belum ada database."}</div>`;
+    return;
+  }
+  container.innerHTML=visible.map(item=>`
+    <div class="wd-db-row">
+      <div class="wd-db-row-text"><strong>${wdEscapeHtml(item.name)}</strong><span>${wdEscapeHtml(item.full)}</span></div>
+      <button class="danger wd-db-delete-one" type="button" data-wd-delete-key="${wdEscapeHtml(item.key)}" data-wd-delete-name="${wdEscapeHtml(item.name)}">Hapus</button>
+    </div>`).join("");
+}
+
+async function wdDeleteOne(key,name){
+  if(!key)return;
+  if(!confirm(`Hapus database ini?\n\n${name||key}`))return;
+  try{
+    await wdSharedApi("delete",{body:{key}});
+    await wdLoadSharedDatabase({silent:true});
+    quickShowToast("1 database berhasil dihapus ✓");
+  }catch(error){wdSetStatus("wdDbStatus","Gagal hapus: "+(error?.message||String(error)))}
+}
+
+async function wdDeleteAll(){
+  if(!wdSharedItems.length)return;
+  if(!confirm(`Hapus SEMUA ${wdSharedItems.length} database WD Bersih?\n\nData akan kosong dan bisa kamu input ulang.`))return;
+  try{
+    await wdSharedApi("clear",{body:{confirm:true}});
+    wdApplySharedItems([],Date.now());
+    quickShowToast("Semua database WD Bersih berhasil dihapus ✓");
+  }catch(error){wdSetStatus("wdDbStatus","Gagal hapus semua: "+(error?.message||String(error)))}
+}
+
+async function wdReplaceDatabase(){
+  const raw=$("wdDatabaseInput")?.value??"";
+  const items=[];
+  for(const line of raw.split(/\r?\n/)){const item=wdExtractDatabaseItem(line);if(item)items.push(item)}
+  const unique=[...new Map(items.map(item=>[item.key,item])).values()];
+  if(!unique.length){wdSetStatus("wdDbStatus","Tempel database baru terlebih dahulu.");return}
+  if(!confirm(`Ganti seluruh database lama dengan ${unique.length} nama yang ada di input sekarang?`))return;
+  try{
+    await wdSharedApi("replace",{body:{items:unique,confirm:true}});
+    $("wdDatabaseInput").value="";
+    await wdLoadSharedDatabase({silent:true});
+    quickShowToast("Seluruh database berhasil diganti ✓");
+  }catch(error){wdSetStatus("wdDbStatus","Gagal ganti database: "+(error?.message||String(error)))}
 }
 
 async function wdSaveDatabase(){
@@ -1867,6 +1919,14 @@ function wdSetStatus(id,message){
 
 $("wdDbToggleBtn")?.addEventListener("click",()=>wdToggleDatabasePanel());
 $("wdSaveDbBtn")?.addEventListener("click",wdSaveDatabase);
+$("wdReplaceDbBtn")?.addEventListener("click",wdReplaceDatabase);
+$("wdDeleteAllBtn")?.addEventListener("click",wdDeleteAll);
+$("wdDbSearch")?.addEventListener("input",wdRenderDatabaseList);
+$("wdDbList")?.addEventListener("click",event=>{
+  const button=event.target.closest("[data-wd-delete-key]");
+  if(!button)return;
+  wdDeleteOne(button.dataset.wdDeleteKey||"",button.dataset.wdDeleteName||"");
+});
 $("wdPasteDbBtn")?.addEventListener("click",wdPasteDatabase);
 $("wdClearDbInputBtn")?.addEventListener("click",wdClearDatabaseInput);
 $("wdProcessBtn")?.addEventListener("click",wdProcessData);

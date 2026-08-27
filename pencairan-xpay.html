@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <title>Pencairan XPAY</title>
-  <link rel="stylesheet" href="/pencairan-xpay.css?v=42.0.0">
+  <link rel="stylesheet" href="/pencairan-xpay.css?v=43.0.0">
 </head>
 <body>
 <main class="wrap payout-columns-wrap">
@@ -172,10 +172,26 @@ Imam Mustakim 65414994165 25.000.000"></textarea>
 BNI WONDER / MUHAMMAD MAULANA (WD BERSIH)
 BRIMO / CHIKA AMALIA (WD BERSIH)
 BRIMO / GILANG ILHAM BINTANG (WD BERSIH)"></textarea>
-          <div class="toolbar column-toolbar">
-            <button class="primary" id="wdSaveDbBtn" type="button">Simpan Database</button>
+          <div class="toolbar column-toolbar wd-db-main-actions">
+            <button class="primary" id="wdSaveDbBtn" type="button">Tambah / Simpan</button>
+            <button class="secondary" id="wdReplaceDbBtn" type="button">Ganti Semua Database</button>
             <button class="secondary" id="wdPasteDbBtn" type="button">Tempel Database</button>
-            <button class="danger" id="wdClearDbInputBtn" type="button">Bersihkan</button>
+            <button class="danger" id="wdClearDbInputBtn" type="button">Bersihkan Input</button>
+          </div>
+
+          <div class="wd-db-manage">
+            <div class="wd-db-manage-head">
+              <div>
+                <strong>Daftar Database WD Bersih</strong>
+                <span>Hapus satu-satu atau hapus semua.</span>
+              </div>
+              <button class="danger small" id="wdDeleteAllBtn" type="button">Hapus Semua Database</button>
+            </div>
+
+            <input id="wdDbSearch" class="wd-db-search" type="text" placeholder="Cari nama database..." autocomplete="off">
+            <div class="wd-db-list" id="wdDbList">
+              <div class="wd-db-empty">Belum ada database.</div>
+            </div>
           </div>
         </div>
         <div id="wdDbStatus" class="message column-message">Database bersama: <strong>0</strong> nama • sinkron otomatis</div>
@@ -261,6 +277,6 @@ BRIMO / GILANG ILHAM BINTANG (WD BERSIH)"></textarea>
 
 </main>
 
-<script src="/pencairan-xpay.js?v=42.0.0" defer></script>
+<script src="/pencairan-xpay.js?v=43.0.0" defer></script>
 </body>
 </html>

@@ -1,35 +1,19 @@
-# TheLastMoon V42 — Excel Sama dengan Contoh1.xlsx
+# TheLastMoon V43 — Kelola Database WD Bersih
 
-Hasil Excel Data Pencairan disamakan dengan file contoh yang diberikan.
+DATABASE NAMA WD BERSIH sekarang bisa:
+- Tambah / Simpan nama baru
+- Cari database
+- Hapus satu-satu
+- Hapus semua database
+- Ganti semua database dengan daftar baru
 
-Format yang dipakai:
+Semua perubahan tetap disimpan di Cloudflare D1 shared `wd_bersih_names` dan tersinkron ke user lain sekitar 3 detik.
 
-- Sheet: Data
-- Font seluruh sel: Calibri 11 regular
-- Tidak bold
-- Tidak ada fill/background
-- Tidak ada border tambahan
-- Tidak ada AutoFilter
-- Tidak ada freeze header
-- Default row height: 15
-- Kolom A: lebar default Excel
-- Kolom B: width 11.140625
-- Kolom C: lebar default Excel
-- Kolom D: width 16.5703125
-- Kolom E: lebar default Excel
-- Amount: number format #,##0
-- Bank Code: General
-- Bank Account: Text (@), supaya leading zero aman
-- Bank Account Name: General
+API tambahan:
+POST /api/wd-bersih?action=delete
+POST /api/wd-bersih?action=clear
+POST /api/wd-bersih?action=replace
 
-Header:
-No | Amount | Bank Code | Bank Account | Bank Account Name
+Setelah deploy tekan Ctrl + Shift + R.
 
-Default nama file tetap:
-Nama Excel.xlsx
-
-Setelah deploy:
-Ctrl + Shift + R
-
-Health:
-v42-excel-match-contoh
+Health: v43-wd-database-manage
