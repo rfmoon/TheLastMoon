@@ -1,4 +1,4 @@
-const VERSION="v43-wd-database-manage";
+const VERSION="v45-wd-bersih-kotor-match-fix";
 const COOKIE_NAME="thelastmoon_session";
 const MAX_JSON_BYTES=1024*1024;
 
@@ -201,7 +201,7 @@ async function bulkUpsert(request,db,user){
 
 async function deleteOne(request,db){
   const body=await readJson(request);
-  const key=matchKey(body.key||"");
+  const key=storedKey(body.key||"");
   if(!key)throw new AppError(400,"Nama/key database tidak valid.","delete-key");
   const result=await db.prepare(`DELETE FROM wd_bersih_names WHERE match_key=?`).bind(key).run();
   if(Number(result.meta?.changes||0)===0)throw new AppError(404,"Database tidak ditemukan.","delete-not-found");
@@ -237,20 +237,37 @@ async function replaceAll(request,db,user){
   return json({success:true,total:unique.size,received:unique.size,revision:now,version:VERSION});
 }
 
-function extractName(fullText){
-  let name=cleanText(fullText,600);
-  const slash=name.indexOf("/");
-  if(slash!==-1)name=name.slice(slash+1);
+function canonicalName(value){
+  let name=cleanText(value,600);
+  if(!name)return "";
+
+  const slash=name.lastIndexOf("/");
+  if(slash!==-1){
+    name=name.slice(slash+1);
+  }
 
   return name
-    .replace(/\(\s*WD\s*BERSIH\s*\)/ig,"")
-    .replace(/\bWD\s*BERSIH\b/ig,"")
+    .replace(/\(\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\)/ig," ")
+    .replace(/\[\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\]/ig," ")
+    .replace(/\b(?:WD\s+)?(?:BERSIH|KOTOR)\b\s*$/ig," ")
+    .replace(/\s+/g," ")
     .trim()
     .slice(0,300);
 }
 
+function extractName(fullText){
+  return canonicalName(fullText);
+}
+
+function storedKey(value){
+  return cleanText(value,300)
+    .toUpperCase()
+    .replace(/\s+/g," ")
+    .trim();
+}
+
 function matchKey(value){
-  return cleanText(value,300).toUpperCase().replace(/\s+/g," ").trim();
+  return storedKey(canonicalName(value));
 }
 
 function cleanText(value,max){
