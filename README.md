@@ -1,38 +1,45 @@
-# TheLastMoon V45 — WD Bersih + Kotor Match Fix
+# TheLastMoon V46 — WD KAS Status Match Fix
 
-Perbaikan pencocokan DATABASE NAMA WD BERSIH untuk status BERSIH dan KOTOR.
-
-Contoh database:
-BCA / RISDA AMELIA (KOTOR)
-KAS BESAR DANAMON / IMAM MUSTAKIM ( BERSIH )
-
-Data Pencairan:
-RISDA AMELIA
-IMAM MUSTAKIM
-
-Sekarang format berikut dibersihkan hanya untuk MATCHING:
-- (BERSIH)
-- ( BERSIH )
-- WD BERSIH
-- (WD BERSIH)
-- (KOTOR)
-- ( KOTOR )
-- WD KOTOR
-- (WD KOTOR)
-- [BERSIH]
-- [KOTOR]
-
-Teks asli database tetap dipertahankan untuk output Docs Qris.
+Penyebab kasus 20 data hanya 13 ketemu:
+7 nama pertama memakai status KAS pada database, terutama `(KAS BERSIH)`.
 
 Contoh:
-BCA / RISDA AMELIA (KOTOR)
-akan dicocokkan sebagai:
-RISDA AMELIA
+KAS KECIL BCA / Ahmad Yani (KAS BERSIH)
+Data Pencairan: Ahmad Yani
 
-Data lama yang sudah tersimpan di D1 tidak perlu diinput ulang.
+V45 masih membaca status KAS itu sebagai bagian nama.
+V46 membuang status operasional hanya untuk MATCHING.
+
+Status yang sekarang didukung:
+- BERSIH
+- WD BERSIH
+- KOTOR
+- WD KOTOR
+- KAS BERSIH
+- KAS KECIL
+- KAS KECIL WD BERSIH
+- MANUAL TAMPUNG HUB
+
+Bentuk dengan tanda kurung/spasi juga didukung.
+
+Contoh:
+KAS BCA / Desi Nurul Hikmah ( KAS BERSIH )
+=> match key: DESI NURUL HIKMAH
+
+KAS KECIL BCA / Ahmad Yani (KAS BERSIH)
+=> match key: AHMAD YANI
+
+KAS BRI / ILHAM ( KAS KECIL WD BERSIH )
+=> match key: ILHAM
+
+Teks database asli tetap dipertahankan untuk output Docs Qris.
+Data D1 lama tidak perlu diinput ulang.
+
+Tes 20 data yang diberikan user:
+20 / 20 match.
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v45-wd-bersih-kotor-match-fix
+v46-wd-kas-status-match-fix

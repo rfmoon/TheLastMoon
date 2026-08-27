@@ -1523,13 +1523,31 @@ function wdCanonicalName(value){
     name=name.slice(slashIndex+1)
   }
 
-  // Status lama yang dianggap sama:
-  // ( BERSIH ), (BERSIH), ( WD BERSIH ), (WD BERSIH),
-  // WD BERSIH, atau BERSIH di bagian akhir.
+  // Status operasional tidak ikut dipakai untuk pencocokan nama.
+  // Contoh yang dibersihkan:
+  // (WD BERSIH), (BERSIH), (KOTOR), (KAS BERSIH),
+  // (KAS KECIL), (KAS KECIL WD BERSIH), (MANUAL TAMPUNG HUB).
+  const statusPattern=
+    "(?:"+
+      "(?:WD\\s*)?(?:BERSIH|KOTOR)"+
+      "|KAS\\s+BERSIH"+
+      "|KAS\\s+KECIL(?:\\s+WD\\s+BERSIH)?"+
+      "|MANUAL\\s+TAMPUNG\\s+HUB"+
+    ")";
+
   name=name
-    .replace(/\(\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\)/ig," ")
-    .replace(/\[\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\]/ig," ")
-    .replace(/\b(?:WD\s+)?(?:BERSIH|KOTOR)\b\s*$/ig," ")
+    .replace(
+      new RegExp("\\(\\s*"+statusPattern+"\\s*\\)\\s*$","ig"),
+      " "
+    )
+    .replace(
+      new RegExp("\\[\\s*"+statusPattern+"\\s*\\]\\s*$","ig"),
+      " "
+    )
+    .replace(
+      new RegExp("\\b"+statusPattern+"\\b\\s*$","ig"),
+      " "
+    )
     .replace(/\s+/g," ")
     .trim();
 
