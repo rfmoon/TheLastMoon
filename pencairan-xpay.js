@@ -1505,19 +1505,58 @@ let wdSyncTimer=null;
 let wdCurrentRows=[];
 let wdLegacyMigrationAttempted=false;
 
-function wdCleanEdges(value){return String(value??"").replace(/\u00A0/g," ").replace(/<br\s*\/?>/gi," ").trim()}
-function wdMatchKey(value){return wdCleanEdges(value).toUpperCase().replace(/\s+/g," ").trim()}
+function wdCleanEdges(value){
+  return String(value??"")
+    .replace(/\u00A0/g," ")
+    .replace(/<br\s*\/?>/gi," ")
+    .trim()
+}
+
+function wdCanonicalName(value){
+  let name=wdCleanEdges(value);
+  if(!name)return "";
+
+  // Jika formatnya BANK / NAMA, ambil bagian setelah slash TERAKHIR.
+  // Ini juga aman untuk data lama yang mempunyai prefix tambahan.
+  const slashIndex=name.lastIndexOf("/");
+  if(slashIndex!==-1){
+    name=name.slice(slashIndex+1)
+  }
+
+  // Status lama yang dianggap sama:
+  // ( BERSIH ), (BERSIH), ( WD BERSIH ), (WD BERSIH),
+  // WD BERSIH, atau BERSIH di bagian akhir.
+  name=name
+    .replace(/\(\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\)/ig," ")
+    .replace(/\[\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\]/ig," ")
+    .replace(/\b(?:WD\s+)?(?:BERSIH|KOTOR)\b\s*$/ig," ")
+    .replace(/\s+/g," ")
+    .trim();
+
+  return name
+}
+
+function wdMatchKey(value){
+  return wdCanonicalName(value)
+    .toUpperCase()
+    .replace(/\s+/g," ")
+    .trim()
+}
+
 function wdEscapeHtml(text){return String(text).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}
 
 function wdExtractDatabaseItem(line){
   const full=wdCleanEdges(line);
   if(!full)return null;
-  let name=full;
-  const slashIndex=name.indexOf("/");
-  if(slashIndex!==-1)name=name.slice(slashIndex+1);
-  name=name.replace(/\(\s*WD\s*BERSIH\s*\)/ig,"").replace(/\bWD\s*BERSIH\b/ig,"").trim();
+
+  const name=wdCanonicalName(full);
   if(!name)return null;
-  return{key:wdMatchKey(name),name:name.trim(),full}
+
+  return{
+    key:wdMatchKey(name),
+    name,
+    full
+  }
 }
 
 async function wdSharedApi(action="list",options={}){
@@ -1555,7 +1594,13 @@ function wdApplySharedItems(items,revision=0){
 
   wdSharedMap=new Map();
   for(const item of wdSharedItems){
-    wdSharedMap.set(wdMatchKey(item.name),item)
+    const canonicalKey=wdMatchKey(
+      item.name || item.full || ""
+    );
+
+    if(canonicalKey){
+      wdSharedMap.set(canonicalKey,item)
+    }
   }
 
   wdLastRevision=Number(revision||0);

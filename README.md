@@ -1,19 +1,38 @@
-# TheLastMoon V43 — Kelola Database WD Bersih
+# TheLastMoon V45 — WD Bersih + Kotor Match Fix
 
-DATABASE NAMA WD BERSIH sekarang bisa:
-- Tambah / Simpan nama baru
-- Cari database
-- Hapus satu-satu
-- Hapus semua database
-- Ganti semua database dengan daftar baru
+Perbaikan pencocokan DATABASE NAMA WD BERSIH untuk status BERSIH dan KOTOR.
 
-Semua perubahan tetap disimpan di Cloudflare D1 shared `wd_bersih_names` dan tersinkron ke user lain sekitar 3 detik.
+Contoh database:
+BCA / RISDA AMELIA (KOTOR)
+KAS BESAR DANAMON / IMAM MUSTAKIM ( BERSIH )
 
-API tambahan:
-POST /api/wd-bersih?action=delete
-POST /api/wd-bersih?action=clear
-POST /api/wd-bersih?action=replace
+Data Pencairan:
+RISDA AMELIA
+IMAM MUSTAKIM
 
-Setelah deploy tekan Ctrl + Shift + R.
+Sekarang format berikut dibersihkan hanya untuk MATCHING:
+- (BERSIH)
+- ( BERSIH )
+- WD BERSIH
+- (WD BERSIH)
+- (KOTOR)
+- ( KOTOR )
+- WD KOTOR
+- (WD KOTOR)
+- [BERSIH]
+- [KOTOR]
 
-Health: v43-wd-database-manage
+Teks asli database tetap dipertahankan untuk output Docs Qris.
+
+Contoh:
+BCA / RISDA AMELIA (KOTOR)
+akan dicocokkan sebagai:
+RISDA AMELIA
+
+Data lama yang sudah tersimpan di D1 tidak perlu diinput ulang.
+
+Setelah deploy:
+Ctrl + Shift + R
+
+Health:
+v45-wd-bersih-kotor-match-fix
