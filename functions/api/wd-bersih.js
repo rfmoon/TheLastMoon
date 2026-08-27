@@ -1,4 +1,4 @@
-const VERSION="v45-wd-bersih-kotor-match-fix";
+const VERSION="v46-wd-kas-status-match-fix";
 const COOKIE_NAME="thelastmoon_session";
 const MAX_JSON_BYTES=1024*1024;
 
@@ -246,10 +246,27 @@ function canonicalName(value){
     name=name.slice(slash+1);
   }
 
+  const statusPattern=
+    "(?:"+
+      "(?:WD\\s*)?(?:BERSIH|KOTOR)"+
+      "|KAS\\s+BERSIH"+
+      "|KAS\\s+KECIL(?:\\s+WD\\s+BERSIH)?"+
+      "|MANUAL\\s+TAMPUNG\\s+HUB"+
+    ")";
+
   return name
-    .replace(/\(\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\)/ig," ")
-    .replace(/\[\s*(?:WD\s*)?(?:BERSIH|KOTOR)\s*\]/ig," ")
-    .replace(/\b(?:WD\s+)?(?:BERSIH|KOTOR)\b\s*$/ig," ")
+    .replace(
+      new RegExp("\\(\\s*"+statusPattern+"\\s*\\)\\s*$","ig"),
+      " "
+    )
+    .replace(
+      new RegExp("\\[\\s*"+statusPattern+"\\s*\\]\\s*$","ig"),
+      " "
+    )
+    .replace(
+      new RegExp("\\b"+statusPattern+"\\b\\s*$","ig"),
+      " "
+    )
     .replace(/\s+/g," ")
     .trim()
     .slice(0,300);
