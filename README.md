@@ -1,45 +1,45 @@
-# TheLastMoon V46 — WD KAS Status Match Fix
+# TheLastMoon V47 — Data Pencairan Dual Format
 
-Penyebab kasus 20 data hanya 13 ketemu:
-7 nama pertama memakai status KAS pada database, terutama `(KAS BERSIH)`.
+Bagian `Data Pencairan` sekarang menerima 2 format.
 
-Contoh:
-KAS KECIL BCA / Ahmad Yani (KAS BERSIH)
-Data Pencairan: Ahmad Yani
-
-V45 masih membaca status KAS itu sebagai bagian nama.
-V46 membuang status operasional hanya untuk MATCHING.
-
-Status yang sekarang didukung:
-- BERSIH
-- WD BERSIH
-- KOTOR
-- WD KOTOR
-- KAS BERSIH
-- KAS KECIL
-- KAS KECIL WD BERSIH
-- MANUAL TAMPUNG HUB
-
-Bentuk dengan tanda kurung/spasi juga didukung.
+Format lama:
+NAMA | NOMOR REKENING | NOMINAL
 
 Contoh:
-KAS BCA / Desi Nurul Hikmah ( KAS BERSIH )
-=> match key: DESI NURUL HIKMAH
+Fabian Aditya 54564545454 25.000.000
 
-KAS KECIL BCA / Ahmad Yani (KAS BERSIH)
-=> match key: AHMAD YANI
+Format baru:
+NOMINAL | KODE BANK | NOMOR REKENING | NAMA
 
-KAS BRI / ILHAM ( KAS KECIL WD BERSIH )
-=> match key: ILHAM
+Contoh:
+25.000.000    6    54564545454    Fabian Aditya
 
-Teks database asli tetap dipertahankan untuk output Docs Qris.
-Data D1 lama tidak perlu diinput ulang.
+Format baru dapat ditempel dari Spreadsheet menggunakan TAB,
+dan juga dapat terbaca jika dipisahkan spasi.
 
-Tes 20 data yang diberikan user:
-20 / 20 match.
+Alur:
+1. Nama + nomor rekening tetap dicocokkan dengan database rekening.
+2. Kode bank pada format baru divalidasi.
+3. Hasil tetap memakai kode bank dari database master agar konsisten.
+4. Output Copy dan Excel TIDAK berubah.
+
+Excel tetap:
+No
+Amount
+Bank Code
+Bank Account
+Bank Account Name
+
+Format Excel tetap mengikuti Contoh1.xlsx:
+- Calibri 11 regular
+- tidak bold
+- tidak ada filter
+- tidak freeze
+- Bank Account sebagai Text
+- default nama file: Nama Excel.xlsx
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v46-wd-kas-status-match-fix
+v47-data-pencairan-dual-format

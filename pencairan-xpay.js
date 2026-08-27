@@ -579,56 +579,236 @@ function invalidTransaction(line,error,detail={}){
 
 function parseTransactionLine(line){
   const clean=String(line ?? "").trim();
-  if(!clean) return invalidTransaction(line,"Baris kosong");
+  if(!clean){
+    return invalidTransaction(
+      line,
+      "Baris kosong"
+    );
+  }
 
-  let parts=clean.split(/\t+/).map(v=>v.trim()).filter(Boolean);
-  if(parts.length<3 && clean.includes(";")){
-    parts=clean.split(";").map(v=>v.trim()).filter(Boolean);
+  let parts=clean
+    .split(/\t+/)
+    .map(v=>v.trim())
+    .filter(Boolean);
+
+  if(
+    parts.length<3 &&
+    clean.includes(";")
+  ){
+    parts=clean
+      .split(";")
+      .map(v=>v.trim())
+      .filter(Boolean);
   }
 
   let amountRaw="";
   let account="";
   let inputName="";
+  let inputBankCode="";
+  let format="nama-rekening-nominal";
 
-  if(parts.length>=3){
-    amountRaw=parts[parts.length-1];
-    account=cleanAccount(parts[parts.length-2]);
-    inputName=parts.slice(0,-2).join(" ").trim();
-  }else{
-    const tokens=clean.split(/\s+/).filter(Boolean);
-    if(tokens.length<3){
-      return invalidTransaction(line,"Format harus: NAMA NOMOR_REKENING NOMINAL");
+  // ======================================================
+  // FORMAT BARU:
+  // NOMINAL | KODE BANK | NOMOR REKENING | NAMA
+  //
+  // Contoh:
+  // 25.000.000    6    54564545454    Fabian Aditya
+  // ======================================================
+  if(parts.length>=4){
+    const possibleAmount=
+      normalizeAmount(parts[0]);
+
+    const possibleCode=
+      String(parts[1] || "")
+        .replace(/[^\d]/g,"");
+
+    const possibleAccount=
+      cleanAccount(parts[2]);
+
+    if(
+      possibleAmount.numeric &&
+      /^\d+$/.test(possibleCode) &&
+      possibleAccount &&
+      /^\d+$/.test(possibleAccount)
+    ){
+      format="nominal-kode-rekening-nama";
+      amountRaw=parts[0];
+      inputBankCode=possibleCode;
+      account=possibleAccount;
+      inputName=parts
+        .slice(3)
+        .join(" ")
+        .trim();
     }
+  }
 
-    amountRaw=tokens[tokens.length-1];
-    account=cleanAccount(tokens[tokens.length-2]);
-    inputName=tokens.slice(0,-2).join(" ").trim();
+  // ======================================================
+  // FORMAT BARU — fallback teks satu spasi:
+  // 25.000.000 6 54564545454 Fabian Aditya
+  // ======================================================
+  if(
+    !amountRaw &&
+    !account &&
+    !inputName
+  ){
+    const newFormatMatch=clean.match(
+      /^([Rp\s\d.,]+?)\s+(\d+)\s+(\d+)\s+(.+)$/i
+    );
+
+    if(newFormatMatch){
+      const possibleAmount=
+        normalizeAmount(
+          newFormatMatch[1]
+        );
+
+      if(possibleAmount.numeric){
+        format="nominal-kode-rekening-nama";
+        amountRaw=newFormatMatch[1];
+        inputBankCode=String(
+          newFormatMatch[2]
+        ).trim();
+        account=cleanAccount(
+          newFormatMatch[3]
+        );
+        inputName=String(
+          newFormatMatch[4]
+        ).trim();
+      }
+    }
+  }
+
+  // ======================================================
+  // FORMAT LAMA:
+  // NAMA | NOMOR REKENING | NOMINAL
+  //
+  // Contoh:
+  // Fabian Aditya 54564545454 25.000.000
+  // ======================================================
+  if(
+    !amountRaw &&
+    !account &&
+    !inputName
+  ){
+    if(parts.length>=3){
+      amountRaw=
+        parts[parts.length-1];
+
+      account=cleanAccount(
+        parts[parts.length-2]
+      );
+
+      inputName=parts
+        .slice(0,-2)
+        .join(" ")
+        .trim();
+    }else{
+      const tokens=clean
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if(tokens.length<3){
+        return invalidTransaction(
+          line,
+          "Format tidak dikenali. Gunakan NAMA REKENING NOMINAL atau NOMINAL KODE_BANK REKENING NAMA."
+        );
+      }
+
+      amountRaw=
+        tokens[tokens.length-1];
+
+      account=cleanAccount(
+        tokens[tokens.length-2]
+      );
+
+      inputName=tokens
+        .slice(0,-2)
+        .join(" ")
+        .trim();
+    }
+  }
+
+  if(!inputName){
+    return invalidTransaction(
+      line,
+      "Nama rekening tidak ditemukan",
+      {account}
+    );
   }
 
   if(!account){
-    return invalidTransaction(line,"Nomor rekening tidak ditemukan",{name:inputName});
+    return invalidTransaction(
+      line,
+      "Nomor rekening tidak ditemukan",
+      {name:inputName}
+    );
   }
 
-  const amount=normalizeAmount(amountRaw);
+  const amount=
+    normalizeAmount(amountRaw);
+
   if(!amount.numeric){
-    return invalidTransaction(line,"Nominal wajib diisi",{account,name:inputName});
+    return invalidTransaction(
+      line,
+      "Nominal wajib diisi",
+      {
+        account,
+        name:inputName
+      }
+    );
   }
 
-  const match=findDatabaseMatch(inputName,account);
+  const match=
+    findDatabaseMatch(
+      inputName,
+      account
+    );
+
   if(!match){
     return invalidTransaction(
       line,
       "Rekening belum ada di database",
-      {account,name:inputName}
+      {
+        account,
+        name:inputName
+      }
     );
   }
 
-  const bank=bankByCode(match.row.bankCode);
+  // Jika format baru menyertakan kode bank,
+  // validasi kodenya. Output tetap memakai kode dari
+  // database supaya hasil Excel konsisten dengan data master.
+  if(
+    format==="nominal-kode-rekening-nama" &&
+    inputBankCode
+  ){
+    const inputBank=
+      bankByCode(inputBankCode);
+
+    if(!inputBank){
+      return invalidTransaction(
+        line,
+        "Kode bank input tidak valid",
+        {
+          account,
+          name:inputName
+        }
+      );
+    }
+  }
+
+  const bank=
+    bankByCode(
+      match.row.bankCode
+    );
+
   if(!bank){
     return invalidTransaction(
       line,
       "Kode bank database tidak valid",
-      {account,name:match.row.name}
+      {
+        account,
+        name:match.row.name
+      }
     );
   }
 
@@ -641,10 +821,10 @@ function parseTransactionLine(line){
     name:match.row.name,
     valid:true,
     error:"",
-    matchMethod:match.method
+    matchMethod:match.method,
+    inputFormat:format
   };
 }
-
 function processTransactions(){
   const lines=$("inputData").value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   if(!lines.length){
@@ -1162,8 +1342,8 @@ $("clearInputBtn").addEventListener("click",()=>{
 
 $("sampleBtn").addEventListener("click",()=>{
   $("inputData").value=[
-    "Fabian Aditya 46545464564 25.000.000",
-    "Imam Mustakim 65414994165 25.000.000"
+    "Fabian Aditya 54564545454 25.000.000",
+    "25.000.000\t6\t54564545454\tFabian Aditya"
   ].join("\n");
   processTransactions();
 });
