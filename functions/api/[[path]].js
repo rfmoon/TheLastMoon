@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v49-compact-xpay-dropdown";
+const VERSION = "v50-dashboard-clean-gif-background";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -103,6 +103,10 @@ async function routeRequest(request, env, url) {
 
   if (url.pathname === "/api/public-settings" && request.method === "GET") {
     return json(await readAppearance(env.DB));
+  }
+
+  if (url.pathname === "/api/background-media" && request.method === "GET") {
+    return serveBackgroundMedia(env.DB);
   }
 
   if (url.pathname.startsWith("/api/external/") && request.method === "OPTIONS") {
@@ -260,6 +264,11 @@ async function routeRequest(request, env, url) {
   if (url.pathname === "/api/settings/background" && request.method === "PUT") {
     requireMaster(user);
     return updateBackground(request, env.DB, user);
+  }
+
+  if (url.pathname === "/api/settings/background-upload" && request.method === "POST") {
+    requireMaster(user);
+    return uploadBackgroundMedia(request, env.DB, user);
   }
 
   if (url.pathname === "/api/pencairan-xpay/accounts" && request.method === "GET") {
@@ -941,20 +950,234 @@ async function upsertAppSetting(db, name, value, userId) {
   `).bind(name, String(value), Date.now(), userId).run();
 }
 
+let backgroundMediaSchemaReady=false;
+const MAX_BACKGROUND_MEDIA_BYTES=1700000;
+
+async function ensureBackgroundMediaSchema(db){
+  if(backgroundMediaSchemaReady)return;
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS background_media (
+      id INTEGER PRIMARY KEY,
+      mime_type TEXT NOT NULL,
+      filename TEXT NOT NULL DEFAULT '',
+      data BLOB NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      updated_by INTEGER
+    )
+  `).run();
+
+  backgroundMediaSchemaReady=true;
+}
+
+async function uploadBackgroundMedia(
+  request,
+  db,
+  user
+){
+  await ensureBackgroundMediaSchema(db);
+
+  const mime=String(
+    request.headers.get("Content-Type") || ""
+  ).split(";")[0].trim().toLowerCase();
+
+  const allowed=new Set([
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ]);
+
+  if(!allowed.has(mime)){
+    throw new AppError(
+      400,
+      "Format file harus GIF, JPG, PNG, atau WebP.",
+      "background-upload-type"
+    );
+  }
+
+  const announcedSize=Number(
+    request.headers.get("Content-Length") || 0
+  );
+
+  if(
+    announcedSize &&
+    announcedSize>MAX_BACKGROUND_MEDIA_BYTES
+  ){
+    throw new AppError(
+      413,
+      "Ukuran file maksimal 1.7 MB.",
+      "background-upload-size"
+    );
+  }
+
+  const buffer=await request.arrayBuffer();
+
+  if(
+    !buffer.byteLength ||
+    buffer.byteLength>MAX_BACKGROUND_MEDIA_BYTES
+  ){
+    throw new AppError(
+      413,
+      "Ukuran file maksimal 1.7 MB.",
+      "background-upload-size"
+    );
+  }
+
+  let filename="background";
+
+  try{
+    filename=decodeURIComponent(
+      String(
+        request.headers.get(
+          "X-Background-Filename"
+        ) || "background"
+      )
+    ).slice(0,180);
+  }catch(_){
+    filename="background";
+  }
+
+  const now=Date.now();
+
+  await db.prepare(`
+    INSERT INTO background_media (
+      id,
+      mime_type,
+      filename,
+      data,
+      size_bytes,
+      updated_at,
+      updated_by
+    )
+    VALUES (1, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      mime_type = excluded.mime_type,
+      filename = excluded.filename,
+      data = excluded.data,
+      size_bytes = excluded.size_bytes,
+      updated_at = excluded.updated_at,
+      updated_by = excluded.updated_by
+  `).bind(
+    mime,
+    filename,
+    new Uint8Array(buffer),
+    buffer.byteLength,
+    now,
+    user.id
+  ).run();
+
+  return json({
+    success:true,
+    filename,
+    mime,
+    size:buffer.byteLength,
+    url:`/api/background-media?v=${now}`
+  });
+}
+
+async function serveBackgroundMedia(db){
+  await ensureBackgroundMediaSchema(db);
+
+  const row=await db.prepare(`
+    SELECT
+      mime_type AS mime,
+      filename,
+      data,
+      size_bytes AS size,
+      updated_at AS updatedAt
+    FROM background_media
+    WHERE id = 1
+    LIMIT 1
+  `).first();
+
+  if(!row || !row.data){
+    throw new AppError(
+      404,
+      "Background upload belum tersedia.",
+      "background-media-empty"
+    );
+  }
+
+  const body=
+    row.data instanceof ArrayBuffer
+      ? row.data
+      : row.data.buffer
+        ? row.data.buffer.slice(
+            row.data.byteOffset || 0,
+            (row.data.byteOffset || 0) +
+              (row.data.byteLength || row.data.length || 0)
+          )
+        : row.data;
+
+  return new Response(body,{
+    status:200,
+    headers:{
+      "Content-Type":
+        String(row.mime || "application/octet-stream"),
+      "Content-Length":
+        String(Number(row.size || 0)),
+      "Cache-Control":
+        "public, max-age=31536000, immutable",
+      "X-Content-Type-Options":"nosniff"
+    }
+  });
+}
+
 function normalizeBackgroundUrls(input) {
-  const values = Array.isArray(input) ? input : String(input || "").split(/\n|,/);
+  const values = Array.isArray(input)
+    ? input
+    : String(input || "").split(/\n|,/);
+
   const seen = new Set();
   const result = [];
+
   for (const raw of values) {
     const value = String(raw || "").trim();
-    if (!value || seen.has(value)) continue;
+
+    if (!value || seen.has(value)) {
+      continue;
+    }
+
+    if (
+      value.startsWith(
+        "/api/background-media"
+      )
+    ) {
+      seen.add(value);
+      result.push(value);
+
+      if (result.length >= 20) break;
+      continue;
+    }
+
     let parsed;
-    try { parsed = new URL(value); } catch (_) { throw new AppError(400, `Format link background tidak valid: ${value}`, "background-url"); }
-    if (parsed.protocol !== "https:") throw new AppError(400, `Link background wajib menggunakan HTTPS: ${value}`, "background-protocol");
+
+    try {
+      parsed = new URL(value);
+    } catch (_) {
+      throw new AppError(
+        400,
+        `Format link background tidak valid: ${value}`,
+        "background-url"
+      );
+    }
+
+    if (parsed.protocol !== "https:") {
+      throw new AppError(
+        400,
+        `Link background wajib menggunakan HTTPS: ${value}`,
+        "background-protocol"
+      );
+    }
+
     seen.add(value);
     result.push(value);
+
     if (result.length >= 20) break;
   }
+
   return result;
 }
 
