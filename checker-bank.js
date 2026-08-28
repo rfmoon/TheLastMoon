@@ -34,7 +34,50 @@
   }
 
   function normalizeAccount(value='') {
-    return String(value).trim().replace(/^'+/, '').replace(/[^0-9]/g, '');
+    let s = String(value ?? '')
+      .trim()
+      .replace(/^'+/, '')
+      .replace(/\s+/g, '');
+
+    if (!s) return '';
+
+    // Angka biasa.
+    if (/^\d+$/.test(s)) return s;
+
+    // Jika Google Sheets mengirim angka seperti 213165145146.0
+    if (/^\d+\.0+$/.test(s)) {
+      return s.replace(/\.0+$/, '');
+    }
+
+    // Jika Google Sheets mengirim scientific notation.
+    // Contoh: 2.13165145146E+11 -> 213165145146
+    const sci = s.match(/^(\d+)(?:\.(\d+))?[eE]\+?(-?\d+)$/);
+    if (sci) {
+      const intPart = sci[1] || '';
+      const fracPart = sci[2] || '';
+      const exponent = Number(sci[3] || 0);
+
+      if (Number.isInteger(exponent)) {
+        const digits = intPart + fracPart;
+        const decimalPos = intPart.length + exponent;
+
+        if (decimalPos >= digits.length) {
+          return digits + '0'.repeat(decimalPos - digits.length);
+        }
+
+        if (decimalPos > 0) {
+          const whole = digits.slice(0, decimalPos);
+          const fraction = digits.slice(decimalPos);
+
+          if (/^0*$/.test(fraction)) {
+            return whole;
+          }
+        }
+      }
+    }
+
+    // Format dengan pemisah titik/spasi/dash.
+    return s.replace(/[^0-9]/g, '');
   }
 
   function normalizeName(value='') {
@@ -45,6 +88,22 @@
       .replace(/[^A-Z0-9]+/g, ' ')
       .trim()
       .replace(/\s+/g, ' ');
+  }
+
+  function cleanInputName(value='') {
+    let s = String(value ?? '').trim();
+
+    // Pola umum dari pesan operasional:
+    // "YUNITA TRIANA, N" -> "YUNITA TRIANA"
+    // "YUNITA TRIANA ,N" -> "YUNITA TRIANA"
+    s = s
+      .replace(/,\s*N\s*$/i, '')
+      .replace(/\s+\bN\s*$/i, '')
+      .replace(/^[\s:,-]+|[\s:,-]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return s;
   }
 
   async function api(path, options={}) {
@@ -128,9 +187,13 @@
         masterSheetConfig.classList.add('hidden');
         userSheetInfo.classList.remove('hidden');
       }
+
+      // Otomatis baca BANK saat Checker dibuka.
+      // Tombol BACA SHEET BANK tetap tersedia untuk refresh manual.
+      await loadBankSheet();
     } catch (error) {
       setLoadStatus(error.message, 'err');
-      loadBtn.disabled = true;
+      loadBtn.disabled = false;
     }
   }
 
@@ -159,6 +222,9 @@
         'Link berhasil disimpan. User biasa tetap tidak dapat melihat link ini.',
         'ok'
       );
+
+      // Setelah link diganti, langsung refresh database BANK.
+      await loadBankSheet();
     } catch (error) {
       setSaveStatus(error.message, 'err');
     } finally {
@@ -244,13 +310,13 @@
       if (tabs.length >= 3) {
         return {
           bank: tabs[0],
-          name: tabs.slice(1, -1).join(' ').trim(),
+          name: cleanInputName(tabs.slice(1, -1).join(' ').trim()),
           account
         };
       }
 
       const d = detectBankPrefix(tabs[0]);
-      return { bank: d.bank, name: d.rest, account };
+      return { bank: d.bank, name: cleanInputName(d.rest), account };
     }
 
     // Format satu baris: BCA Muhammad Rama Rusyana 1790399273
@@ -261,20 +327,46 @@
     if (!account) return null;
     const before = s.slice(0, m.index).trim();
     const d = detectBankPrefix(before);
-    return { bank: d.bank, name: d.rest, account };
+    return { bank: d.bank, name: cleanInputName(d.rest), account };
   }
 
   function findMatch(item) {
-    // BANK dari data tempelan TIDAK ikut dicocokkan karena sheet BANK hanya punya:
-    // A = Nama, B = Nomor Rekening, C = Status.
-    // Agar benar-benar "data yang sama", Nama + Nomor Rekening harus sama.
+    // Sheet BANK:
+    // A = Nama Rekening
+    // B = Nomor Rekening
+    // C = Status
+    //
+    // BANK dari tempelan hanya untuk ditampilkan.
+    // Match tetap berdasarkan NAMA + NOMOR REKENING.
     const account = normalizeAccount(item.account);
-    const name = normalizeName(item.name);
+    const name = normalizeName(
+      cleanInputName(item.name)
+    );
+
     if (!account || !name) return null;
+
+    // Utama: nama + nomor harus sama.
+    const exact = bankRows.find(r =>
+      normalizeAccount(r.account) === account &&
+      normalizeName(r.name) === name
+    );
+
+    if (exact) return exact;
+
+    // Toleransi hanya untuk karakter/noise yang tidak bermakna.
+    // Contoh "ROSITA," atau "YUNITA TRIANA, N".
+    const cleanedName = normalizeName(
+      cleanInputName(
+        String(item.name || '')
+          .replace(/[.,;:]+$/g, '')
+      )
+    );
+
+    if (!cleanedName) return null;
 
     return bankRows.find(r =>
       normalizeAccount(r.account) === account &&
-      normalizeName(r.name) === name
+      normalizeName(r.name) === cleanedName
     ) || null;
   }
 

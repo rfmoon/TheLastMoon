@@ -1,45 +1,40 @@
-# TheLastMoon V47 — Data Pencairan Dual Format
+# TheLastMoon V48 — Checker BANK Flexible Match
 
-Bagian `Data Pencairan` sekarang menerima 2 format.
+Perbaikan Checker BANK.
 
-Format lama:
-NAMA | NOMOR REKENING | NOMINAL
+Sheet BANK tetap dibaca:
+A = Nama Rekening
+B = Nomor Rekening
+C = Status / Keterangan
+
+Contoh database:
+ROSITA | 213165145146 | REKENING (AKTIF)
+
+Tempelan:
+BCA ROSITA 213165145146
+
+Sekarang terbaca.
+
+Tambahan:
+- Checker otomatis membaca Sheet BANK saat halaman dibuka.
+- Setelah Master mengganti link Spreadsheet, database otomatis dibaca ulang.
+- Format chat seperti:
+  `BCA YUNITA TRIANA, N 46545465`
+  dibersihkan menjadi nama `YUNITA TRIANA`.
+- Nomor rekening dari Google Sheets lebih tahan jika terbaca:
+  `213165145146`
+  `213165145146.0`
+  atau scientific notation.
+- Match tetap berdasarkan Nama + Nomor Rekening.
+- BANK pada tempelan tidak ikut dicocokkan karena Sheet BANK hanya A:B:C.
 
 Contoh:
-Fabian Aditya 54564545454 25.000.000
-
-Format baru:
-NOMINAL | KODE BANK | NOMOR REKENING | NAMA
-
-Contoh:
-25.000.000    6    54564545454    Fabian Aditya
-
-Format baru dapat ditempel dari Spreadsheet menggunakan TAB,
-dan juga dapat terbaca jika dipisahkan spasi.
-
-Alur:
-1. Nama + nomor rekening tetap dicocokkan dengan database rekening.
-2. Kode bank pada format baru divalidasi.
-3. Hasil tetap memakai kode bank dari database master agar konsisten.
-4. Output Copy dan Excel TIDAK berubah.
-
-Excel tetap:
-No
-Amount
-Bank Code
-Bank Account
-Bank Account Name
-
-Format Excel tetap mengikuti Contoh1.xlsx:
-- Calibri 11 regular
-- tidak bold
-- tidak ada filter
-- tidak freeze
-- Bank Account sebagai Text
-- default nama file: Nama Excel.xlsx
+BCA ROSITA 213165145146
+-> ROSITA + 213165145146
+-> REKENING (AKTIF)
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v47-data-pencairan-dual-format
+v48-checker-flexible-match
