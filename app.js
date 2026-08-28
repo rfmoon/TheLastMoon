@@ -242,15 +242,26 @@ function renderMenu() {
 
   $("#menuList").innerHTML = roots.map(menu => {
     const children = state.menus.filter(child => child.parentId === menu.id);
+    const hasChildren = children.length > 0;
+    const childIsActive = children.some(child => child.id === state.currentMenu);
 
     return `
-      <div class="menu-group">
-        <button class="menu-item" type="button" data-menu="${escapeHtml(menu.id)}">
+      <div
+        class="menu-group ${childIsActive ? "open" : ""}"
+        data-menu-group-wrap="${escapeHtml(menu.id)}">
+
+        <button
+          class="menu-item ${childIsActive ? "group-active" : ""}"
+          type="button"
+          ${hasChildren
+            ? `data-menu-group="${escapeHtml(menu.id)}" aria-expanded="${childIsActive ? "true" : "false"}"`
+            : `data-menu="${escapeHtml(menu.id)}"`}>
           <span class="mi">${escapeHtml(menu.icon)}</span>
-          <span>${escapeHtml(menu.label)}</span>
+          <span class="menu-label">${escapeHtml(menu.label)}</span>
+          ${hasChildren ? `<span class="menu-chevron">⌄</span>` : ""}
         </button>
 
-        ${children.length ? `
+        ${hasChildren ? `
           <div class="submenu">
             ${children.map(child => `
               <button class="submenu-item" type="button" data-menu="${escapeHtml(child.id)}">
@@ -267,6 +278,23 @@ function renderMenu() {
   $$("[data-menu]").forEach(button => {
     button.addEventListener("click", () => navigate(button.dataset.menu));
   });
+
+  $$("[data-menu-group]").forEach(button => {
+    button.addEventListener("click", () => {
+      const groupId = button.dataset.menuGroup;
+      const wrapper = document.querySelector(
+        `[data-menu-group-wrap="${CSS.escape(groupId)}"]`
+      );
+
+      if (!wrapper) return;
+
+      const isOpen = wrapper.classList.toggle("open");
+      button.setAttribute(
+        "aria-expanded",
+        isOpen ? "true" : "false"
+      );
+    });
+  });
 }
 
 async function navigate(menuId) {
@@ -278,6 +306,23 @@ async function navigate(menuId) {
   $$("[data-menu]").forEach(button => {
     button.classList.toggle("active", button.dataset.menu === menuId);
   });
+
+  if (menu.parentId) {
+    const wrapper = document.querySelector(
+      `[data-menu-group-wrap="${CSS.escape(menu.parentId)}"]`
+    );
+    const groupButton = document.querySelector(
+      `[data-menu-group="${CSS.escape(menu.parentId)}"]`
+    );
+
+    if (wrapper) wrapper.classList.add("open");
+
+    if (groupButton) {
+      groupButton.classList.add("group-active");
+      groupButton.setAttribute("aria-expanded", "true");
+    }
+  }
+
   closeSidebar();
 
   if (menuId === "dashboard") return renderDashboard();
@@ -295,7 +340,8 @@ async function navigate(menuId) {
 
 function renderDashboard() {
   const accessible = state.menus.filter(menu =>
-    !["dashboard", "settings", "user-admin"].includes(menu.id)
+    !["dashboard", "settings", "user-admin"].includes(menu.id) &&
+    !menu.groupOnly
   );
 
   $("#pageContent").innerHTML = `
@@ -927,7 +973,9 @@ function openUserForm(user = null) {
   hideMessage("#userMessage");
 
   const assignableMenus = state.menus.filter(menu =>
-    !["dashboard", "settings", "user-admin"].includes(menu.id)
+    !["dashboard", "settings", "user-admin"].includes(menu.id) &&
+    menu.assignable !== false &&
+    !menu.groupOnly
   );
 
   $("#permissionGrid").innerHTML = assignableMenus.map(menu => `

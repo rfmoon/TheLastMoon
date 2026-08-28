@@ -1,40 +1,31 @@
-# TheLastMoon V48 — Checker BANK Flexible Match
+# TheLastMoon V49 — Compact Sidebar + XPAY Dropdown
 
-Perbaikan Checker BANK.
+Sidebar sekarang lebih kecil dan rapat.
 
-Sheet BANK tetap dibaca:
-A = Nama Rekening
-B = Nomor Rekening
-C = Status / Keterangan
+XPAY menjadi satu dropdown:
 
-Contoh database:
-ROSITA | 213165145146 | REKENING (AKTIF)
+XPAY
+- Xpay Biaya & Settlement
+- Xpay Selisih Checker
+- Pencairan XPAY
 
-Tempelan:
-BCA ROSITA 213165145146
+Nama yang berubah:
+Xpay Checker -> Xpay Biaya & Settlement
+Cari Selisih XPAY -> Xpay Selisih Checker
+Pencairan XPAY -> tetap
 
-Sekarang terbaca.
+Klik XPAY untuk buka/tutup pilihan.
+Jika salah satu submenu aktif, dropdown otomatis tetap terbuka.
 
-Tambahan:
-- Checker otomatis membaca Sheet BANK saat halaman dibuka.
-- Setelah Master mengganti link Spreadsheet, database otomatis dibaca ulang.
-- Format chat seperti:
-  `BCA YUNITA TRIANA, N 46545465`
-  dibersihkan menjadi nama `YUNITA TRIANA`.
-- Nomor rekening dari Google Sheets lebih tahan jika terbaca:
-  `213165145146`
-  `213165145146.0`
-  atau scientific notation.
-- Match tetap berdasarkan Nama + Nomor Rekening.
-- BANK pada tempelan tidak ikut dicocokkan karena Sheet BANK hanya A:B:C.
+Permission lama tetap memakai ID yang sama:
+xpay-checker
+xpay-diff
+pencairan-xpay
 
-Contoh:
-BCA ROSITA 213165145146
--> ROSITA + 213165145146
--> REKENING (AKTIF)
+Jadi user tidak perlu diatur ulang.
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v48-checker-flexible-match
+v49-compact-xpay-dropdown
