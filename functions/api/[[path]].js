@@ -1,10 +1,12 @@
 const MENUS = Object.freeze([
   { id: "dashboard", label: "Dashboard", icon: "▦", always: true },
   { id: "checker", label: "Checker", icon: "✓", assignable: true },
-  { id: "xpay-checker", label: "Xpay Checker", icon: "◫", assignable: true },
-  { id: "xpay-diff", label: "Cari Selisih XPAY", icon: "≠", assignable: true },
-  { id: "pencairan", label: "Pencairan", icon: "⇄", assignable: true },
-  { id: "pencairan-xpay", label: "Pencairan XPAY", icon: "▤", parentId: "pencairan", assignable: true },
+
+  { id: "xpay", label: "XPAY", icon: "⇄", groupOnly: true },
+  { id: "xpay-checker", label: "Xpay Biaya & Settlement", icon: "◫", parentId: "xpay", assignable: true },
+  { id: "xpay-diff", label: "Xpay Selisih Checker", icon: "≠", parentId: "xpay", assignable: true },
+  { id: "pencairan-xpay", label: "Pencairan XPAY", icon: "▤", parentId: "xpay", assignable: true },
+
   { id: "biaya", label: "Biaya", icon: "◈", assignable: true },
   { id: "list-data", label: "List Data", icon: "☷", assignable: true },
   { id: "hasil-result", label: "Hasil Result", icon: "◎", assignable: true },
@@ -16,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v48-checker-flexible-match";
+const VERSION = "v49-compact-xpay-dropdown";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3192,13 +3194,41 @@ function menusForUser(user) {
   if (isMaster(user)) return MENUS.map(publicMenu);
 
   const permissions = safePermissions(user.permissions);
+
+  const visibleIds = new Set(
+    MENUS
+      .filter(menu =>
+        menu.always ||
+        (menu.assignable && permissions.includes(menu.id))
+      )
+      .map(menu => menu.id)
+  );
+
+  for (const menu of MENUS) {
+    if (!menu.groupOnly) continue;
+
+    const hasVisibleChild = MENUS.some(child =>
+      child.parentId === menu.id &&
+      visibleIds.has(child.id)
+    );
+
+    if (hasVisibleChild) visibleIds.add(menu.id);
+  }
+
   return MENUS
-    .filter(menu => menu.always || (menu.assignable && permissions.includes(menu.id)))
+    .filter(menu => visibleIds.has(menu.id))
     .map(publicMenu);
 }
 
 function publicMenu(menu) {
-  return { id: menu.id, label: menu.label, icon: menu.icon, parentId: menu.parentId || null };
+  return {
+    id: menu.id,
+    label: menu.label,
+    icon: menu.icon,
+    parentId: menu.parentId || null,
+    groupOnly: Boolean(menu.groupOnly),
+    assignable: Boolean(menu.assignable)
+  };
 }
 
 function publicUser(user) {
