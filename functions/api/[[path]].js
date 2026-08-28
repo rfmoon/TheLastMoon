@@ -16,7 +16,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v47-data-pencairan-dual-format";
+const VERSION = "v48-checker-flexible-match";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -2902,10 +2902,59 @@ function parseCsv(text) {
 }
 
 function normalizeCheckerAccount(value) {
-  return String(value || "")
+  let s = String(value ?? "")
     .trim()
     .replace(/^'+/, "")
-    .replace(/[^0-9]/g, "");
+    .replace(/\s+/g, "");
+
+  if (!s) return "";
+
+  if (/^\d+$/.test(s)) {
+    return s;
+  }
+
+  // Google Sheets dapat mengembalikan angka rekening sebagai 12345.0.
+  if (/^\d+\.0+$/.test(s)) {
+    return s.replace(/\.0+$/, "");
+  }
+
+  // Atau scientific notation pada kolom yang tidak Plain Text.
+  const sci = s.match(
+    /^(\d+)(?:\.(\d+))?[eE]\+?(-?\d+)$/
+  );
+
+  if (sci) {
+    const intPart = sci[1] || "";
+    const fracPart = sci[2] || "";
+    const exponent = Number(sci[3] || 0);
+
+    if (Number.isInteger(exponent)) {
+      const digits = intPart + fracPart;
+      const decimalPos =
+        intPart.length + exponent;
+
+      if (decimalPos >= digits.length) {
+        return digits +
+          "0".repeat(
+            decimalPos - digits.length
+          );
+      }
+
+      if (decimalPos > 0) {
+        const whole =
+          digits.slice(0, decimalPos);
+
+        const fraction =
+          digits.slice(decimalPos);
+
+        if (/^0*$/.test(fraction)) {
+          return whole;
+        }
+      }
+    }
+  }
+
+  return s.replace(/[^0-9]/g, "");
 }
 
 function normalizeCheckerName(value) {
