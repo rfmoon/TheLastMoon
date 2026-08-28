@@ -1,31 +1,50 @@
-# TheLastMoon V49 — Compact Sidebar + XPAY Dropdown
+# TheLastMoon V50 — Dashboard Clean + GIF Background
 
-Sidebar sekarang lebih kecil dan rapat.
+## Dashboard
 
-XPAY menjadi satu dropdown:
+Dihapus dari Dashboard:
+- AKTIF / jumlah menu
+- ONLINE / status sistem
+- MASTER / tingkat akses
+- AMAN / masa sesi login
+- seluruh bagian Akses cepat
 
-XPAY
-- Xpay Biaya & Settlement
-- Xpay Selisih Checker
-- Pencairan XPAY
+Dashboard sekarang hanya menampilkan sambutan ringkas.
 
-Nama yang berubah:
-Xpay Checker -> Xpay Biaya & Settlement
-Cari Selisih XPAY -> Xpay Selisih Checker
-Pencairan XPAY -> tetap
+## Settings Background
 
-Klik XPAY untuk buka/tutup pilihan.
-Jika salah satu submenu aktif, dropdown otomatis tetap terbuka.
+Settings sekarang mendukung dua cara:
 
-Permission lama tetap memakai ID yang sama:
-xpay-checker
-xpay-diff
-pencairan-xpay
+1. Tempel link HTTPS gambar/GIF.
+2. Upload file langsung dari komputer.
 
-Jadi user tidak perlu diatur ulang.
+Format upload:
+- GIF
+- JPG/JPEG
+- PNG
+- WebP
+
+Ukuran upload maksimal:
+1.7 MB
+
+File upload disimpan di Cloudflare D1 dan dapat dipakai oleh semua akun.
+
+Endpoint:
+POST /api/settings/background-upload
+GET  /api/background-media
+
+Cara:
+1. Settings
+2. Pilih file GIF/gambar
+3. Tekan Upload File
+4. URL upload otomatis masuk ke daftar background
+5. Tekan Simpan untuk semua akun
+
+Upload baru mengganti file upload sebelumnya.
+Link HTTPS lain tetap bisa digunakan bersamaan sebagai slideshow.
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v49-compact-xpay-dropdown
+v50-dashboard-clean-gif-background

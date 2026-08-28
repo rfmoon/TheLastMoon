@@ -339,62 +339,14 @@ async function navigate(menuId) {
 }
 
 function renderDashboard() {
-  const accessible = state.menus.filter(menu =>
-    !["dashboard", "settings", "user-admin"].includes(menu.id) &&
-    !menu.groupOnly
-  );
-
   $("#pageContent").innerHTML = `
-    <section class="hero glass">
+    <section class="hero glass dashboard-simple">
       <div>
         <span class="kicker">WELCOME BACK</span>
         <h1>Halo, ${escapeHtml(state.user.username)} 👋</h1>
-        <p>Semua menu yang terlihat sudah mengikuti hak akses dari akun kamu. Background halaman dapat dibuat slideshow oleh master menggunakan beberapa link gambar.</p>
-      </div>
-    </section>
-
-    <section class="stats-grid">
-      <article class="stat-card">
-        <div class="stat-top"><span class="stat-icon">▦</span><span class="badge green">AKTIF</span></div>
-        <strong>${accessible.length}</strong><small>Menu dapat diakses</small>
-      </article>
-      <article class="stat-card">
-        <div class="stat-top"><span class="stat-icon">◉</span><span class="badge green">ONLINE</span></div>
-        <strong>100%</strong><small>Status sistem</small>
-      </article>
-      <article class="stat-card">
-        <div class="stat-top"><span class="stat-icon">◆</span><span class="badge purple">${state.user.isMaster ? "MASTER" : "USER"}</span></div>
-        <strong>${state.user.isMaster ? "ALL" : "LIMIT"}</strong><small>Tingkat akses</small>
-      </article>
-      <article class="stat-card">
-        <div class="stat-top"><span class="stat-icon">⌁</span><span class="badge green">AMAN</span></div>
-        <strong>12h</strong><small>Masa sesi login</small>
-      </article>
-    </section>
-
-    <section class="section">
-      <div class="section-head">
-        <div><h3>Akses cepat</h3><p>Buka menu operasional dari dashboard.</p></div>
-      </div>
-      <div class="quick-grid">
-        ${accessible.map(menu => `
-          <button class="quick-card" type="button" data-quick="${escapeHtml(menu.id)}">
-            <span class="qi">${escapeHtml(menu.icon)}</span>
-            <span><strong>${escapeHtml(
-        menu.parentId
-          ? `${state.menus.find(parent => parent.id === menu.parentId)?.label || "Menu"} › ${menu.label}`
-          : menu.label
-      )}</strong><small>Buka modul →</small></span>
-          </button>
-        `).join("") || `<div class="content-card" style="padding:20px">Belum ada menu tambahan untuk akun ini.</div>`}
       </div>
     </section>`;
-
-  $$("[data-quick]").forEach(button => {
-    button.addEventListener("click", () => navigate(button.dataset.quick));
-  });
 }
-
 
 
 async function renderXpaySettlementCheckerWorkspace(menu) {
@@ -1045,12 +997,34 @@ async function renderSettings() {
       <section class="settings-grid">
         <article class="setting-card">
           <span class="eyebrow">LIQUID GLASS APPEARANCE</span>
-          <h3>Multi background slideshow</h3>
-          <p>Tempel banyak link gambar sekaligus. Satu link per baris. Semua gambar akan dipakai sebagai slideshow untuk halaman login dan seluruh halaman dalam.</p>
+          <h3>Wallpaper / Background</h3>
+          <p>Bisa tempel link gambar/GIF atau upload file GIF, JPG, PNG, dan WebP. Background berlaku untuk halaman login dan seluruh akun.</p>
           <form id="backgroundForm">
-            <label>Daftar link gambar HTTPS <small class="subtext">Satu link per baris • maksimal 20 link</small>
-              <textarea id="backgroundLinks" placeholder="https://domain.com/1.jpg&#10;https://domain.com/2.jpg&#10;https://domain.com/3.jpg">${escapeHtml(state.appearance.backgroundUrls.join("\n"))}</textarea>
+            <label>Daftar link gambar / GIF HTTPS <small class="subtext">Satu link per baris • maksimal 20 link</small>
+              <textarea id="backgroundLinks" placeholder="https://domain.com/background.gif&#10;https://domain.com/background.jpg">${escapeHtml(state.appearance.backgroundUrls.join("\n"))}</textarea>
             </label>
+
+            <div class="background-upload-box">
+              <div class="background-upload-copy">
+                <strong>Upload GIF / Gambar</strong>
+                <small>GIF, JPG, PNG, WebP • maksimal 1.7 MB • file tersimpan untuk semua akun</small>
+              </div>
+
+              <input
+                id="backgroundFile"
+                class="background-file-input"
+                type="file"
+                accept="image/gif,image/jpeg,image/png,image/webp">
+
+              <button
+                id="uploadBackgroundFile"
+                class="btn btn-secondary"
+                type="button">
+                Upload File
+              </button>
+            </div>
+
+            <div id="uploadBackgroundMessage" class="message hidden"></div>
             <div class="range-group">
               <div class="range-row"><header><strong>Kegelapan overlay</strong><span id="overlayValue">${state.appearance.overlay}%</span></header><input id="overlayInput" type="range" min="20" max="90" step="1" value="${state.appearance.overlay}"></div>
               <div class="range-row"><header><strong>Blur background</strong><span id="blurValue">${state.appearance.blur}px</span></header><input id="blurInput" type="range" min="0" max="20" step="1" value="${state.appearance.blur}"></div>
@@ -1067,15 +1041,15 @@ async function renderSettings() {
         <article class="setting-card">
           <span class="eyebrow">LIVE PREVIEW</span>
           <h3>Preview liquid glass</h3>
-          <p>Preview menggunakan gambar pertama dari daftar link. Setelah disimpan, seluruh gambar akan berganti otomatis sesuai interval slideshow.</p>
+          <p>Preview menggunakan background pertama. GIF akan bergerak langsung. Jika ada beberapa background, sistem berganti otomatis sesuai interval.</p>
           <div id="backgroundPreviewBox" class="preview-box" style="--preview-overlay:${state.appearance.overlay / 100};--preview-blur:${state.appearance.blur}px">
             <img id="backgroundPreview" alt="Preview background" referrerpolicy="no-referrer" ${state.appearance.backgroundUrls[0] ? `src="${escapeAttribute(state.appearance.backgroundUrls[0])}"` : ""}>
             <span class="preview-badge" id="previewCount">${state.appearance.backgroundUrls.length} gambar</span>
             <div class="preview-center"><strong id="previewLabel">${state.appearance.backgroundUrls.length ? "Preview aktif" : "Belum ada gambar"}</strong><small id="previewSubtext">${state.appearance.backgroundUrls.length ? `${state.appearance.slideSeconds} detik per slide` : "Menggunakan background bawaan"}</small></div>
           </div>
           <div class="help-list">
-            <div class="help-item"><b>1</b><div><strong>Gunakan link langsung</strong><small>Link harus langsung membuka file gambar, bukan halaman website biasa.</small></div></div>
-            <div class="help-item"><b>2</b><div><strong>Bisa banyak gambar</strong><small>Masukkan beberapa link sekaligus. Sistem akan memutar slideshow otomatis.</small></div></div>
+            <div class="help-item"><b>1</b><div><strong>Tempel link atau upload</strong><small>Bisa memakai link HTTPS langsung atau file GIF/JPG/PNG/WebP dari komputer.</small></div></div>
+            <div class="help-item"><b>2</b><div><strong>GIF didukung</strong><small>GIF tetap bergerak sebagai wallpaper. Upload file baru akan mengganti file upload sebelumnya.</small></div></div>
             <div class="help-item"><b>3</b><div><strong>Berlaku untuk semua</strong><small>Login page dan halaman dashboard seluruh akun ikut menggunakan tampilan ini.</small></div></div>
           </div>
         </article>
@@ -1084,6 +1058,7 @@ async function renderSettings() {
     $("#previewBackground").addEventListener("click", previewAppearance);
     $("#backgroundForm").addEventListener("submit", saveAppearance);
     $("#resetBackground").addEventListener("click", resetAppearance);
+    $("#uploadBackgroundFile").addEventListener("click", uploadBackgroundFile);
     $("#overlayInput").addEventListener("input", updatePreviewControls);
     $("#blurInput").addEventListener("input", updatePreviewControls);
     $("#slideInput").addEventListener("input", updatePreviewControls);
@@ -1120,9 +1095,28 @@ function updatePreviewControls() {
 
 function validateAppearance(value) {
   for (const url of value.backgroundUrls) {
+    const raw=String(url || "").trim();
+
+    if(
+      raw.startsWith("/api/background-media")
+    ){
+      continue;
+    }
+
     let parsed;
-    try { parsed = new URL(url); } catch (_) { throw new Error(`Link background tidak valid: ${url}`); }
-    if (parsed.protocol !== "https:") throw new Error(`Link wajib HTTPS: ${url}`);
+    try{
+      parsed=new URL(raw);
+    }catch(_){
+      throw new Error(
+        `Link background tidak valid: ${raw}`
+      );
+    }
+
+    if(parsed.protocol!=="https:"){
+      throw new Error(
+        `Link wajib HTTPS: ${raw}`
+      );
+    }
   }
 }
 
@@ -1148,6 +1142,123 @@ function previewAppearance() {
     applyAppearance(appearance);
   } catch (error) {
     showMessage("#backgroundMessage", error.message);
+  }
+}
+
+async function uploadBackgroundFile(){
+  const input=$("#backgroundFile");
+  const button=$("#uploadBackgroundFile");
+  const file=input?.files?.[0];
+
+  hideMessage("#uploadBackgroundMessage");
+
+  if(!file){
+    showMessage(
+      "#uploadBackgroundMessage",
+      "Pilih file GIF atau gambar terlebih dahulu."
+    );
+    return;
+  }
+
+  const allowed=new Set([
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ]);
+
+  if(!allowed.has(file.type)){
+    showMessage(
+      "#uploadBackgroundMessage",
+      "Format file harus GIF, JPG, PNG, atau WebP."
+    );
+    return;
+  }
+
+  if(file.size>1700000){
+    showMessage(
+      "#uploadBackgroundMessage",
+      "Ukuran file maksimal 1.7 MB."
+    );
+    return;
+  }
+
+  setBusy(button,true,"Uploading...");
+
+  try{
+    const response=await fetch(
+      "/api/settings/background-upload",
+      {
+        method:"POST",
+        credentials:"same-origin",
+        headers:{
+          "Content-Type":file.type,
+          "X-Background-Filename":
+            encodeURIComponent(file.name)
+        },
+        body:file,
+        cache:"no-store"
+      }
+    );
+
+    const raw=await response.text();
+    let data={};
+
+    try{
+      data=raw ? JSON.parse(raw) : {};
+    }catch(_){
+      data={
+        error:
+          `Upload tidak mengirim JSON (HTTP ${response.status}).`
+      };
+    }
+
+    if(response.status===401){
+      state.user=null;
+      showLogin(true);
+    }
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        `Upload gagal (HTTP ${response.status}).`
+      );
+    }
+
+    const current=parseBackgroundLinks(
+      $("#backgroundLinks").value
+    );
+
+    const withoutOldUpload=current.filter(
+      url=>!String(url).startsWith(
+        "/api/background-media"
+      )
+    );
+
+    const next=[
+      data.url,
+      ...withoutOldUpload
+    ].filter(Boolean).slice(0,20);
+
+    $("#backgroundLinks").value=
+      next.join("\n");
+
+    input.value="";
+    updatePreviewControls();
+    previewAppearance();
+
+    showMessage(
+      "#uploadBackgroundMessage",
+      `${file.name} berhasil diupload. Tekan "Simpan untuk semua akun" untuk menjadikannya background.`,
+      true
+    );
+  }catch(error){
+    showMessage(
+      "#uploadBackgroundMessage",
+      error.message
+    );
+  }finally{
+    setBusy(button,false);
   }
 }
 
@@ -1178,6 +1289,7 @@ async function resetAppearance() {
     state.appearance = normalizeAppearance(data);
     backgroundIndex = 0;
     $("#backgroundLinks").value = "";
+    if($("#backgroundFile")) $("#backgroundFile").value = "";
     $("#overlayInput").value = String(state.appearance.overlay);
     $("#blurInput").value = String(state.appearance.blur);
     $("#slideInput").value = String(state.appearance.slideSeconds);
