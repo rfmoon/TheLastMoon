@@ -336,6 +336,7 @@ async function navigate(menuId) {
   if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
   if (menuId === "ai-chat") return renderMemoWorkspace(menu);
   if (menuId === "list-data") return renderGenerateBuktiWorkspace(menu);
+  if (menuId === "hasil-result") return renderHasilResultWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -562,6 +563,39 @@ async function renderGenerateBuktiWorkspace(menu){
 }
 
 
+async function renderHasilResultWorkspace(menu){
+  $("#pageContent").innerHTML=loadingHtml();
+
+  try{
+    const data=await api(
+      `/api/module/${encodeURIComponent(menu.id)}`
+    );
+
+    $("#pageContent").innerHTML=`
+      <section class="xpay-workspace hasil-result-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">LIVE RESULT DATABASE</span>
+            <h3>Hasil Result</h3>
+            <p>${escapeHtml(data.message)} Data masuk dari Extension Luna melalui API khusus Result.</p>
+          </div>
+          <span class="xpay-workspace-badge">EXTENSION • API • D1</span>
+        </header>
+
+        <iframe
+          class="xpay-frame hasil-result-frame"
+          src="/hasil-result.html?v=56.0.0"
+          title="Hasil Result"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  }catch(error){
+    $("#pageContent").innerHTML=errorHtml(error.message);
+  }
+}
+
+
 async function renderModule(menu) {
   $("#pageContent").innerHTML = loadingHtml();
 
@@ -644,6 +678,10 @@ async function renderGenerateApi() {
             <button id="generateApiButton" class="btn btn-primary btn-full" type="submit">
               ⌘ Generate Universal API Key
             </button>
+
+            <button id="generateResultApiButton" class="btn btn-secondary btn-full" type="button">
+              ◎ Generate API Extension Result
+            </button>
           </form>
 
           <div id="generatedApiBox" class="generated-api-box hidden">
@@ -675,6 +713,14 @@ async function renderGenerateApi() {
               <code>${escapeHtml(origin)}/api/external/all</code>
               <button class="row-btn" type="button"
                       data-copy-api="${escapeAttribute(origin)}/api/external/all">
+                ⧉
+              </button>
+            </div>
+            <div class="api-endpoint-row universal-endpoint">
+              <span class="api-method">POST</span>
+              <code>${escapeHtml(origin)}/api/external/results</code>
+              <button class="row-btn" type="button"
+                      data-copy-api="${escapeAttribute(origin)}/api/external/results">
                 ⧉
               </button>
             </div>
@@ -744,6 +790,7 @@ async function renderGenerateApi() {
       </section>`;
 
     $("#apiKeyForm").addEventListener("submit", generateApiKey);
+    $("#generateResultApiButton").addEventListener("click", generateResultApiKey);
     $("#refreshApiKeys").addEventListener("click", renderGenerateApi);
 
     $$("[data-copy-api]").forEach(button => {
@@ -774,14 +821,19 @@ function apiKeyRows(keys) {
     const expired = key.expiresAt && Number(key.expiresAt) <= Date.now();
     const active = key.active && !expired;
     const universal = (key.scopes || []).includes("all:read");
+    const resultWriter = (key.scopes || []).includes("results:write");
 
     return `
       <tr>
         <td><strong>${escapeHtml(key.name)}</strong></td>
         <td><code>${escapeHtml(key.tokenPrefix)}…</code></td>
         <td>
-          <span class="badge ${universal ? "green" : "purple"}">
-            ${universal ? "SEMUA • READ ONLY" : "LEGACY"}
+          <span class="badge ${universal ? "green" : resultWriter ? "purple" : "purple"}">
+            ${universal
+              ? "SEMUA • READ ONLY"
+              : resultWriter
+                ? "HASIL RESULT • READ/WRITE"
+                : "LEGACY"}
           </span>
         </td>
         <td>
@@ -842,6 +894,71 @@ async function generateApiKey(event) {
     setBusy(button, false);
   }
 }
+
+async function generateResultApiKey(){
+  const button=$("#generateResultApiButton");
+
+  setBusy(
+    button,
+    true,
+    "Membuat API Result..."
+  );
+
+  try{
+    const name=
+      $("#apiKeyName").value.trim() ||
+      "Luna Result Extension";
+
+    const data=await api(
+      "/api/api-keys",
+      {
+        method:"POST",
+        body:{
+          name,
+          expiresDays:
+            Number($("#apiKeyExpiry").value),
+          kind:"result-extension"
+        }
+      }
+    );
+
+    $("#generatedApiToken").textContent=
+      data.token;
+
+    $("#generatedApiBox").classList.remove(
+      "hidden"
+    );
+
+    $("#copyGeneratedApi").onclick=()=>{
+      copyApiText(data.token);
+    };
+
+    showMessage(
+      "#apiGeneratorMessage",
+      "API Extension Result berhasil dibuat. Tempel key ini di popup Extension Luna Result.",
+      true
+    );
+
+    const list=await api("/api/api-keys");
+    $("#apiKeyRows").innerHTML=
+      apiKeyRows(list.keys);
+
+    bindApiRevokeButtons();
+
+    toast(
+      "API Extension Result berhasil dibuat.",
+      "ok"
+    );
+  }catch(error){
+    showMessage(
+      "#apiGeneratorMessage",
+      error.message
+    );
+  }finally{
+    setBusy(button,false);
+  }
+}
+
 
 function bindApiRevokeButtons() {
   $$("[data-revoke-api]").forEach(button => {

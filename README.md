@@ -40,3 +40,16 @@ v54-generate-bukti-csp-fix
 - `?` = data tidak ditemukan / format salah.
 - Menggunakan database rekening shared yang sudah ada; tidak membuat database baru.
 - Health: `v55-crosscheck-kode-bank`.
+
+## V56 — Hasil Result via Chrome Extension + API
+
+- Chrome Extension mengadaptasi scanner `LUNA34849 AUTO RESULT MINI V4`.
+- Auto scan tetap 10 detik.
+- Result dikirim ke `POST /api/external/results`.
+- API key khusus dibuat dari `Generate API → Generate API Extension Result`.
+- Scope: `results:read`, `results:write`.
+- Universal `all:read` tetap READ ONLY dan tidak dapat POST result.
+- D1 table: `lottery_results`.
+- Menu `Hasil Result` sekarang menampilkan data per tanggal dan auto-refresh 10 detik.
+- Result duplikat di-upsert berdasarkan key pasaran/tanggal/waktu/periode/nomor.
+- Health: `v56-hasil-result-api-extension`.

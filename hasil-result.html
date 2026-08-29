@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hasil Result</title>
+  <link rel="stylesheet" href="/hasil-result.css?v=56.0.0">
+</head>
+<body>
+  <main class="result-app">
+    <section class="result-toolbar">
+      <div>
+        <strong>Hasil Result</strong>
+        <span>Data dari Extension Luna melalui API.</span>
+      </div>
+
+      <div class="result-controls">
+        <input id="resultDate" type="date">
+        <select id="savedDates" title="Tanggal yang tersimpan">
+          <option value="">Tanggal tersimpan</option>
+        </select>
+        <input id="resultSearch" type="search" placeholder="Cari pasaran...">
+        <button id="resultRefresh" type="button">↻ Refresh</button>
+      </div>
+    </section>
+
+    <section class="result-stats">
+      <span>Total <b id="resultTotal">0</b></span>
+      <span>Terakhir sync <b id="resultUpdated">-</b></span>
+      <span id="resultStatus">Siap</span>
+    </section>
+
+    <section class="result-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Pasaran</th>
+            <th>Tanggal / Waktu</th>
+            <th>Prize 1 / Result</th>
+            <th>Prize 2</th>
+            <th>Prize 3</th>
+            <th>Shio</th>
+            <th>Copy</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody">
+          <tr><td colspan="7" class="empty">Belum ada data.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <script src="/hasil-result.js?v=56.0.0"></script>
+</body>
+</html>

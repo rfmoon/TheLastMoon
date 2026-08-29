@@ -1,0 +1,59 @@
+*{box-sizing:border-box}
+:root{
+  --bg:#0d1320;
+  --panel:#151d2b;
+  --panel2:#1c2637;
+  --line:#2c394e;
+  --text:#edf3ff;
+  --muted:#8fa0b7;
+  --ok:#57d49c;
+  --bad:#ff7d8b;
+}
+html,body{margin:0;min-height:100%;background:transparent;color:var(--text);font-family:Inter,"Segoe UI",Arial,sans-serif}
+body{padding:12px}
+.result-app{display:grid;gap:10px}
+.result-toolbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:11px 12px;border:1px solid rgba(255,255,255,.10);
+  border-radius:13px;background:rgba(10,17,29,.78);backdrop-filter:blur(12px)
+}
+.result-toolbar strong{display:block;font-size:14px}
+.result-toolbar span{display:block;margin-top:2px;color:var(--muted);font-size:9px}
+.result-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.result-controls input,.result-controls select,.result-controls button{
+  height:31px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+  color:var(--text);padding:0 9px;font-size:10px;outline:none
+}
+.result-controls input[type="search"]{min-width:170px}
+.result-controls button{cursor:pointer;font-weight:800}
+.result-stats{display:flex;gap:6px;flex-wrap:wrap}
+.result-stats span{
+  padding:6px 9px;border:1px solid rgba(255,255,255,.09);
+  border-radius:999px;background:rgba(10,17,29,.66);font-size:9px;color:var(--muted)
+}
+.result-stats b{color:#fff}
+#resultStatus.ok{color:var(--ok)}
+#resultStatus.bad{color:var(--bad)}
+.result-table-wrap{
+  overflow:auto;max-height:calc(100vh - 145px);
+  border:1px solid rgba(255,255,255,.10);border-radius:13px;
+  background:rgba(10,17,29,.78);backdrop-filter:blur(12px)
+}
+table{width:100%;border-collapse:collapse;min-width:900px;font-size:10px}
+th,td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.075);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;z-index:2;background:#192336;color:#cdd8ea;font-size:8px;letter-spacing:.05em}
+td.market{font-weight:900}
+td.number{font-family:Consolas,monospace;font-weight:800}
+tr:last-child td{border-bottom:0}
+.empty{text-align:center;color:var(--muted);padding:30px!important}
+.copy-btn{
+  border:1px solid #3a4961;border-radius:7px;background:#222f43;color:#fff;
+  padding:5px 8px;font-size:8px;font-weight:900;cursor:pointer
+}
+.copy-btn.ok{background:#256c50;border-color:#367e62}
+@media(max-width:760px){
+  body{padding:7px}
+  .result-toolbar{align-items:flex-start;flex-direction:column}
+  .result-controls{justify-content:flex-start;width:100%}
+  .result-controls input[type="search"]{flex:1;min-width:120px}
+}

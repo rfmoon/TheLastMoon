@@ -240,3 +240,28 @@ CREATE INDEX IF NOT EXISTS idx_wd_bersih_updated
 
 CREATE INDEX IF NOT EXISTS idx_wd_bersih_name
   ON wd_bersih_names(name);
+
+
+CREATE TABLE IF NOT EXISTS lottery_results (
+  result_key TEXT PRIMARY KEY,
+  pool TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL,
+  periode TEXT NOT NULL DEFAULT '',
+  result_date TEXT NOT NULL,
+  result_time TEXT NOT NULL DEFAULT '',
+  n1 TEXT NOT NULL,
+  n2 TEXT NOT NULL DEFAULT '',
+  n3 TEXT NOT NULL DEFAULT '',
+  shio TEXT NOT NULL DEFAULT '',
+  result_text TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'luna-extension',
+  received_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_lottery_results_date_time
+  ON lottery_results(result_date, result_time);
+
+CREATE INDEX IF NOT EXISTS idx_lottery_results_display
+  ON lottery_results(display_name, result_date);
+
