@@ -62,8 +62,8 @@ function applyDynamicDefaults(){
 function resetToDefaults(){
     const defaults={
         ctrlWaktu:'17:05:12',
-        ctrlNama:'IWAN SETIAWAN',
-        ctrlRekening:'801 - 109 - 7961',
+        ctrlNama:'Samuel',
+        ctrlRekening:'123 - 456 - 7891',
         ctrlJenis:'Transfer ke rekening',
         ctrlMataTujuan:'IDR - Indonesian Rupiah',
         ctrlMataAsal:'IDR - Indonesian Rupiah',
