@@ -121,3 +121,24 @@ tr:last-child td{border-bottom:0}
     width:100%;
   }
 }
+
+
+/* =========================================================
+   V59 — SYNC DIAGNOSTICS
+========================================================= */
+.result-sync-help{
+  margin:0;
+  padding:9px 11px;
+  border:1px solid rgba(255,190,90,.26);
+  border-radius:10px;
+  background:rgba(105,70,15,.16);
+  color:#e7cc91;
+  font-size:9px;
+  line-height:1.55;
+}
+
+.result-sync-help.ok{
+  border-color:rgba(87,212,156,.25);
+  background:rgba(25,105,73,.15);
+  color:#86e5b8;
+}

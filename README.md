@@ -76,3 +76,13 @@ v54-generate-bukti-csp-fix
 - Dedicated functions membuat tabel `lottery_results` otomatis jika belum ada.
 - Catch-all route tetap dipertahankan sebagai fallback.
 - Health main: `v58-result-dedicated-endpoints`.
+
+## V59 — Result Sync Diagnostics
+
+- Tambah `/api/results-status` untuk melihat jumlah row yang benar-benar sudah masuk D1.
+- Hasil Result menampilkan `Server` dan `Tanggal Server`.
+- Jika server 0, halaman menjelaskan bahwa Extension belum POST data.
+- Extension V3 mempunyai tombol `SET API` langsung di panel Luna.
+- `TEST & SYNC` menguji scope `results:write` lalu langsung mengirim seluruh result.
+- Status API tidak lagi dipotong pendek.
+- Health: `v59-result-sync-diagnostics`.

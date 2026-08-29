@@ -71,6 +71,54 @@ function setActiveDate(date){
   renderDateHistory();
 }
 
+async function loadServerStatus(){
+  try{
+    const data=await api(
+      "/api/results-status"
+    );
+
+    $("#serverTotal").textContent=
+      Number(data.total || 0);
+
+    $("#serverDates").textContent=
+      Number(data.dates || 0);
+
+    let help=$("#resultSyncHelp");
+
+    if(!help){
+      help=document.createElement("div");
+      help.id="resultSyncHelp";
+      help.className="result-sync-help";
+
+      const stats=$(".result-stats");
+      stats.insertAdjacentElement(
+        "afterend",
+        help
+      );
+    }
+
+    if(Number(data.total || 0) > 0){
+      help.className=
+        "result-sync-help ok";
+
+      help.textContent=
+        `Server sudah menerima ${Number(data.total || 0)} result dari ${Number(data.dates || 0)} tanggal.`;
+    }else{
+      help.className=
+        "result-sync-help";
+
+      help.textContent=
+        "Server masih 0 result. Lihat panel LUNA RESULT: jika tertulis API BELUM SET / API OFF / API ERROR, data belum pernah dikirim ke TheLastMoon. Klik SET API di panel Luna lalu TEST & SYNC.";
+    }
+
+    return data;
+  }catch(error){
+    $("#serverTotal").textContent="ERR";
+    $("#serverDates").textContent="-";
+    throw error;
+  }
+}
+
 async function loadDates(){
   const data=await api("/api/results/dates");
 
@@ -263,6 +311,7 @@ async function loadResults(showStatus=true){
 async function refreshAll(){
   const before=$("#resultDate").value;
 
+  await loadServerStatus();
   await loadDates();
 
   if(
@@ -354,6 +403,7 @@ async function start(){
         const current=
           $("#resultDate").value;
 
+        await loadServerStatus();
         await loadDates();
 
         if(current){
