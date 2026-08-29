@@ -4,38 +4,50 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Hasil Result</title>
-  <link rel="stylesheet" href="/hasil-result.css?v=56.0.0">
+  <link rel="stylesheet" href="/hasil-result.css?v=57.0.0">
 </head>
 <body>
   <main class="result-app">
     <section class="result-toolbar">
       <div>
         <strong>Hasil Result</strong>
-        <span>Data dari Extension Luna melalui API.</span>
+        <span>Result tersimpan per tanggal dari Extension Luna melalui API.</span>
       </div>
 
       <div class="result-controls">
-        <input id="resultDate" type="date">
-        <select id="savedDates" title="Tanggal yang tersimpan">
+        <label class="date-field">
+          <span>Tanggal</span>
+          <input id="resultDate" type="date">
+        </label>
+
+        <select id="savedDates" title="Tanggal yang sudah tersimpan">
           <option value="">Tanggal tersimpan</option>
         </select>
-        <input id="resultSearch" type="search" placeholder="Cari pasaran...">
+
+        <input id="resultSearch" type="search" placeholder="Cari pasaran / result...">
+
+        <button id="resultToday" type="button">Hari Ini</button>
         <button id="resultRefresh" type="button">↻ Refresh</button>
       </div>
     </section>
 
     <section class="result-stats">
+      <span>Tanggal <b id="activeDate">-</b></span>
       <span>Total <b id="resultTotal">0</b></span>
       <span>Terakhir sync <b id="resultUpdated">-</b></span>
       <span id="resultStatus">Siap</span>
     </section>
+
+    <section class="date-history" id="dateHistory"></section>
 
     <section class="result-table-wrap">
       <table>
         <thead>
           <tr>
             <th>Pasaran</th>
-            <th>Tanggal / Waktu</th>
+            <th>Periode</th>
+            <th>Tanggal</th>
+            <th>Waktu</th>
             <th>Prize 1 / Result</th>
             <th>Prize 2</th>
             <th>Prize 3</th>
@@ -44,11 +56,12 @@
           </tr>
         </thead>
         <tbody id="resultBody">
-          <tr><td colspan="7" class="empty">Belum ada data.</td></tr>
+          <tr><td colspan="9" class="empty">Belum ada data.</td></tr>
         </tbody>
       </table>
     </section>
   </main>
-  <script src="/hasil-result.js?v=56.0.0"></script>
+
+  <script src="/hasil-result.js?v=57.0.0"></script>
 </body>
 </html>

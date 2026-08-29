@@ -584,7 +584,7 @@ async function renderHasilResultWorkspace(menu){
 
         <iframe
           class="xpay-frame hasil-result-frame"
-          src="/hasil-result.html?v=56.0.0"
+          src="/hasil-result.html?v=57.0.0"
           title="Hasil Result"
           loading="eager"
           referrerpolicy="same-origin">

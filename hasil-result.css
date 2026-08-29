@@ -57,3 +57,67 @@ tr:last-child td{border-bottom:0}
   .result-controls{justify-content:flex-start;width:100%}
   .result-controls input[type="search"]{flex:1;min-width:120px}
 }
+
+
+/* =========================================================
+   V57 — HISTORY RESULT PER TANGGAL
+========================================================= */
+.date-field{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  color:var(--muted);
+  font-size:8px;
+  font-weight:800;
+}
+
+.date-field span{
+  display:inline !important;
+  margin:0 !important;
+}
+
+.date-history{
+  display:flex;
+  gap:6px;
+  overflow-x:auto;
+  padding:1px 0 2px;
+}
+
+.date-chip{
+  flex:0 0 auto;
+  min-width:112px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:10px;
+  background:rgba(10,17,29,.68);
+  color:var(--text);
+  padding:7px 9px;
+  cursor:pointer;
+  text-align:left;
+}
+
+.date-chip strong{
+  display:block;
+  font-size:9px;
+}
+
+.date-chip small{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font-size:8px;
+}
+
+.date-chip.active{
+  border-color:rgba(109,162,255,.65);
+  background:rgba(54,87,146,.36);
+}
+
+.result-table-wrap{
+  max-height:calc(100vh - 185px) !important;
+}
+
+@media(max-width:760px){
+  .date-field{
+    width:100%;
+  }
+}

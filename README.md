@@ -53,3 +53,14 @@ v54-generate-bukti-csp-fix
 - Menu `Hasil Result` sekarang menampilkan data per tanggal dan auto-refresh 10 detik.
 - Result duplikat di-upsert berdasarkan key pasaran/tanggal/waktu/periode/nomor.
 - Health: `v56-hasil-result-api-extension`.
+
+## V57 — Result History 10 Tanggal
+
+- Extension V2 membaca 10 baris History Nomor per market.
+- Parser diperbaiki untuk tabel dengan kolom Tanggal + Waktu terpisah.
+- Hasil Result mempunyai 10 chip tanggal terbaru + dropdown tanggal.
+- Klik tanggal untuk melihat result pada tanggal tersebut.
+- API route tetap berada di `functions/api/[[path]].js`.
+- `functions/api/RESULTS-API-INFO.txt` ditambahkan sebagai petunjuk lokasi route.
+- API batch limit 500; Extension mengirim chunk 180 agar stabil.
+- Health: `v57-result-history-10tanggal`.
