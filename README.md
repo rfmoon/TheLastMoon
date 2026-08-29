@@ -1,6 +1,8 @@
-# TheLastMoon V52 — Generate Bukti Original Scripts
+# TheLastMoon V53 — Generate Bukti / Script Baru
 
-Perubahan menu:
+Script baru dari file terbaru dipakai.
+
+Menu:
 List Data -> Generate Bukti
 
 Dropdown:
@@ -12,9 +14,9 @@ Mapping:
 SOURCE_1 -> Antar Bank
 SOURCE_2 -> Sesama BCA
 
-PENTING:
-Isi SOURCE_1 dan SOURCE_2 dari file yang diberikan user TIDAK DIUBAH.
-Keduanya ditulis byte-for-byte setelah base64 decode.
+Isi SOURCE_1 dan SOURCE_2:
+TIDAK DIUBAH.
+Keduanya disimpan byte-for-byte setelah base64 decode.
 
 SHA256 SOURCE_1:
 6a8a5fd8d80373f04c0156c52bddb5ce04d392230c496580e383be315c0c83df
@@ -22,11 +24,11 @@ SHA256 SOURCE_1:
 SHA256 SOURCE_2:
 3df0f57b2c0ba61d89f28ecaf8ad25e73ec32be934885a61566a11cf1d3030b6
 
-Untuk keamanan, template dijalankan dalam iframe sandbox tanpa izin download.
-Jadi script asli tetap utuh, tetapi wrapper membatasi ekspor/download.
+Wrapper hanya mengatur menu/dropdown dan menjalankan template dalam iframe sandbox.
+Penanda PREVIEW berada di wrapper, bukan di dalam script asli.
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v52-generate-bukti-original-scripts
+v53-generate-bukti-new-original-scripts

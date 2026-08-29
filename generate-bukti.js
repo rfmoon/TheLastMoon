@@ -2,8 +2,8 @@ const type=document.getElementById("gbType");
 const frame=document.getElementById("gbFrame");
 
 const pages={
-  "antar-bank":"/generate-bukti-antar-bank.html?v=52.0.0",
-  "sesama-bca":"/generate-bukti-sesama-bca.html?v=52.0.0"
+  "antar-bank":"/generate-bukti-antar-bank.html?v=53.0.0",
+  "sesama-bca":"/generate-bukti-sesama-bca.html?v=53.0.0"
 };
 
 type.addEventListener("change",()=>{

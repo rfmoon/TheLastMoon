@@ -546,12 +546,11 @@ async function renderGenerateBuktiWorkspace(menu){
             <h3>Generate Bukti</h3>
             <p>${escapeHtml(data.message)} Pilih Antar Bank atau Sesama BCA.</p>
           </div>
-          <span class="xpay-workspace-badge">PREVIEW</span>
         </header>
 
         <iframe
           class="xpay-frame generate-bukti-frame"
-          src="/generate-bukti.html?v=52.0.0"
+          src="/generate-bukti.html?v=53.0.0"
           title="Generate Bukti"
           loading="eager"
           referrerpolicy="same-origin">

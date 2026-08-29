@@ -867,6 +867,6 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
   }
 }
 
-/* V52 — Generate Bukti wrapper */
+/* V53 — Generate Bukti wrapper */
 .generate-bukti-workspace{min-height:calc(100vh - 92px)}
 .generate-bukti-frame{min-height:calc(100vh - 180px)!important;background:transparent!important}
