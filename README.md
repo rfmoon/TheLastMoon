@@ -64,3 +64,15 @@ v54-generate-bukti-csp-fix
 - `functions/api/RESULTS-API-INFO.txt` ditambahkan sebagai petunjuk lokasi route.
 - API batch limit 500; Extension mengirim chunk 180 agar stabil.
 - Health: `v57-result-history-10tanggal`.
+
+## V58 — Dedicated Result API Endpoints
+
+- Fix `Endpoint tidak ditemukan` pada Hasil Result.
+- Tidak lagi hanya bergantung pada catch-all `[[path]].js`.
+- `functions/api/results.js` → `/api/results`.
+- `functions/api/results/dates.js` → `/api/results/dates`.
+- `functions/api/external/results.js` → `/api/external/results`.
+- `functions/api/results-health.js` → `/api/results-health`.
+- Dedicated functions membuat tabel `lottery_results` otomatis jika belum ada.
+- Catch-all route tetap dipertahankan sebagai fallback.
+- Health main: `v58-result-dedicated-endpoints`.

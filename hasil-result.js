@@ -31,9 +31,12 @@ async function api(url){
   const data=await response.json().catch(()=>({}));
 
   if(!response.ok){
-    throw new Error(
+    const message=
       data.error ||
-      `HTTP ${response.status}`
+      `HTTP ${response.status}`;
+
+    throw new Error(
+      `${message} [${url}]`
     );
   }
 
@@ -284,6 +287,24 @@ async function refreshAll(){
 }
 
 async function start(){
+  try{
+    const health=await api("/api/results-health");
+
+    if(
+      !health?.ok ||
+      !health?.dedicatedEndpoints
+    ){
+      throw new Error(
+        "Dedicated Result API belum aktif."
+      );
+    }
+  }catch(error){
+    setStatus(
+      error.message,
+      "bad"
+    );
+  }
+
   $("#resultRefresh").addEventListener(
     "click",
     refreshAll
