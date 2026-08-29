@@ -1,0 +1,16 @@
+HASIL RESULT API
+
+Route ini sengaja berada di:
+functions/api/[[path]].js
+
+Endpoint:
+POST /api/external/results
+GET  /api/external/results
+GET  /api/results
+GET  /api/results/dates
+
+Cloudflare Pages memakai [[path]].js sebagai catch-all router,
+jadi tidak wajib ada file results.js terpisah.
+
+Version:
+v57-result-history-10tanggal

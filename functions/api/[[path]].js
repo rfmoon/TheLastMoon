@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v55-crosscheck-kode-bank";
+const VERSION = "v57-result-history-10tanggal";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -73,7 +73,10 @@ async function routeRequest(request, env, url) {
     );
   }
 
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) {
+  if (
+    ["POST", "PUT", "PATCH", "DELETE"].includes(request.method) &&
+    !url.pathname.startsWith("/api/external/")
+  ) {
     const origin = request.headers.get("Origin");
     if (origin && origin !== url.origin) {
       throw new AppError(403, "Permintaan lintas situs ditolak.", "origin");
@@ -146,6 +149,24 @@ async function routeRequest(request, env, url) {
     return externalPayoutAccounts(env.DB, apiKey);
   }
 
+  if (url.pathname === "/api/external/results" && request.method === "POST") {
+    const apiKey = await authenticateApiKey(
+      request,
+      env.DB,
+      "results:write"
+    );
+    return externalUpsertLotteryResults(request, env.DB, apiKey);
+  }
+
+  if (url.pathname === "/api/external/results" && request.method === "GET") {
+    const apiKey = await authenticateApiKey(
+      request,
+      env.DB,
+      "results:read"
+    );
+    return externalLotteryResults(env.DB, apiKey, url);
+  }
+
   if (url.pathname === "/api/session" && request.method === "GET") {
     const user = await getSessionUser(request, env.DB);
     return json({
@@ -187,6 +208,16 @@ async function routeRequest(request, env, url) {
   if (url.pathname === "/api/xpay-cloud") {
     requireMenuAccess(user, "xpay-checker");
     return handleXpayCloud(request, env.DB, user, url);
+  }
+
+  if (url.pathname === "/api/results/dates" && request.method === "GET") {
+    requireMenuAccess(user, "hasil-result");
+    return listLotteryResultDates(env.DB);
+  }
+
+  if (url.pathname === "/api/results" && request.method === "GET") {
+    requireMenuAccess(user, "hasil-result");
+    return getLotteryResults(env.DB, url);
   }
 
   if (url.pathname === "/api/change-password" && request.method === "POST") {
@@ -502,6 +533,26 @@ async function initializeDatabase(env) {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_event_scatter_date_order
         ON event_scatter_rows(event_date, row_order)`,
+      `CREATE TABLE IF NOT EXISTS lottery_results (
+        result_key TEXT PRIMARY KEY,
+        pool TEXT NOT NULL DEFAULT '',
+        display_name TEXT NOT NULL,
+        periode TEXT NOT NULL DEFAULT '',
+        result_date TEXT NOT NULL,
+        result_time TEXT NOT NULL DEFAULT '',
+        n1 TEXT NOT NULL,
+        n2 TEXT NOT NULL DEFAULT '',
+        n3 TEXT NOT NULL DEFAULT '',
+        shio TEXT NOT NULL DEFAULT '',
+        result_text TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT 'luna-extension',
+        received_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_lottery_results_date_time
+        ON lottery_results(result_date, result_time)`,
+      `CREATE INDEX IF NOT EXISTS idx_lottery_results_display
+        ON lottery_results(display_name, result_date)`,
       `CREATE TABLE IF NOT EXISTS api_keys (
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -1192,7 +1243,9 @@ function clampInteger(value, minimum, maximum, fallback) {
 const API_SCOPES = Object.freeze([
   "all:read",
   "dashboard:read",
-  "payout-accounts:read"
+  "payout-accounts:read",
+  "results:read",
+  "results:write"
 ]);
 
 async function listApiKeys(db) {
@@ -1238,9 +1291,11 @@ async function createApiKey(request, db, user) {
     );
   }
 
-  // V18: setiap key baru adalah Universal Read API.
-  // Tidak perlu memilih scope satu per satu.
-  const scopes = ["all:read"];
+  const apiKind = String(body.kind || "universal-read").trim();
+
+  const scopes = apiKind === "result-extension"
+    ? ["results:read", "results:write"]
+    : ["all:read"];
 
   const allowedExpiryDays = new Set([0, 7, 30, 90, 365]);
   const requestedDays = Number(body.expiresDays || 0);
@@ -1382,9 +1437,13 @@ async function authenticateApiKey(request, db, requiredScope) {
   }
 
   const scopes = safeApiScopes(row.scopes);
+  const universalReadAllowed =
+    requiredScope.endsWith(":read") &&
+    scopes.includes("all:read");
+
   if (
-    !scopes.includes("all:read") &&
-    !scopes.includes(requiredScope)
+    !scopes.includes(requiredScope) &&
+    !universalReadAllowed
   ) {
     throw new AppError(
       403,
@@ -1491,6 +1550,281 @@ async function externalPayoutAccounts(db, apiKey) {
   }, 200, externalCorsHeaders());
 }
 
+
+function normalizeLotteryDigits(value, maximum = 6) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.slice(0, maximum);
+}
+
+function normalizeLotteryText(value, maximum = 120) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximum);
+}
+
+function validLotteryDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
+function validLotteryTime(value) {
+  return !value || /^\d{1,2}:\d{2}(?::\d{2})?$/.test(String(value || ""));
+}
+
+function buildLotteryResultText(row) {
+  const lines = [
+    `Hasil Pengeluaran ${row.display}`,
+    `Hari ini ${row.date}`,
+    row.display
+  ];
+
+  if (row.n2 || row.n3) {
+    lines.push(`Prize 1 : ${row.n1 || "-"}`);
+    lines.push(`Prize 2 : ${row.n2 || "-"}`);
+    lines.push(`Prize 3 : ${row.n3 || "-"}`);
+    lines.push(`SHIO Prize 1 : ${row.shio || "-"}`);
+  } else {
+    lines.push(`Result : ${row.n1 || "-"}`);
+    lines.push(`SHIO : ${row.shio || "-"}`);
+  }
+
+  lines.push("Selamat Kepada Pemenang, Salam JP");
+  return lines.join("\n");
+}
+
+function normalizeLotteryRow(input) {
+  const pool = normalizeLotteryText(input?.pool, 100);
+  const display = normalizeLotteryText(
+    input?.display || input?.market,
+    100
+  );
+  const periode = normalizeLotteryText(input?.periode, 80);
+  const date = String(input?.date || "").trim();
+  const time = String(input?.time || "").trim();
+  const n1 = normalizeLotteryDigits(input?.n1, 6);
+  const n2 = normalizeLotteryDigits(input?.n2, 6);
+  const n3 = normalizeLotteryDigits(input?.n3, 6);
+  const shio = normalizeLotteryText(input?.shio, 30).toUpperCase();
+
+  if (!display) {
+    throw new AppError(400, "Nama pasaran kosong.", "result-display");
+  }
+
+  if (!validLotteryDate(date)) {
+    throw new AppError(400, `Tanggal result tidak valid: ${date}`, "result-date");
+  }
+
+  if (!validLotteryTime(time)) {
+    throw new AppError(400, `Waktu result tidak valid: ${time}`, "result-time");
+  }
+
+  if (!n1) {
+    throw new AppError(400, `Prize/Result 1 kosong untuk ${display}.`, "result-n1");
+  }
+
+  const resultKey = [
+    pool,
+    display,
+    date,
+    time,
+    periode,
+    n1,
+    n2,
+    n3
+  ].join("|");
+
+  const row = {
+    resultKey,
+    pool,
+    display,
+    periode,
+    date,
+    time,
+    n1,
+    n2,
+    n3,
+    shio
+  };
+
+  row.resultText = normalizeLotteryText(input?.resultText, 4000)
+    ? String(input.resultText).trim().slice(0, 4000)
+    : buildLotteryResultText(row);
+
+  return row;
+}
+
+async function externalUpsertLotteryResults(request, db, apiKey) {
+  const body = await readJson(request);
+  const inputRows = Array.isArray(body.rows) ? body.rows : [];
+
+  if (!inputRows.length) {
+    return json({
+      ok: true,
+      received: 0,
+      saved: 0,
+      message: "Tidak ada result yang dikirim."
+    }, 200, externalCorsHeaders());
+  }
+
+  if (inputRows.length > 500) {
+    throw new AppError(
+      400,
+      "Maksimal 500 result per request.",
+      "results-batch-limit"
+    );
+  }
+
+  const rows = inputRows.map(normalizeLotteryRow);
+  const now = Date.now();
+
+  const statements = rows.map(row =>
+    db.prepare(`
+      INSERT INTO lottery_results (
+        result_key,
+        pool,
+        display_name,
+        periode,
+        result_date,
+        result_time,
+        n1,
+        n2,
+        n3,
+        shio,
+        result_text,
+        source,
+        received_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(result_key) DO UPDATE SET
+        pool = excluded.pool,
+        display_name = excluded.display_name,
+        periode = excluded.periode,
+        result_date = excluded.result_date,
+        result_time = excluded.result_time,
+        n1 = excluded.n1,
+        n2 = excluded.n2,
+        n3 = excluded.n3,
+        shio = excluded.shio,
+        result_text = excluded.result_text,
+        source = excluded.source,
+        updated_at = excluded.updated_at
+    `).bind(
+      row.resultKey,
+      row.pool,
+      row.display,
+      row.periode,
+      row.date,
+      row.time,
+      row.n1,
+      row.n2,
+      row.n3,
+      row.shio,
+      row.resultText,
+      "luna-extension",
+      now,
+      now
+    )
+  );
+
+  await db.batch(statements);
+
+  return json({
+    ok: true,
+    received: inputRows.length,
+    saved: rows.length,
+    apiKey: apiKey.name,
+    updatedAt: now
+  }, 200, externalCorsHeaders());
+}
+
+function lotteryResultSelectSql(whereClause = "") {
+  return `
+    SELECT
+      result_key AS resultKey,
+      pool,
+      display_name AS display,
+      periode,
+      result_date AS date,
+      result_time AS time,
+      n1,
+      n2,
+      n3,
+      shio,
+      result_text AS resultText,
+      source,
+      received_at AS receivedAt,
+      updated_at AS updatedAt
+    FROM lottery_results
+    ${whereClause}
+    ORDER BY result_date DESC, result_time DESC, display_name ASC
+  `;
+}
+
+async function queryLotteryResults(db, date = "", limit = 2000) {
+  if (date) {
+    if (!validLotteryDate(date)) {
+      throw new AppError(400, "Format tanggal harus YYYY-MM-DD.", "result-query-date");
+    }
+
+    const result = await db.prepare(
+      lotteryResultSelectSql("WHERE result_date = ?") + " LIMIT ?"
+    ).bind(date, limit).all();
+
+    return result.results || [];
+  }
+
+  const result = await db.prepare(
+    lotteryResultSelectSql("") + " LIMIT ?"
+  ).bind(limit).all();
+
+  return result.results || [];
+}
+
+async function externalLotteryResults(db, apiKey, url) {
+  const date = String(url.searchParams.get("date") || "").trim();
+  const rows = await queryLotteryResults(db, date, 2000);
+
+  return json({
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    version: VERSION,
+    apiKey: { name: apiKey.name },
+    date: date || null,
+    total: rows.length,
+    rows
+  }, 200, externalCorsHeaders());
+}
+
+async function getLotteryResults(db, url) {
+  const date = String(url.searchParams.get("date") || "").trim();
+  const rows = await queryLotteryResults(db, date, 3000);
+
+  return json({
+    ok: true,
+    date: date || null,
+    total: rows.length,
+    rows
+  });
+}
+
+async function listLotteryResultDates(db) {
+  const result = await db.prepare(`
+    SELECT
+      result_date AS date,
+      COUNT(*) AS total,
+      MAX(updated_at) AS updatedAt
+    FROM lottery_results
+    GROUP BY result_date
+    ORDER BY result_date DESC
+    LIMIT 90
+  `).all();
+
+  return json({
+    dates: result.results || []
+  });
+}
+
 function sanitizeApiScopes(value) {
   const requested = Array.isArray(value) ? value : [];
   const allowed = new Set(API_SCOPES);
@@ -1514,7 +1848,7 @@ function safeApiScopes(value) {
 function externalCorsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400"
   };
@@ -1565,6 +1899,27 @@ async function externalAllData(db, apiKey) {
       updated_at AS updatedAt
     FROM event_scatter_rows
     ORDER BY event_date DESC, row_order ASC
+    LIMIT 10000
+  `).all();
+
+  const lotteryResult = await db.prepare(`
+    SELECT
+      result_key AS resultKey,
+      pool,
+      display_name AS display,
+      periode,
+      result_date AS date,
+      result_time AS time,
+      n1,
+      n2,
+      n3,
+      shio,
+      result_text AS resultText,
+      source,
+      received_at AS receivedAt,
+      updated_at AS updatedAt
+    FROM lottery_results
+    ORDER BY result_date DESC, result_time DESC, display_name ASC
     LIMIT 10000
   `).all();
 
@@ -1646,6 +2001,7 @@ async function externalAllData(db, apiKey) {
           menus: operationalMenus.length,
           payoutAccounts: (payoutResult.results || []).length,
           eventScatterRows: eventRows.length,
+          hasilResultRows: (lotteryResult.results || []).length,
           activeApiKeys: apiKeys.filter(key => key.active).length
         }
       },
