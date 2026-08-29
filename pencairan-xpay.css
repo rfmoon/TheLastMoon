@@ -1057,3 +1057,150 @@ code {
 .wd-db-delete-one{padding:4px 6px!important;border-radius:6px!important;font-size:7.8px!important}
 .wd-db-empty{padding:20px 8px;text-align:center;color:var(--muted);font-size:8.5px}
 @media(max-width:980px){.wd-db-list{max-height:220px}}
+
+
+/* =========================================================
+   V55 — CROSSCHECK KODE BANK
+========================================================= */
+.bank-code-check{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.13);
+}
+
+.bank-code-check-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+
+.bank-code-check-head > div:first-child{
+  min-width:0;
+}
+
+.bank-code-check-head strong{
+  display:block;
+  font-size:12px;
+  color:#fff;
+}
+
+.bank-code-check-head span{
+  display:block;
+  margin-top:2px;
+  font-size:9px;
+  line-height:1.4;
+  color:rgba(238,244,255,.65);
+}
+
+.bank-code-check-stats{
+  display:flex;
+  flex:0 0 auto;
+  gap:5px;
+}
+
+.check-pill{
+  min-width:34px;
+  height:24px;
+  display:flex !important;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  margin-top:0 !important;
+  padding:0 7px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:999px;
+  font-size:9px !important;
+  font-weight:900;
+  background:rgba(5,12,25,.45);
+}
+
+.check-pill b{
+  font-size:9px;
+}
+
+.check-ok{
+  color:#61e4ad !important;
+}
+
+.check-bad{
+  color:#ff8994 !important;
+}
+
+.check-miss{
+  color:#f4c96a !important;
+}
+
+.code-check-textarea{
+  min-height:118px !important;
+  max-height:220px;
+}
+
+.code-check-table-wrap{
+  margin-top:10px;
+  max-height:260px !important;
+}
+
+.code-check-table{
+  min-width:560px !important;
+  font-size:10px !important;
+}
+
+.code-check-table th,
+.code-check-table td{
+  padding:7px 8px !important;
+}
+
+.code-check-table th:last-child,
+.code-check-table td:last-child{
+  width:54px;
+  text-align:center;
+}
+
+.code-status{
+  display:inline-flex;
+  width:25px;
+  height:25px;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  font-size:15px;
+  font-weight:1000;
+}
+
+.code-status-ok{
+  color:#08170f;
+  background:#4cda9d;
+}
+
+.code-status-bad{
+  color:#fff;
+  background:#e64e5f;
+}
+
+.code-status-miss{
+  color:#161104;
+  background:#e8b94f;
+}
+
+.code-check-row-bad td{
+  background:rgba(230,78,95,.10) !important;
+}
+
+.code-check-row-miss td{
+  background:rgba(232,185,79,.08) !important;
+}
+
+.code-db-bank{
+  display:block;
+  margin-top:2px;
+  font-size:8px;
+  color:rgba(238,244,255,.55);
+}
+
+@media(max-width:720px){
+  .bank-code-check-head{
+    flex-direction:column;
+  }
+}

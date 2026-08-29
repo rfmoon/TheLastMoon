@@ -28,3 +28,15 @@ Ctrl + Shift + R
 
 Health:
 v54-generate-bukti-csp-fix
+
+## V55 — Crosscheck Kode Bank Pencairan XPAY
+
+- Lokasi: Pencairan XPAY → Tambahkan Rekening Baru atau Hapus.
+- Tambahan panel `Crosscheck Kode Bank`.
+- Input: `NOMINAL | KODE BANK | NOMOR REKENING | NAMA`.
+- Sistem mencari data database berdasarkan nomor rekening; fallback nama exact jika unik.
+- `✓` = kode sama dengan database.
+- `✕` = kode berbeda.
+- `?` = data tidak ditemukan / format salah.
+- Menggunakan database rekening shared yang sudah ada; tidak membuat database baru.
+- Health: `v55-crosscheck-kode-bank`.

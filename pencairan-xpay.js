@@ -564,6 +564,300 @@ function findDatabaseMatch(name,account){
   return null;
 }
 
+
+/* =========================================================
+   V55 — CROSSCHECK KODE BANK DATABASE
+   Input:
+   NOMINAL | KODE BANK | NOMOR REKENING | NAMA
+
+   Matching:
+   1. Nomor rekening
+   2. Jika tidak ketemu, nama exact dan unik
+
+   Status:
+   ✓ = kode sama
+   ✕ = kode berbeda
+   ? = rekening/nama belum ada di database
+========================================================= */
+let codeCheckRows=[];
+
+function parseCodeCheckLine(line){
+  const clean=String(line ?? "").trim();
+
+  if(!clean){
+    return {
+      valid:false,
+      error:"Baris kosong"
+    };
+  }
+
+  let parts=clean
+    .split(/\t+/)
+    .map(v=>v.trim())
+    .filter(Boolean);
+
+  if(parts.length<4 && clean.includes(";")){
+    parts=clean
+      .split(";")
+      .map(v=>v.trim())
+      .filter(Boolean);
+  }
+
+  let inputCode="";
+  let account="";
+  let name="";
+
+  // Spreadsheet / TAB:
+  // NOMINAL | CODE | ACCOUNT | NAME
+  if(parts.length>=4){
+    inputCode=String(parts[1] || "")
+      .replace(/[^\d]/g,"");
+
+    account=cleanAccount(parts[2]);
+
+    name=parts
+      .slice(3)
+      .join(" ")
+      .trim();
+  }else{
+    // Fallback jika ditempel dengan spasi biasa.
+    const match=clean.match(
+      /^([Rp\s\d.,]+?)\s+(\d+)\s+(\d+)\s+(.+)$/i
+    );
+
+    if(match){
+      inputCode=String(match[2] || "")
+        .replace(/[^\d]/g,"");
+
+      account=cleanAccount(match[3]);
+      name=String(match[4] || "").trim();
+    }
+  }
+
+  if(!inputCode || !/^\d+$/.test(inputCode)){
+    return {
+      valid:false,
+      error:"Kode bank tidak ditemukan",
+      name,
+      account
+    };
+  }
+
+  if(!account){
+    return {
+      valid:false,
+      error:"Nomor rekening tidak ditemukan",
+      name,
+      inputCode
+    };
+  }
+
+  if(!name){
+    return {
+      valid:false,
+      error:"Nama rekening tidak ditemukan",
+      account,
+      inputCode
+    };
+  }
+
+  return {
+    valid:true,
+    inputCode,
+    account,
+    name
+  };
+}
+
+function crosscheckDatabaseCode(parsed,source){
+  if(!parsed.valid){
+    return {
+      source,
+      name:parsed.name || "",
+      account:parsed.account || "",
+      inputCode:parsed.inputCode || "",
+      dbCode:"",
+      dbName:"",
+      matchMethod:"",
+      status:"invalid",
+      error:parsed.error || "Format tidak valid"
+    };
+  }
+
+  const match=findDatabaseMatch(
+    parsed.name,
+    parsed.account
+  );
+
+  if(!match){
+    return {
+      source,
+      name:parsed.name,
+      account:parsed.account,
+      inputCode:parsed.inputCode,
+      dbCode:"",
+      dbName:"",
+      matchMethod:"",
+      status:"missing",
+      error:"Tidak ditemukan di database"
+    };
+  }
+
+  const dbCode=String(
+    match.row.bankCode || ""
+  ).trim();
+
+  const same=
+    String(parsed.inputCode) === dbCode;
+
+  return {
+    source,
+    name:match.row.name || parsed.name,
+    account:match.row.account || parsed.account,
+    inputCode:String(parsed.inputCode),
+    dbCode,
+    dbName:match.row.bankName || "",
+    matchMethod:match.method || "",
+    status:same ? "ok" : "bad",
+    error:same
+      ? ""
+      : `Kode berbeda: tempel ${parsed.inputCode}, database ${dbCode}`
+  };
+}
+
+function renderCodeCheck(){
+  const body=$("codeCheckBody");
+  if(!body) return;
+
+  body.innerHTML="";
+
+  const ok=codeCheckRows.filter(
+    row=>row.status==="ok"
+  ).length;
+
+  const bad=codeCheckRows.filter(
+    row=>row.status==="bad"
+  ).length;
+
+  const missing=codeCheckRows.filter(
+    row=>
+      row.status==="missing" ||
+      row.status==="invalid"
+  ).length;
+
+  if($("codeCheckOk")){
+    $("codeCheckOk").textContent=ok;
+  }
+
+  if($("codeCheckBad")){
+    $("codeCheckBad").textContent=bad;
+  }
+
+  if($("codeCheckMiss")){
+    $("codeCheckMiss").textContent=missing;
+  }
+
+  if(!codeCheckRows.length){
+    body.innerHTML=
+      '<tr><td colspan="5" class="empty">Belum ada data crosscheck.</td></tr>';
+    return;
+  }
+
+  codeCheckRows.forEach(row=>{
+    const tr=document.createElement("tr");
+
+    if(row.status==="bad"){
+      tr.className="code-check-row-bad";
+    }else if(
+      row.status==="missing" ||
+      row.status==="invalid"
+    ){
+      tr.className="code-check-row-miss";
+    }
+
+    let statusHtml="";
+
+    if(row.status==="ok"){
+      statusHtml=
+        '<span class="code-status code-status-ok" title="Kode sama">✓</span>';
+    }else if(row.status==="bad"){
+      statusHtml=
+        '<span class="code-status code-status-bad" title="Kode berbeda">✕</span>';
+    }else{
+      statusHtml=
+        '<span class="code-status code-status-miss" title="Tidak ditemukan">?</span>';
+    }
+
+    tr.innerHTML=`
+      <td title="${escapeHtml(row.matchMethod || row.error || "")}">
+        ${escapeHtml(row.name || "-")}
+      </td>
+      <td>${escapeHtml(row.account || "-")}</td>
+      <td>${escapeHtml(row.inputCode || "-")}</td>
+      <td>
+        ${escapeHtml(row.dbCode || "-")}
+        ${row.dbName ? `<small class="code-db-bank">${escapeHtml(row.dbName)}</small>` : ""}
+      </td>
+      <td>
+        ${statusHtml}
+      </td>
+    `;
+
+    body.appendChild(tr);
+  });
+}
+
+function processCodeCheck(){
+  const input=$("codeCheckInput");
+
+  if(!input) return;
+
+  const lines=input.value
+    .split(/\r?\n/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  if(!lines.length){
+    codeCheckRows=[];
+    renderCodeCheck();
+
+    setMessage(
+      $("codeCheckMessage"),
+      "Tempel data yang ingin dicrosscheck terlebih dahulu.",
+      "warn"
+    );
+
+    return;
+  }
+
+  codeCheckRows=lines.map(line=>
+    crosscheckDatabaseCode(
+      parseCodeCheckLine(line),
+      line
+    )
+  );
+
+  renderCodeCheck();
+
+  const ok=codeCheckRows.filter(
+    row=>row.status==="ok"
+  ).length;
+
+  const bad=codeCheckRows.filter(
+    row=>row.status==="bad"
+  ).length;
+
+  const missing=codeCheckRows.length-ok-bad;
+
+  setMessage(
+    $("codeCheckMessage"),
+    bad || missing
+      ? `${codeCheckRows.length} baris dicek • ${ok} sama • ${bad} beda • ${missing} tidak ditemukan/format salah.`
+      : `${codeCheckRows.length} baris dicek • semua kode sama dengan database.`,
+    bad || missing ? "warn" : "ok"
+  );
+}
+
 function invalidTransaction(line,error,detail={}){
   return {
     source:line,
@@ -1292,6 +1586,25 @@ $("masterDbHideBtn")?.addEventListener("click",()=>{
 
 $("importDbBtn").addEventListener("click",importDatabase);
 $("exportDbBtn").addEventListener("click",exportDatabase);
+
+$("codeCheckBtn")?.addEventListener("click",processCodeCheck);
+
+$("codeCheckClearBtn")?.addEventListener("click",()=>{
+  if($("codeCheckInput")){
+    $("codeCheckInput").value="";
+  }
+
+  codeCheckRows=[];
+  renderCodeCheck();
+  setMessage($("codeCheckMessage"));
+});
+
+$("codeCheckInput")?.addEventListener("keydown",event=>{
+  if(event.ctrlKey && event.key==="Enter"){
+    event.preventDefault();
+    processCodeCheck();
+  }
+});
 $("refreshDbBtn").addEventListener("click",()=>{
   loadSharedDatabase({silent:false,migrate:false});
 });

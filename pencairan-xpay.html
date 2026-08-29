@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <title>Pencairan XPAY</title>
-  <link rel="stylesheet" href="/pencairan-xpay.css?v=47.0.0">
+  <link rel="stylesheet" href="/pencairan-xpay.css?v=55.0.0">
 </head>
 <body>
 <main class="wrap payout-columns-wrap">
@@ -66,6 +66,62 @@ BRI Fajrian Aditya 46545464564"></textarea>
         </div>
 
         <div id="bulkMessage" class="message column-message"></div>
+
+        <div class="bank-code-check">
+          <div class="bank-code-check-head">
+            <div>
+              <strong>Crosscheck Kode Bank</strong>
+              <span>Bandingkan kode yang ditempel dengan kode di database rekening.</span>
+            </div>
+            <div class="bank-code-check-stats">
+              <span class="check-pill check-ok">✓ <b id="codeCheckOk">0</b></span>
+              <span class="check-pill check-bad">✕ <b id="codeCheckBad">0</b></span>
+              <span class="check-pill check-miss">? <b id="codeCheckMiss">0</b></span>
+            </div>
+          </div>
+
+          <textarea
+            id="codeCheckInput"
+            class="column-textarea code-check-textarea"
+            spellcheck="false"
+            placeholder="25,000,000	6	984598465446	Ahmad Yani
+25,000,000	4	9849846514	VIVI SUSANTI"></textarea>
+
+          <div class="column-help">
+            Format:
+            <b>NOMINAL | KODE BANK | NOMOR REKENING | NAMA</b>
+          </div>
+
+          <div class="toolbar column-toolbar">
+            <button class="primary" id="codeCheckBtn" type="button">
+              Crosscheck
+            </button>
+            <button class="danger" id="codeCheckClearBtn" type="button">
+              Bersihkan
+            </button>
+          </div>
+
+          <div id="codeCheckMessage" class="message column-message"></div>
+
+          <div class="table-wrap code-check-table-wrap">
+            <table class="code-check-table">
+              <thead>
+                <tr>
+                  <th>Nama</th>
+                  <th>Rekening</th>
+                  <th>Code Tempel</th>
+                  <th>Code Database</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="codeCheckBody">
+                <tr>
+                  <td colspan="5" class="empty">Belum ada data crosscheck.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </article>
 
@@ -280,6 +336,6 @@ BRIMO / GILANG ILHAM BINTANG (WD BERSIH)"></textarea>
 
 </main>
 
-<script src="/pencairan-xpay.js?v=47.0.0" defer></script>
+<script src="/pencairan-xpay.js?v=55.0.0" defer></script>
 </body>
 </html>
