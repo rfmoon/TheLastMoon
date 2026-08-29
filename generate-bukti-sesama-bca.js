@@ -170,7 +170,7 @@ $('saveToPcBtn').addEventListener('click',function(){
     })
     .then(canvas=>{
         const a=document.createElement('a');
-        a.download='SIMULASI_BCA_Sesama_BCA.png';
+        a.download='Template_Transaksi_HD.png';
         a.href=canvas.toDataURL('image/png');
         a.click();
 

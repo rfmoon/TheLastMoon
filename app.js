@@ -550,7 +550,7 @@ async function renderGenerateBuktiWorkspace(menu){
 
         <iframe
           class="xpay-frame generate-bukti-frame"
-          src="/generate-bukti.html?v=53.0.0"
+          src="/generate-bukti.html?v=54.0.0"
           title="Generate Bukti"
           loading="eager"
           referrerpolicy="same-origin">

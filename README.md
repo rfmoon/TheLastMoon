@@ -1,34 +1,30 @@
-# TheLastMoon V53 — Generate Bukti / Script Baru
+# TheLastMoon V54 — Generate Bukti CSP Fix
 
-Script baru dari file terbaru dipakai.
+Penyebab tampilan rusak:
+TheLastMoon memakai CSP:
+- style-src 'self'
+- script-src 'self' https://cdn.jsdelivr.net
 
-Menu:
-List Data -> Generate Bukti
+Sementara template user memakai:
+- <style> inline
+- <script> inline
 
-Dropdown:
-BCA
-- Antar Bank
-- Sesama BCA
+Browser memblokir keduanya sehingga template tampil tanpa CSS/logic.
 
-Mapping:
-SOURCE_1 -> Antar Bank
-SOURCE_2 -> Sesama BCA
-
-Isi SOURCE_1 dan SOURCE_2:
-TIDAK DIUBAH.
-Keduanya disimpan byte-for-byte setelah base64 decode.
-
-SHA256 SOURCE_1:
-6a8a5fd8d80373f04c0156c52bddb5ce04d392230c496580e383be315c0c83df
-
-SHA256 SOURCE_2:
-3df0f57b2c0ba61d89f28ecaf8ad25e73ec32be934885a61566a11cf1d3030b6
-
-Wrapper hanya mengatur menu/dropdown dan menjalankan template dalam iframe sandbox.
-Penanda PREVIEW berada di wrapper, bukan di dalam script asli.
+Perbaikan V54:
+- CSS SOURCE_1 dipindah apa adanya ke generate-bukti-antar-bank.css
+- JS SOURCE_1 dipindah apa adanya ke generate-bukti-antar-bank.js
+- CSS SOURCE_2 dipindah apa adanya ke generate-bukti-sesama-bca.css
+- JS SOURCE_2 dipindah apa adanya ke generate-bukti-sesama-bca.js
+- HTML hanya diarahkan ke file CSS/JS lokal tersebut
+- Tidak mengubah isi CSS/logic template
+- Dropdown tetap:
+  BCA
+  - Antar Bank
+  - Sesama BCA
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v53-generate-bukti-new-original-scripts
+v54-generate-bukti-csp-fix
