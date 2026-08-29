@@ -542,24 +542,23 @@ async function renderGenerateBuktiWorkspace(menu){
       <section class="xpay-workspace generate-bukti-workspace">
         <header class="xpay-workspace-head">
           <div>
-            <span class="kicker">BCA • TEMPLATE SIMULASI</span>
+            <span class="kicker">BCA</span>
             <h3>Generate Bukti</h3>
-            <p>${escapeHtml(data.message)} Pilih BCA → Antar Bank atau Sesama BCA.</p>
+            <p>${escapeHtml(data.message)} Pilih Antar Bank atau Sesama BCA.</p>
           </div>
-          <span class="xpay-workspace-badge">DEMO • SIMULASI</span>
+          <span class="xpay-workspace-badge">PREVIEW</span>
         </header>
 
         <iframe
           class="xpay-frame generate-bukti-frame"
-          src="/generate-bukti.html?v=51.0.0"
-          title="Generate Bukti — Simulasi"
+          src="/generate-bukti.html?v=52.0.0"
+          title="Generate Bukti"
           loading="eager"
           referrerpolicy="same-origin">
         </iframe>
       </section>`;
   }catch(error){
-    $("#pageContent").innerHTML=
-      errorHtml(error.message);
+    $("#pageContent").innerHTML=errorHtml(error.message);
   }
 }
 

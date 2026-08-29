@@ -1,45 +1,32 @@
-# TheLastMoon V51 — Generate Bukti BCA (Demo)
+# TheLastMoon V52 — Generate Bukti Original Scripts
 
 Perubahan menu:
+List Data -> Generate Bukti
 
-List Data
-→ Generate Bukti
-
-ID menu tetap:
-list-data
-
-Jadi permission user lama tidak perlu diubah.
-
-Di Generate Bukti tersedia:
-
+Dropdown:
 BCA
 - Antar Bank
 - Sesama BCA
 
-Mapping script upload:
-- SCRIPT 1 → Antar Bank
-- SCRIPT 2 → Sesama BCA
+Mapping:
+SOURCE_1 -> Antar Bank
+SOURCE_2 -> Sesama BCA
 
-Karena template ini menyerupai bukti transaksi bank, versi integrasi
-dibuat sebagai SIMULASI / DEMO dan setiap hasil memiliki watermark permanen:
+PENTING:
+Isi SOURCE_1 dan SOURCE_2 dari file yang diberikan user TIDAK DIUBAH.
+Keduanya ditulis byte-for-byte setelah base64 decode.
 
-SIMULASI / DEMO — BUKAN BUKTI TRANSFER
+SHA256 SOURCE_1:
+6a8a5fd8d80373f04c0156c52bddb5ce04d392230c496580e383be315c0c83df
 
-Watermark berada di dalam area struk sehingga ikut pada hasil Save Demo ke PC.
+SHA256 SOURCE_2:
+3df0f57b2c0ba61d89f28ecaf8ad25e73ec32be934885a61566a11cf1d3030b6
 
-File baru:
-generate-bukti.html
-generate-bukti.css
-generate-bukti.js
-generate-bukti-antar-bank.html
-generate-bukti-antar-bank.css
-generate-bukti-antar-bank.js
-generate-bukti-sesama-bca.html
-generate-bukti-sesama-bca.css
-generate-bukti-sesama-bca.js
+Untuk keamanan, template dijalankan dalam iframe sandbox tanpa izin download.
+Jadi script asli tetap utuh, tetapi wrapper membatasi ekspor/download.
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v51-generate-bukti-bca-demo
+v52-generate-bukti-original-scripts
