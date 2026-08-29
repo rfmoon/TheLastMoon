@@ -335,6 +335,7 @@ async function navigate(menuId) {
   if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
   if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
   if (menuId === "ai-chat") return renderMemoWorkspace(menu);
+  if (menuId === "list-data") return renderGenerateBuktiWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -528,6 +529,40 @@ async function renderMemoWorkspace(menu) {
     $("#pageContent").innerHTML = errorHtml(error.message);
   }
 }
+
+async function renderGenerateBuktiWorkspace(menu){
+  $("#pageContent").innerHTML=loadingHtml();
+
+  try{
+    const data=await api(
+      `/api/module/${encodeURIComponent(menu.id)}`
+    );
+
+    $("#pageContent").innerHTML=`
+      <section class="xpay-workspace generate-bukti-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">BCA • TEMPLATE SIMULASI</span>
+            <h3>Generate Bukti</h3>
+            <p>${escapeHtml(data.message)} Pilih BCA → Antar Bank atau Sesama BCA.</p>
+          </div>
+          <span class="xpay-workspace-badge">DEMO • SIMULASI</span>
+        </header>
+
+        <iframe
+          class="xpay-frame generate-bukti-frame"
+          src="/generate-bukti.html?v=51.0.0"
+          title="Generate Bukti — Simulasi"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  }catch(error){
+    $("#pageContent").innerHTML=
+      errorHtml(error.message);
+  }
+}
+
 
 async function renderModule(menu) {
   $("#pageContent").innerHTML = loadingHtml();

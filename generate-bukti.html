@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generate Bukti — BCA</title>
+  <link rel="stylesheet" href="/generate-bukti.css?v=51.0.0">
+</head>
+<body>
+  <div class="generator-toolbar">
+    <div class="generator-bank">
+      <span class="generator-bank-label">BANK</span>
+      <strong>BCA</strong>
+    </div>
+
+    <label class="generator-select-wrap">
+      <span>Jenis</span>
+      <select id="generatorType">
+        <option value="antar-bank">Antar Bank</option>
+        <option value="sesama-bca">Sesama BCA</option>
+      </select>
+    </label>
+
+    <div class="generator-demo-note">
+      SIMULASI / DEMO
+    </div>
+  </div>
+
+  <main class="generator-stage">
+    <iframe
+      id="generatorFrame"
+      title="Generate Bukti BCA — Simulasi"
+      src="/generate-bukti-antar-bank.html?v=51.0.0"
+      referrerpolicy="strict-origin-when-cross-origin">
+    </iframe>
+  </main>
+
+  <script src="/generate-bukti.js?v=51.0.0"></script>
+</body>
+</html>

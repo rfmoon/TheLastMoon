@@ -1,50 +1,45 @@
-# TheLastMoon V50 — Dashboard Clean + GIF Background
+# TheLastMoon V51 — Generate Bukti BCA (Demo)
 
-## Dashboard
+Perubahan menu:
 
-Dihapus dari Dashboard:
-- AKTIF / jumlah menu
-- ONLINE / status sistem
-- MASTER / tingkat akses
-- AMAN / masa sesi login
-- seluruh bagian Akses cepat
+List Data
+→ Generate Bukti
 
-Dashboard sekarang hanya menampilkan sambutan ringkas.
+ID menu tetap:
+list-data
 
-## Settings Background
+Jadi permission user lama tidak perlu diubah.
 
-Settings sekarang mendukung dua cara:
+Di Generate Bukti tersedia:
 
-1. Tempel link HTTPS gambar/GIF.
-2. Upload file langsung dari komputer.
+BCA
+- Antar Bank
+- Sesama BCA
 
-Format upload:
-- GIF
-- JPG/JPEG
-- PNG
-- WebP
+Mapping script upload:
+- SCRIPT 1 → Antar Bank
+- SCRIPT 2 → Sesama BCA
 
-Ukuran upload maksimal:
-1.7 MB
+Karena template ini menyerupai bukti transaksi bank, versi integrasi
+dibuat sebagai SIMULASI / DEMO dan setiap hasil memiliki watermark permanen:
 
-File upload disimpan di Cloudflare D1 dan dapat dipakai oleh semua akun.
+SIMULASI / DEMO — BUKAN BUKTI TRANSFER
 
-Endpoint:
-POST /api/settings/background-upload
-GET  /api/background-media
+Watermark berada di dalam area struk sehingga ikut pada hasil Save Demo ke PC.
 
-Cara:
-1. Settings
-2. Pilih file GIF/gambar
-3. Tekan Upload File
-4. URL upload otomatis masuk ke daftar background
-5. Tekan Simpan untuk semua akun
-
-Upload baru mengganti file upload sebelumnya.
-Link HTTPS lain tetap bisa digunakan bersamaan sebagai slideshow.
+File baru:
+generate-bukti.html
+generate-bukti.css
+generate-bukti.js
+generate-bukti-antar-bank.html
+generate-bukti-antar-bank.css
+generate-bukti-antar-bank.js
+generate-bukti-sesama-bca.html
+generate-bukti-sesama-bca.css
+generate-bukti-sesama-bca.js
 
 Setelah deploy:
 Ctrl + Shift + R
 
 Health:
-v50-dashboard-clean-gif-background
+v51-generate-bukti-bca-demo
