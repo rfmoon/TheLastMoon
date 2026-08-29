@@ -1,16 +1,24 @@
-HASIL RESULT API
+V58 HASIL RESULT API
 
-Route ini sengaja berada di:
-functions/api/[[path]].js
+Sekarang Result API punya file route KHUSUS:
 
-Endpoint:
-POST /api/external/results
-GET  /api/external/results
-GET  /api/results
-GET  /api/results/dates
+functions/api/results.js
+  -> GET /api/results
 
-Cloudflare Pages memakai [[path]].js sebagai catch-all router,
-jadi tidak wajib ada file results.js terpisah.
+functions/api/results/dates.js
+  -> GET /api/results/dates
 
-Version:
-v57-result-history-10tanggal
+functions/api/external/results.js
+  -> GET/POST/OPTIONS /api/external/results
+
+functions/api/results-health.js
+  -> GET /api/results-health
+
+[[path]].js tetap memiliki route lama sebagai fallback.
+
+Setelah deploy:
+1. Ctrl + Shift + R
+2. Buka:
+   https://thelastmoon.pages.dev/api/health
+   harus version v58-result-dedicated-endpoints
+3. Login lalu buka Hasil Result.
