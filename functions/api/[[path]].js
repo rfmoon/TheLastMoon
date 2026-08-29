@@ -8,7 +8,7 @@ const MENUS = Object.freeze([
   { id: "pencairan-xpay", label: "Pencairan XPAY", icon: "▤", parentId: "xpay", assignable: true },
 
   { id: "biaya", label: "Biaya", icon: "◈", assignable: true },
-  { id: "list-data", label: "List Data", icon: "☷", assignable: true },
+  { id: "list-data", label: "Generate Bukti", icon: "▧", assignable: true },
   { id: "hasil-result", label: "Hasil Result", icon: "◎", assignable: true },
   { id: "event-scatter", label: "EVENT SCATTER", icon: "✺", assignable: true },
   { id: "ai-chat", label: "MEMO", icon: "📝", assignable: true },
@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v50-dashboard-clean-gif-background";
+const VERSION = "v51-generate-bukti-bca-demo";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
