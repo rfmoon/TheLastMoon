@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Hasil Result</title>
-  <link rel="stylesheet" href="/hasil-result.css?v=62.0.0">
+  <link rel="stylesheet" href="/hasil-result.css?v=63.0.0">
 </head>
 <body>
   <main class="result-app">
@@ -31,38 +31,37 @@
       </div>
     </section>
 
-    <section class="source-panel hidden" id="masterSourcePanel">
-      <div class="source-panel-head">
+    <section class="worker-panel hidden" id="masterSourcePanel">
+      <div class="worker-panel-head">
         <div>
-          <strong>Auto Source Result</strong>
-          <span>Link sumber dinamis. Update otomatis dijalankan oleh Cloudflare Browser Run Worker.</span>
+          <span class="worker-eyebrow">MASTER ADMINISTRATOR ONLY</span>
+          <strong>Auto Result Browser Worker</strong>
+          <small>Sinkronisasi otomatis berjalan dari Cloudflare Browser Run.</small>
         </div>
-        <label class="source-toggle">
-          <input id="sourceEnabled" type="checkbox">
-          <span>Aktif untuk Cron</span>
+        <div class="worker-live" id="workerOnlineBadge">● CHECKING</div>
+      </div>
+
+      <div class="worker-config-row">
+        <label>Browser Worker
+          <input id="workerUrl" type="url" value="https://thelastmoon-result-cron.thelastmoon.workers.dev" spellcheck="false">
         </label>
+        <button id="workerSave" type="button">Simpan Worker</button>
+        <button id="workerTest" type="button">Test Worker</button>
       </div>
 
-      <div class="source-row">
-        <input
-          id="sourceUrl"
-          type="url"
-          value="https://luna34849.com/history/number"
-          placeholder="https://luna34849.com/history/number">
-
-        <button id="sourceSave" type="button">Simpan Link</button>
-        <button id="sourceTest" type="button">Test HTML</button>
-        <button id="sourcePull" type="button">Cek Sumber</button>
+      <div class="worker-cards">
+        <div class="worker-card"><span>Browser Worker</span><strong id="workerState">CHECKING</strong><small id="workerVersion">-</small></div>
+        <div class="worker-card"><span>Auto Sync</span><strong>AKTIF</strong><small>Cloudflare Cron</small></div>
+        <div class="worker-card"><span>Interval</span><strong>10 MENIT</strong><small>Tanpa buka Chrome</small></div>
+        <div class="worker-card"><span>Last Sync</span><strong id="workerLastSync">-</strong><small id="workerLatestDate">-</small></div>
+        <div class="worker-card"><span>Market</span><strong id="workerMarkets">0</strong><small>Pasaran tersimpan</small></div>
+        <div class="worker-card"><span>Result</span><strong id="workerResults">0</strong><small id="workerDateCount">0 tanggal</small></div>
       </div>
 
-      <div id="sourceStatus" class="source-status">
-        Belum dites.
-      </div>
-
-      <div id="sourceDiag" class="source-diagnostics"></div>
+      <div id="workerMessage" class="worker-message">Memeriksa Browser Worker...</div>
     </section>
 
-    <section class="result-stats">
+<section class="result-stats">
       <span>Tanggal <b id="activeDate">-</b></span>
       <span>Ditampilkan <b id="resultTotal">0</b></span>
       <span>Server <b id="serverTotal">0</b></span>
@@ -96,6 +95,6 @@
     </section>
   </main>
 
-  <script src="/hasil-result.js?v=62.0.0"></script>
+  <script src="/hasil-result.js?v=63.0.0"></script>
 </body>
 </html>

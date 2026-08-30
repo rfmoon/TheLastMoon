@@ -392,6 +392,51 @@ async function pullSourceNow(){
 }
 
 
+function setWorkerMessage(text,type=""){
+  const el=$("#workerMessage"); if(!el)return;
+  el.textContent=text; el.className="worker-message"+(type?" "+type:"");
+}
+function formatWorkerTime(value){
+  const n=Number(value||0); if(!n)return "-";
+  const d=new Date(n); return Number.isNaN(d.getTime())?"-":d.toLocaleString("id-ID");
+}
+async function loadWorkerStatus(showMessage=false){
+  const panel=$("#masterSourcePanel"); if(!panel)return null;
+  try{
+    const data=await sourceApi("/api/result-worker-status");
+    sourceIsMaster=true; panel.classList.remove("hidden");
+    $("#workerUrl").value=data.workerUrl||"https://thelastmoon-result-cron.thelastmoon.workers.dev";
+    const w=data.worker||{}, s=data.stats||{}, online=Boolean(w.ok);
+    $("#workerState").textContent=online?"ONLINE":"ERROR";
+    $("#workerVersion").textContent=w.version||"-";
+    $("#workerLastSync").textContent=formatWorkerTime(s.lastSyncAt);
+    $("#workerLatestDate").textContent=s.latestDate?`${s.latestDate} • ${Number(s.latestDateTotal||0)} hasil`:"-";
+    $("#workerMarkets").textContent=Number(s.markets||0);
+    $("#workerResults").textContent=Number(s.total||0);
+    $("#workerDateCount").textContent=`${Number(s.dates||0)} tanggal`;
+    const badge=$("#workerOnlineBadge");
+    badge.textContent=online?"● WORKER ONLINE":"● WORKER ERROR";
+    badge.className="worker-live "+(online?"ok":"bad");
+    setWorkerMessage(
+      online
+        ? (showMessage?`Worker siap • Browser Run aktif • API Result aktif • Auto sync ${data.cronInterval||"10 menit"}.`:`Auto sync aktif • ${Number(s.markets||0)} market • ${Number(s.total||0)} result • ${Number(s.dates||0)} tanggal.`)
+        : `Worker tidak siap: ${w.error||"Periksa Browser binding / API key."}`,
+      online?"ok":"bad"
+    );
+    return data;
+  }catch(error){panel.classList.add("hidden");sourceIsMaster=false;return null;}
+}
+async function saveWorkerUrl(){
+  const value=String($("#workerUrl")?.value||"").trim();
+  setWorkerMessage("Menyimpan Browser Worker...");
+  try{
+    const data=await sourceApi("/api/result-worker-status",{method:"PUT",body:JSON.stringify({workerUrl:value})});
+    $("#workerUrl").value=data.workerUrl||value;
+    setWorkerMessage("Browser Worker tersimpan.","ok");
+    await loadWorkerStatus(true);
+  }catch(error){setWorkerMessage(error.message,"bad");}
+}
+
 async function loadServerStatus(){
   try{
     const data=await api(
@@ -658,6 +703,7 @@ async function loadResults(showStatus=true){
 
 async function liveCheck(){
   try{
+    await loadWorkerStatus(false);
     const status=await loadServerStatus();
 
     if(
@@ -734,22 +780,9 @@ async function refreshAll(){
 }
 
 async function start(){
-  $("#sourceSave").addEventListener(
-    "click",
-    saveSourceConfig
-  );
-
-  $("#sourceTest").addEventListener(
-    "click",
-    testSource
-  );
-
-  $("#sourcePull").addEventListener(
-    "click",
-    pullSourceNow
-  );
-
-  await loadSourceConfig();
+  $("#workerSave")?.addEventListener("click",saveWorkerUrl);
+  $("#workerTest")?.addEventListener("click",()=>loadWorkerStatus(true));
+  await loadWorkerStatus(false);
 
   try{
     const health=await api("/api/results-health");

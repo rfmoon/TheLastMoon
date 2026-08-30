@@ -117,3 +117,14 @@ v54-generate-bukti-csp-fix
 - Hasil Result tetap live-check D1 setiap 5 detik + fallback 60 detik.
 - Gunakan `thelastmoon-result-browser-worker-v2.zip` untuk scan headless browser tanpa Chrome user dibuka.
 - Health: `v62-browser-run-ready`.
+
+## V63 — Auto Result Worker Clean UI
+- Panel diagnosis HTML lama dihapus dari UI.
+- Panel `Auto Result Browser Worker` hanya MASTER ADMINISTRATOR.
+- Status Worker memakai `/health` nyata dari Browser Worker.
+- Menampilkan ONLINE/ERROR, Auto Sync, Interval 10 menit, Last Sync, Market, Result, Tanggal.
+- URL Worker bisa disimpan oleh Master.
+- Backend `/api/result-worker-status` master-only.
+- RUN_TOKEN tidak ditampilkan di TheLastMoon.
+- Live stats tetap diperbarui setiap 5 detik.
+- Health: `v63-auto-result-worker-clean`.
