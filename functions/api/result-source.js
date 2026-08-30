@@ -407,6 +407,7 @@ export async function onRequestGet({ request, env }) {
 
     await ensureSchema(env.DB);
     const user = await requireSession(request, env.DB);
+    requireMaster(user);
 
     const row = await env.DB.prepare(`
       SELECT
@@ -487,6 +488,7 @@ export async function onRequestPost({ request, env }) {
 
     await ensureSchema(env.DB);
     const user = await requireSession(request, env.DB);
+    requireMaster(user);
 
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || "test").trim().toLowerCase();
@@ -505,7 +507,6 @@ export async function onRequestPost({ request, env }) {
     const now = Date.now();
 
     if (action === "pull") {
-      requireMaster(user);
       const saved = await saveRows(env.DB, result.rows);
 
       await env.DB.prepare(`
