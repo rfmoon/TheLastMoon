@@ -335,8 +335,12 @@ async function testSource(){
 
     setSourceStatus(
       rows
-        ? `BERHASIL • server membaca ${rows} result tanpa browser Luna.`
-        : `Link berhasil dibuka server (HTTP ${source.status}), tetapi result statis belum terbaca. Lihat diagnosis di bawah.`,
+        ? `HTML statis terbaca • ${rows} result ditemukan.`
+        : (
+          source.hasChangeHistory
+            ? `HTTP ${source.status} • halaman dinamis terdeteksi (changeHistory/AJAX). Browser Run Worker diperlukan untuk membaca update.`
+            : `HTTP ${source.status} • result statis belum terbaca.`
+        ),
       rows ? "ok" : "bad"
     );
 
@@ -369,8 +373,12 @@ async function pullSourceNow(){
 
     setSourceStatus(
       data.saved
-        ? `BERHASIL • ${data.saved} result masuk ke Hasil Result.`
-        : "Server belum menemukan row result yang dapat disimpan.",
+        ? `HTML statis terbaca • ${data.saved} result disimpan.`
+        : (
+          data.source?.hasChangeHistory
+            ? "Halaman ini dinamis (changeHistory/AJAX). Fetch biasa tidak bisa membaca update. Gunakan Browser Run Worker V2 untuk scan otomatis."
+            : "Server belum menemukan row result yang dapat disimpan."
+        ),
       data.saved ? "ok" : "bad"
     );
 

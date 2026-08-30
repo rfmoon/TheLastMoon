@@ -109,3 +109,11 @@ v54-generate-bukti-csp-fix
 - Setiap kartu tanggal sekarang punya tombol `COPY ALL`.
 - COPY ALL mengambil seluruh `resultText` pada tanggal tersebut.
 - Health: `v61-master-source-live-refresh`.
+
+## V62 — Browser Run Ready
+
+- Diagnosis V61 membuktikan source Luna dinamis: `changeHistory` ada tetapi `Result statis = 0`.
+- Tombol source sekarang menjelaskan bahwa fetch HTML biasa tidak dapat menjalankan AJAX market.
+- Hasil Result tetap live-check D1 setiap 5 detik + fallback 60 detik.
+- Gunakan `thelastmoon-result-browser-worker-v2.zip` untuk scan headless browser tanpa Chrome user dibuka.
+- Health: `v62-browser-run-ready`.
