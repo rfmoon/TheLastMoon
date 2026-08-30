@@ -86,3 +86,14 @@ v54-generate-bukti-csp-fix
 - `TEST & SYNC` menguji scope `results:write` lalu langsung mengirim seluruh result.
 - Status API tidak lagi dipotong pendek.
 - Health: `v59-result-sync-diagnostics`.
+
+## V60 — Server Source Result Test
+
+- Tambah kolom link sumber di Hasil Result.
+- Default: `https://luna34849.com/history/number`.
+- `Test Server` membuktikan apakah Cloudflare dapat membuka link tanpa browser user.
+- `Tarik Sekarang` mencoba membaca tabel result statis dan menyimpan maksimal 10 row ke D1.
+- Diagnosis menampilkan HTTP, #pool-name, #isihistory, changeHistory, candidate URL history.
+- `Aktif untuk Cron` menyimpan status untuk Worker cron terpisah.
+- Endpoint cron: `POST /api/external/result-source-pull` dengan API key `results:write`.
+- Health: `v60-server-source-test`.

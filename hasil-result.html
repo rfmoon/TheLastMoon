@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Hasil Result</title>
-  <link rel="stylesheet" href="/hasil-result.css?v=59.0.0">
+  <link rel="stylesheet" href="/hasil-result.css?v=60.0.0">
 </head>
 <body>
   <main class="result-app">
@@ -29,6 +29,37 @@
         <button id="resultToday" type="button">Hari Ini</button>
         <button id="resultRefresh" type="button">↻ Refresh</button>
       </div>
+    </section>
+
+    <section class="source-panel">
+      <div class="source-panel-head">
+        <div>
+          <strong>Auto Source Result</strong>
+          <span>Server mencoba membaca link ini tanpa browser Luna dibuka.</span>
+        </div>
+        <label class="source-toggle">
+          <input id="sourceEnabled" type="checkbox">
+          <span>Aktif untuk Cron</span>
+        </label>
+      </div>
+
+      <div class="source-row">
+        <input
+          id="sourceUrl"
+          type="url"
+          value="https://luna34849.com/history/number"
+          placeholder="https://luna34849.com/history/number">
+
+        <button id="sourceSave" type="button">Simpan Link</button>
+        <button id="sourceTest" type="button">Test Server</button>
+        <button id="sourcePull" type="button">Tarik Sekarang</button>
+      </div>
+
+      <div id="sourceStatus" class="source-status">
+        Belum dites.
+      </div>
+
+      <div id="sourceDiag" class="source-diagnostics"></div>
     </section>
 
     <section class="result-stats">
@@ -64,6 +95,6 @@
     </section>
   </main>
 
-  <script src="/hasil-result.js?v=59.0.0"></script>
+  <script src="/hasil-result.js?v=60.0.0"></script>
 </body>
 </html>

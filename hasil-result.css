@@ -142,3 +142,115 @@ tr:last-child td{border-bottom:0}
   background:rgba(25,105,73,.15);
   color:#86e5b8;
 }
+
+
+/* =========================================================
+   V60 — SERVER SOURCE TEST
+========================================================= */
+.source-panel{
+  display:grid;
+  gap:8px;
+  padding:10px 11px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:12px;
+  background:rgba(10,17,29,.72);
+  backdrop-filter:blur(12px);
+}
+
+.source-panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.source-panel-head strong{
+  display:block;
+  font-size:11px;
+}
+
+.source-panel-head span{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font-size:8px;
+}
+
+.source-toggle{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:var(--muted);
+  font-size:9px;
+  font-weight:800;
+}
+
+.source-row{
+  display:grid;
+  grid-template-columns:minmax(280px,1fr) auto auto auto;
+  gap:6px;
+}
+
+.source-row input,
+.source-row button{
+  height:32px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--panel2);
+  color:var(--text);
+  padding:0 9px;
+  font-size:9px;
+  outline:none;
+}
+
+.source-row button{
+  cursor:pointer;
+  font-weight:900;
+}
+
+.source-status{
+  min-height:28px;
+  padding:7px 9px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:rgba(3,8,15,.28);
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.45;
+}
+
+.source-status.ok{
+  color:#74dea9;
+  border-color:rgba(87,212,156,.26);
+}
+
+.source-status.bad{
+  color:#ff929d;
+  border-color:rgba(255,125,139,.28);
+}
+
+.source-diagnostics{
+  display:none;
+  padding:8px 9px;
+  border-radius:8px;
+  background:rgba(5,10,17,.35);
+  color:#9eb0c6;
+  font:9px/1.55 Consolas,monospace;
+  white-space:pre-wrap;
+  overflow:auto;
+  max-height:170px;
+}
+
+.source-diagnostics.show{
+  display:block;
+}
+
+@media(max-width:900px){
+  .source-row{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .source-row input{
+    grid-column:1/-1;
+  }
+}

@@ -265,3 +265,17 @@ CREATE INDEX IF NOT EXISTS idx_lottery_results_date_time
 CREATE INDEX IF NOT EXISTS idx_lottery_results_display
   ON lottery_results(display_name, result_date);
 
+
+CREATE TABLE IF NOT EXISTS result_source_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  source_url TEXT NOT NULL DEFAULT 'https://luna34849.com/history/number',
+  enabled INTEGER NOT NULL DEFAULT 0,
+  last_test_at INTEGER,
+  last_test_ok INTEGER,
+  last_test_message TEXT NOT NULL DEFAULT '',
+  last_pull_at INTEGER,
+  last_pull_saved INTEGER NOT NULL DEFAULT 0,
+  updated_by INTEGER,
+  updated_at INTEGER NOT NULL
+);
+

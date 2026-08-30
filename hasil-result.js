@@ -71,6 +71,200 @@ function setActiveDate(date){
   renderDateHistory();
 }
 
+async function sourceApi(url,options={}){
+  const response=await fetch(url,{
+    credentials:"same-origin",
+    cache:"no-store",
+    ...options,
+    headers:{
+      "Content-Type":"application/json",
+      ...(options.headers || {})
+    }
+  });
+
+  const data=await response.json().catch(()=>({}));
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      `HTTP ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+function setSourceStatus(text,type=""){
+  const el=$("#sourceStatus");
+  el.textContent=text;
+  el.className=
+    "source-status" +
+    (type ? " " + type : "");
+}
+
+function showSourceDiag(source){
+  const box=$("#sourceDiag");
+
+  if(!source){
+    box.className="source-diagnostics";
+    box.textContent="";
+    return;
+  }
+
+  const lines=[
+    `HTTP: ${source.status}`,
+    `Final URL: ${source.finalUrl || "-"}`,
+    `HTML: ${Number(source.htmlLength || 0)} chars`,
+    `#pool-name: ${source.hasPoolName ? "ADA" : "TIDAK"}`,
+    `#isihistory: ${source.hasIsiHistory ? "ADA" : "TIDAK"}`,
+    `changeHistory: ${source.hasChangeHistory ? "ADA" : "TIDAK"}`,
+    `Market default: ${source.market || "-"}`,
+    `Result statis: ${Array.isArray(source.rows) ? source.rows.length : 0}`,
+    source.historyCandidates?.length
+      ? `Candidate history URL:\n- ${source.historyCandidates.join("\n- ")}`
+      : "Candidate history URL: belum ditemukan"
+  ];
+
+  box.textContent=lines.join("\n");
+  box.className="source-diagnostics show";
+}
+
+async function loadSourceConfig(){
+  try{
+    const data=await sourceApi(
+      "/api/result-source"
+    );
+
+    const cfg=data.config || {};
+
+    $("#sourceUrl").value=
+      cfg.sourceUrl ||
+      "https://luna34849.com/history/number";
+
+    $("#sourceEnabled").checked=
+      Number(cfg.enabled) === 1;
+
+    if(cfg.lastTestAt){
+      setSourceStatus(
+        cfg.lastTestMessage ||
+        "Sumber pernah dites.",
+        Number(cfg.lastTestOk) === 1
+          ? "ok"
+          : "bad"
+      );
+    }
+  }catch(error){
+    setSourceStatus(
+      error.message,
+      "bad"
+    );
+  }
+}
+
+async function saveSourceConfig(){
+  setSourceStatus(
+    "Menyimpan link..."
+  );
+
+  try{
+    const data=await sourceApi(
+      "/api/result-source",
+      {
+        method:"PUT",
+        body:JSON.stringify({
+          sourceUrl:
+            $("#sourceUrl").value.trim(),
+          enabled:
+            $("#sourceEnabled").checked
+        })
+      }
+    );
+
+    setSourceStatus(
+      `Link tersimpan • Cron ${data.enabled ? "AKTIF" : "NONAKTIF"}.`,
+      "ok"
+    );
+  }catch(error){
+    setSourceStatus(
+      error.message,
+      "bad"
+    );
+  }
+}
+
+async function testSource(){
+  setSourceStatus(
+    "Server sedang membuka link sumber..."
+  );
+  showSourceDiag(null);
+
+  try{
+    const data=await sourceApi(
+      "/api/result-source",
+      {
+        method:"POST",
+        body:JSON.stringify({
+          action:"test"
+        })
+      }
+    );
+
+    const source=data.source || {};
+    const rows=Array.isArray(source.rows)
+      ? source.rows.length
+      : 0;
+
+    setSourceStatus(
+      rows
+        ? `BERHASIL • server membaca ${rows} result tanpa browser Luna.`
+        : `Link berhasil dibuka server (HTTP ${source.status}), tetapi result statis belum terbaca. Lihat diagnosis di bawah.`,
+      rows ? "ok" : "bad"
+    );
+
+    showSourceDiag(source);
+  }catch(error){
+    setSourceStatus(
+      `TEST GAGAL • ${error.message}`,
+      "bad"
+    );
+  }
+}
+
+async function pullSourceNow(){
+  setSourceStatus(
+    "Menarik result dari server..."
+  );
+
+  try{
+    const data=await sourceApi(
+      "/api/result-source",
+      {
+        method:"POST",
+        body:JSON.stringify({
+          action:"pull"
+        })
+      }
+    );
+
+    showSourceDiag(data.source);
+
+    setSourceStatus(
+      data.saved
+        ? `BERHASIL • ${data.saved} result masuk ke Hasil Result.`
+        : "Server belum menemukan row result yang dapat disimpan.",
+      data.saved ? "ok" : "bad"
+    );
+
+    await refreshAll();
+  }catch(error){
+    setSourceStatus(
+      `TARIK GAGAL • ${error.message}`,
+      "bad"
+    );
+  }
+}
+
+
 async function loadServerStatus(){
   try{
     const data=await api(
@@ -336,6 +530,23 @@ async function refreshAll(){
 }
 
 async function start(){
+  $("#sourceSave").addEventListener(
+    "click",
+    saveSourceConfig
+  );
+
+  $("#sourceTest").addEventListener(
+    "click",
+    testSource
+  );
+
+  $("#sourcePull").addEventListener(
+    "click",
+    pullSourceNow
+  );
+
+  await loadSourceConfig();
+
   try{
     const health=await api("/api/results-health");
 
