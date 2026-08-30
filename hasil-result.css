@@ -254,3 +254,81 @@ tr:last-child td{border-bottom:0}
     grid-column:1/-1;
   }
 }
+
+
+/* =========================================================
+   V61 — MASTER SOURCE + LIVE UPDATE + COPY ALL PER DATE
+========================================================= */
+.hidden{
+  display:none !important;
+}
+
+.live-sync-pill{
+  color:#78e3ae !important;
+  border-color:rgba(87,212,156,.25) !important;
+}
+
+.date-history{
+  align-items:stretch;
+}
+
+.date-card{
+  flex:0 0 auto;
+  width:120px;
+  display:grid;
+  grid-template-rows:auto auto;
+  gap:4px;
+  padding:6px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:10px;
+  background:rgba(10,17,29,.68);
+}
+
+.date-card.active{
+  border-color:rgba(109,162,255,.68);
+  background:rgba(54,87,146,.36);
+}
+
+.date-main{
+  width:100%;
+  border:0;
+  background:transparent;
+  color:var(--text);
+  padding:0;
+  cursor:pointer;
+  text-align:left;
+}
+
+.date-main strong{
+  display:block;
+  font-size:9px;
+}
+
+.date-main small{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font-size:8px;
+}
+
+.date-copy-all{
+  width:100%;
+  height:24px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:7px;
+  background:rgba(29,42,60,.86);
+  color:#fff;
+  font-size:8px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.date-copy-all.ok{
+  background:rgba(38,116,82,.95);
+  border-color:rgba(87,212,156,.34);
+}
+
+.date-copy-all.error{
+  background:rgba(125,45,54,.92);
+  border-color:rgba(255,125,139,.34);
+}

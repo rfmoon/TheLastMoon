@@ -3,6 +3,10 @@ const $=selector=>document.querySelector(selector);
 let allRows=[];
 let storedDates=[];
 let refreshTimer=null;
+let liveCheckTimer=null;
+let minuteRefreshTimer=null;
+let lastServerFingerprint="";
+let sourceIsMaster=false;
 
 function todayYmd(){
   const d=new Date();
@@ -129,11 +133,118 @@ function showSourceDiag(source){
   box.className="source-diagnostics show";
 }
 
+async function copyTextSafe(text){
+  const value=String(text || "");
+
+  try{
+    await navigator.clipboard.writeText(value);
+    return true;
+  }catch(_){}
+
+  const area=document.createElement("textarea");
+  area.value=value;
+  area.style.cssText=
+    "position:fixed;left:-9999px;top:-9999px;";
+
+  document.body.appendChild(area);
+  area.select();
+
+  let ok=false;
+
+  try{
+    ok=document.execCommand("copy");
+  }catch(_){}
+
+  area.remove();
+  return ok;
+}
+
+async function copyAllForDate(date,button){
+  const original=button?.textContent || "COPY ALL";
+
+  if(button){
+    button.disabled=true;
+    button.textContent="...";
+  }
+
+  try{
+    const data=await api(
+      `/api/results?date=${encodeURIComponent(date)}`
+    );
+
+    const rows=Array.isArray(data.rows)
+      ? data.rows
+      : [];
+
+    if(!rows.length){
+      throw new Error("Tanggal ini belum ada result.");
+    }
+
+    const text=rows
+      .map(row=>String(row.resultText || "").trim())
+      .filter(Boolean)
+      .join("\n\n");
+
+    if(!text){
+      throw new Error("Text result kosong.");
+    }
+
+    const copied=await copyTextSafe(text);
+
+    if(!copied){
+      throw new Error("Gagal copy clipboard.");
+    }
+
+    if(button){
+      button.textContent="TERSALIN";
+      button.classList.add("ok");
+
+      setTimeout(()=>{
+        button.textContent=original;
+        button.classList.remove("ok");
+        button.disabled=false;
+      },900);
+    }
+  }catch(error){
+    if(button){
+      button.textContent="GAGAL";
+      button.classList.add("error");
+
+      setTimeout(()=>{
+        button.textContent=original;
+        button.classList.remove("error");
+        button.disabled=false;
+      },1100);
+    }
+
+    setStatus(error.message,"bad");
+  }
+}
+
+
 async function loadSourceConfig(){
+  const panel=$("#masterSourcePanel");
+
+  if(panel){
+    panel.classList.add("hidden");
+  }
+
+  sourceIsMaster=false;
+
   try{
     const data=await sourceApi(
       "/api/result-source"
     );
+
+    if(!data?.isMaster){
+      return;
+    }
+
+    sourceIsMaster=true;
+
+    if(panel){
+      panel.classList.remove("hidden");
+    }
 
     const cfg=data.config || {};
 
@@ -154,10 +265,18 @@ async function loadSourceConfig(){
       );
     }
   }catch(error){
-    setSourceStatus(
-      error.message,
-      "bad"
-    );
+    // 403 untuk user non-master memang sengaja:
+    // Auto Source Result tidak boleh terlihat sama sekali.
+    if(
+      String(error.message || "").includes("Master") ||
+      String(error.message || "").includes("403")
+    ){
+      return;
+    }
+
+    if(panel){
+      panel.classList.add("hidden");
+    }
   }
 }
 
@@ -305,7 +424,16 @@ async function loadServerStatus(){
         "Server masih 0 result. Lihat panel LUNA RESULT: jika tertulis API BELUM SET / API OFF / API ERROR, data belum pernah dikirim ke TheLastMoon. Klik SET API di panel Luna lalu TEST & SYNC.";
     }
 
-    return data;
+    const fingerprint=[
+      Number(data.total || 0),
+      Number(data.dates || 0),
+      Number(data.latestUpdatedAt || 0)
+    ].join("|");
+
+    return {
+      ...data,
+      fingerprint
+    };
   }catch(error){
     $("#serverTotal").textContent="ERR";
     $("#serverDates").textContent="-";
@@ -355,19 +483,37 @@ function renderDateHistory(){
   }
 
   box.innerHTML=storedDates.map(row=>`
-    <button
-      class="date-chip ${row.date===current ? "active" : ""}"
-      type="button"
-      data-date="${escapeHtml(row.date)}">
-      <strong>${escapeHtml(row.date)}</strong>
-      <small>${Number(row.total || 0)} hasil</small>
-    </button>
+    <div class="date-card ${row.date===current ? "active" : ""}">
+      <button
+        class="date-main"
+        type="button"
+        data-date-open="${escapeHtml(row.date)}">
+        <strong>${escapeHtml(row.date)}</strong>
+        <small>${Number(row.total || 0)} hasil</small>
+      </button>
+
+      <button
+        class="date-copy-all"
+        type="button"
+        data-date-copy="${escapeHtml(row.date)}">
+        COPY ALL
+      </button>
+    </div>
   `).join("");
 
-  box.querySelectorAll("[data-date]").forEach(button=>{
+  box.querySelectorAll("[data-date-open]").forEach(button=>{
     button.addEventListener("click",()=>{
-      setActiveDate(button.dataset.date);
+      setActiveDate(button.dataset.dateOpen);
       loadResults();
+    });
+  });
+
+  box.querySelectorAll("[data-date-copy]").forEach(button=>{
+    button.addEventListener("click",()=>{
+      copyAllForDate(
+        button.dataset.dateCopy,
+        button
+      );
     });
   });
 }
@@ -502,10 +648,60 @@ async function loadResults(showStatus=true){
   }
 }
 
+async function liveCheck(){
+  try{
+    const status=await loadServerStatus();
+
+    if(
+      lastServerFingerprint &&
+      status.fingerprint !== lastServerFingerprint
+    ){
+      const current=$("#resultDate").value;
+
+      await loadDates();
+
+      if(current){
+        setActiveDate(current);
+      }
+
+      await loadResults(false);
+
+      setStatus(
+        "DATA BARU • otomatis diperbarui",
+        "ok"
+      );
+    }
+
+    lastServerFingerprint=
+      status.fingerprint;
+  }catch(_){}
+}
+
+async function minuteRefresh(){
+  try{
+    const current=$("#resultDate").value;
+
+    const status=await loadServerStatus();
+    lastServerFingerprint=
+      status.fingerprint;
+
+    await loadDates();
+
+    if(current){
+      setActiveDate(current);
+    }
+
+    await loadResults(false);
+  }catch(_){}
+}
+
+
 async function refreshAll(){
   const before=$("#resultDate").value;
 
-  await loadServerStatus();
+  const serverStatus=await loadServerStatus();
+  lastServerFingerprint=
+    serverStatus.fingerprint || "";
   await loadDates();
 
   if(
@@ -608,23 +804,17 @@ async function start(){
 
   await refreshAll();
 
-  refreshTimer=setInterval(
-    async()=>{
-      try{
-        const current=
-          $("#resultDate").value;
+  // Smart live update:
+  // cek perubahan D1 setiap 5 detik, reload tabel hanya jika ada data baru.
+  liveCheckTimer=setInterval(
+    liveCheck,
+    5000
+  );
 
-        await loadServerStatus();
-        await loadDates();
-
-        if(current){
-          setActiveDate(current);
-        }
-
-        await loadResults(false);
-      }catch(_){}
-    },
-    10000
+  // Fallback: refresh penuh setiap 1 menit.
+  minuteRefreshTimer=setInterval(
+    minuteRefresh,
+    60000
   );
 }
 

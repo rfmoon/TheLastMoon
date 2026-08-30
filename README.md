@@ -97,3 +97,15 @@ v54-generate-bukti-csp-fix
 - `Aktif untuk Cron` menyimpan status untuk Worker cron terpisah.
 - Endpoint cron: `POST /api/external/result-source-pull` dengan API key `results:write`.
 - Health: `v60-server-source-test`.
+
+## V61 — Master Source + Live Refresh + Copy All
+
+- `Auto Source Result` hanya dapat dilihat dan dipakai akun `is_master = 1`.
+- Backend `GET/PUT/POST /api/result-source` semuanya master-only.
+- User non-master tidak melihat panel Auto Source Result sama sekali.
+- Hasil Result mengecek perubahan D1 setiap 5 detik.
+- Jika ada row baru/update, tabel dan tanggal otomatis diperbarui tanpa refresh manual.
+- Fallback full refresh setiap 60 detik.
+- Setiap kartu tanggal sekarang punya tombol `COPY ALL`.
+- COPY ALL mengambil seluruh `resultText` pada tanggal tersebut.
+- Health: `v61-master-source-live-refresh`.
