@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v66-result-logical-dedupe";
+const VERSION = "v68-checker-bank-full-range";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3377,13 +3377,24 @@ async function readCheckerBankData(db) {
   }
 
   const parsed = parseCheckerSheetUrl(sourceUrl);
-  const targetParam = parsed.gid
-    ? `gid=${encodeURIComponent(parsed.gid)}`
-    : `sheet=${encodeURIComponent("BANK")}`;
+
+  // V68:
+  // Checker SELALU membaca tab bernama BANK.
+  // GID dari link sengaja diabaikan karena link bisa saja dicopy
+  // saat user sedang membuka tab lain.
+  //
+  // Range dibuat eksplisit supaya Google Visualization tidak hanya
+  // mengembalikan blok data pertama ketika terdapat baris kosong.
+  const targetParam =
+    `sheet=${encodeURIComponent("BANK")}`;
 
   const gvizUrl =
     `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
-    `/gviz/tq?tqx=out:csv&${targetParam}&_=${Date.now()}`;
+    `/gviz/tq?tqx=out:csv` +
+    `&${targetParam}` +
+    `&range=${encodeURIComponent("A1:C5000")}` +
+    `&tq=${encodeURIComponent("select A,B,C")}` +
+    `&_=${Date.now()}`;
 
   let response;
 
@@ -3456,6 +3467,9 @@ async function readCheckerBankData(db) {
   return json({
     ok: true,
     total: rows.length,
+    sheet: "BANK",
+    range: "A1:C5000",
+    sourceMode: "sheet-name",
     rows
   });
 }
