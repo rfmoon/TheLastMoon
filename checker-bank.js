@@ -360,7 +360,7 @@
 
       dbCount.textContent = bankRows.length;
       setLoadStatus(
-        `BANK!A2:C5000 terbaca • ${bankRows.length} rekening • ${Number(data.rawAccountRows || bankRows.length)} baris nomor • ${Number(data.chunksWithData || 0)}/${Number(data.chunksRead || 10)} blok berisi data.`,
+        `BANK!AM2:AO5000 terbaca • ${bankRows.length} rekening • ${Number(data.rawAccountRows || bankRows.length)} baris nomor • ${Number(data.chunksWithData || 0)}/${Number(data.chunksRead || 10)} blok berisi data.`,
         'ok'
       );
     } catch (error) {

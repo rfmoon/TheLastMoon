@@ -216,3 +216,15 @@ v54-generate-bukti-csp-fix
 - A = Nama Rekening, B = Nomor Rekening, C = Status.
 - Matching tetap hanya Nomor Rekening.
 - Health: `v71-checker-canonical-fix`.
+
+## V72 — Checker BANK AM:AO
+
+- Sheet tetap bernama `BANK`.
+- Range sekarang `BANK!AM2:AO5000`.
+- `AM` = Nama Rekening.
+- `AN` = Nomor Rekening.
+- `AO` = Status.
+- Pembacaan tetap per blok 500 baris agar data tidak terpotong.
+- Matching Checker tetap 100% hanya berdasarkan Nomor Rekening dari kolom AN.
+- Leading zero tetap dianggap sama.
+- Health: `v72-checker-bank-am-ao`.
