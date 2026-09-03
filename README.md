@@ -160,3 +160,25 @@ v54-generate-bukti-csp-fix
 - API membersihkan key legacy saat result yang sama dikirim ulang.
 - Query Hasil Result dan jumlah per tanggal melakukan dedupe saat baca, sehingga duplicate lama langsung tidak ditampilkan.
 - Health: `v66-result-logical-dedupe`.
+
+## V67 — Checker Account Number Only (Robust Paste)
+
+- Checker match 100% hanya berdasarkan nomor rekening.
+- Nama rekening dan bank tidak mempengaruhi match.
+- Parser tidak lagi bergantung pada satu transaksi per baris.
+- Seluruh nomor rekening 6–22 digit diekstrak dari text penuh, termasuk paste WhatsApp/Telegram yang menjadi satu baris panjang.
+- Exact account diprioritaskan, lalu canonical account tanpa leading zero.
+- `324401005035506` harus terbaca bila ada di sheet BANK meskipun nama input berbeda.
+- `31445468` sama dengan `0031445468`; `690669587` sama dengan `0690669587`.
+- Hasil tetap menampilkan Nama/Nomor/Status asli dari database BANK.
+- Cache Checker: 67.0.0.
+- Health: `v67-checker-account-number-only`.
+
+## V68 — Checker BANK Full Range
+
+- Checker selalu membaca tab bernama `BANK`, tidak lagi mengikuti `gid` dari link yang mungkin menunjuk tab lain.
+- Google Sheets dibaca dengan range eksplisit `A1:C5000`.
+- Query eksplisit `select A,B,C` agar seluruh database BANK terbaca termasuk data setelah baris kosong.
+- Matching Checker tetap nomor rekening saja seperti V67.
+- Leading zero tetap dianggap sama.
+- Health: `v68-checker-bank-full-range`.

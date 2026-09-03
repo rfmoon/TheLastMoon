@@ -272,7 +272,7 @@
 
       dbCount.textContent = bankRows.length;
       setLoadStatus(
-        `Berhasil membaca ${bankRows.length} rekening dari sheet BANK.`,
+        `Berhasil membaca ${bankRows.length} rekening dari sheet BANK (A:C penuh).`,
         'ok'
       );
     } catch (error) {
@@ -343,9 +343,84 @@
     return { bank: d.bank, name: cleanInputName(d.rest), account };
   }
 
+  function detectBankNearAccount(text='', startIndex=0) {
+    const before = String(text || '')
+      .slice(Math.max(0, startIndex - 120), startIndex)
+      .replace(/[\r\n]+/g, ' ')
+      .trim();
+
+    const upper = before.toUpperCase();
+    let best = '';
+    let bestIndex = -1;
+
+    for (const bank of BANK_WORDS) {
+      const idx = upper.lastIndexOf(bank);
+      if (idx > bestIndex) {
+        bestIndex = idx;
+        best = bank;
+      }
+    }
+
+    return best;
+  }
+
+  function extractAccountItems(rawText='') {
+    const text = String(rawText || '')
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+      .replace(/\u00A0/g, ' ');
+
+    const items = [];
+    const seen = new Set();
+
+    const pushAccount = (accountValue, bank='', name='') => {
+      const account = normalizeAccount(accountValue);
+      const canonical = canonicalAccount(account);
+
+      if (!account || !canonical) return;
+
+      // Nomor rekening operasional pada database minimal 6 digit.
+      // Ini mencegah angka pendek dari teks lain ikut dianggap rekening.
+      if (canonical.length < 6 || canonical.length > 22) return;
+
+      if (seen.has(canonical)) return;
+      seen.add(canonical);
+
+      items.push({
+        bank: String(bank || '').trim(),
+        name: cleanInputName(name || ''),
+        account
+      });
+    };
+
+    // Tahap 1: parser per baris tetap dipakai agar BANK dari input terbaca.
+    for (const line of text.split(/\r?\n/)) {
+      const parsed = parseInputLine(line);
+      if (parsed?.account) {
+        pushAccount(parsed.account, parsed.bank, parsed.name);
+      }
+    }
+
+    // Tahap 2: scan SEMUA nomor rekening di seluruh text.
+    // Ini yang menangani paste WhatsApp/Telegram yang seluruh datanya
+    // berubah menjadi satu baris panjang.
+    // Nama rekening sengaja tidak dibutuhkan untuk matching.
+    const accountPattern = /(?:['’])?(?:\d{6,22}(?:\.0+)?|\d+(?:\.\d+)?[eE][+-]?\d+)/g;
+    let match;
+
+    while ((match = accountPattern.exec(text)) !== null) {
+      pushAccount(
+        match[0],
+        detectBankNearAccount(text, match.index),
+        ''
+      );
+    }
+
+    return items;
+  }
+
   function findMatch(item) {
-    // V65:
-    // MATCH HANYA BERDASARKAN NOMOR REKENING.
+    // V67:
+    // MATCH 100% HANYA BERDASARKAN NOMOR REKENING.
     // Nama rekening TIDAK dipakai untuk menentukan cocok/tidak.
     //
     // Leading zero juga diabaikan:
@@ -399,7 +474,10 @@
       return;
     }
 
-    const items = pasteData.value.split(/\r?\n/).map(parseInputLine).filter(Boolean);
+    // V67: yang dicek hanya NOMOR REKENING.
+    // Tidak peduli nama beda/typo, tidak peduli data satu baris atau banyak baris.
+    const items = extractAccountItems(pasteData.value);
+
     currentResults = items.map(item => {
       const found = findMatch(item);
 
