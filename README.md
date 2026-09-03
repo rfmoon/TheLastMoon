@@ -228,3 +228,15 @@ v54-generate-bukti-csp-fix
 - Matching Checker tetap 100% hanya berdasarkan Nomor Rekening dari kolom AN.
 - Leading zero tetap dianggap sama.
 - Health: `v72-checker-bank-am-ao`.
+
+## V73 — Checker BANK AM:AO Full Fix
+
+- Sheet tetap `BANK`.
+- AM = Nama Rekening, AN = Nomor Rekening, AO = Status.
+- Menghapus pembacaan chunk 500 baris yang menghasilkan angka 149/142.
+- Server mencoba 3 metode GViz dan memilih hasil dengan jumlah AN paling banyak.
+- Database tidak lagi di-dedupe saat dibaca; semua baris rekening dari sheet dipertahankan.
+- Status menampilkan jumlah AM, AN, AO, unique account, duplicate account, dan mode pembacaan yang terpilih.
+- Matching Checker tetap 100% hanya berdasarkan nomor rekening.
+- Leading zero tetap dianggap sama saat matching.
+- Health: `v73-checker-bank-am-ao-full-fix`.

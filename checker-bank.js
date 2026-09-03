@@ -360,7 +360,7 @@
 
       dbCount.textContent = bankRows.length;
       setLoadStatus(
-        `BANK!AM2:AO5000 terbaca • ${bankRows.length} rekening • ${Number(data.rawAccountRows || bankRows.length)} baris nomor • ${Number(data.chunksWithData || 0)}/${Number(data.chunksRead || 10)} blok berisi data.`,
+        `BANK!AM2:AO5000 • ${bankRows.length} baris rekening • AM nama: ${Number(data.nameRows || 0)} • AN nomor: ${Number(data.accountRows || 0)} • AO status: ${Number(data.statusRows || 0)} • unik: ${Number(data.uniqueAccounts || 0)} • duplikat nomor: ${Number(data.duplicateAccounts || 0)} • mode: ${String(data.sourceMode || '-')}.`,
         'ok'
       );
     } catch (error) {
