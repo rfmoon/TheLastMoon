@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v70-checker-bank-a2c-full-read";
+const VERSION = "v71-checker-canonical-fix";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3725,6 +3725,18 @@ function normalizeCheckerAccount(value) {
   }
 
   return s.replace(/[^0-9]/g, "");
+}
+
+function canonicalCheckerAccount(value) {
+  const digits = normalizeCheckerAccount(value);
+
+  if (!digits) return "";
+
+  // Leading zero tidak mempengaruhi pencocokan.
+  // Contoh:
+  // 0031445468 == 31445468
+  // 0690669587 == 690669587
+  return digits.replace(/^0+(?=\d)/, "");
 }
 
 function normalizeCheckerName(value) {
