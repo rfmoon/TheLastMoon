@@ -206,3 +206,13 @@ v54-generate-bukti-csp-fix
 - Matching Checker tetap 100% hanya berdasarkan nomor rekening.
 - Status UI menampilkan jumlah rekening, raw account rows, dan jumlah blok yang berisi data.
 - Health: `v70-checker-bank-a2c-full-read`.
+
+## V71 — Checker Canonical Account Fix
+
+- Memperbaiki error `canonicalCheckerAccount is not defined` pada V70.
+- Menambahkan helper backend `canonicalCheckerAccount()`.
+- Leading zero tetap dianggap sama.
+- Pembacaan tetap persis `BANK!A2:C5000`.
+- A = Nama Rekening, B = Nomor Rekening, C = Status.
+- Matching tetap hanya Nomor Rekening.
+- Health: `v71-checker-canonical-fix`.
