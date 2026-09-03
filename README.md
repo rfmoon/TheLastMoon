@@ -194,3 +194,15 @@ v54-generate-bukti-csp-fix
 - Full range BANK A1:C5000 dari V68 tetap dipakai.
 - Matching tetap nomor rekening saja.
 - Health: `v69-checker-link-state-fix`.
+
+## V70 — Checker BANK A2:C Full Read
+
+- Sheet yang dibaca selalu bernama `BANK`.
+- Range persis `BANK!A2:C5000`.
+- A = Nama Rekening, B = Nomor Rekening, C = Status.
+- Pembacaan dilakukan per blok 500 baris agar data setelah baris kosong tidak terpotong.
+- Yang wajib ada hanya kolom B (Nomor Rekening); A/C boleh kosong.
+- Dedupe database hanya berdasarkan nomor rekening canonical.
+- Matching Checker tetap 100% hanya berdasarkan nomor rekening.
+- Status UI menampilkan jumlah rekening, raw account rows, dan jumlah blok yang berisi data.
+- Health: `v70-checker-bank-a2c-full-read`.
