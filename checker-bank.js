@@ -84,10 +84,23 @@
     return String(value)
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
       .toUpperCase()
       .replace(/[^A-Z0-9]+/g, ' ')
       .trim()
       .replace(/\s+/g, ' ');
+  }
+
+  function canonicalAccount(value='') {
+    const digits = normalizeAccount(value);
+
+    if (!digits) return '';
+
+    // Leading zero tidak mengubah identitas rekening untuk proses pencarian.
+    // Contoh:
+    // 0031445468 == 031445468 == 31445468
+    // 0690669587 == 690669587
+    return digits.replace(/^0+(?=\d)/, '');
   }
 
   function cleanInputName(value='') {
@@ -331,43 +344,46 @@
   }
 
   function findMatch(item) {
-    // Sheet BANK:
-    // A = Nama Rekening
-    // B = Nomor Rekening
-    // C = Status
+    // V65:
+    // MATCH HANYA BERDASARKAN NOMOR REKENING.
+    // Nama rekening TIDAK dipakai untuk menentukan cocok/tidak.
     //
-    // BANK dari tempelan hanya untuk ditampilkan.
-    // Match tetap berdasarkan NAMA + NOMOR REKENING.
-    const account = normalizeAccount(item.account);
-    const name = normalizeName(
-      cleanInputName(item.name)
+    // Leading zero juga diabaikan:
+    // 31445468 == 0031445468
+    // 690669587 == 0690669587
+
+    const rawAccount = normalizeAccount(item.account);
+    const canonical = canonicalAccount(item.account);
+
+    if (!rawAccount || !canonical) {
+      return null;
+    }
+
+    // Prioritas 1: nomor persis.
+    const exact = bankRows.find(row =>
+      normalizeAccount(row.account) === rawAccount
     );
 
-    if (!account || !name) return null;
+    if (exact) {
+      return {
+        row: exact,
+        method: 'ACCOUNT_EXACT'
+      };
+    }
 
-    // Utama: nama + nomor harus sama.
-    const exact = bankRows.find(r =>
-      normalizeAccount(r.account) === account &&
-      normalizeName(r.name) === name
+    // Prioritas 2: nomor sama setelah leading zero dibuang.
+    const canonicalMatches = bankRows.filter(row =>
+      canonicalAccount(row.account) === canonical
     );
 
-    if (exact) return exact;
+    if (canonicalMatches.length) {
+      return {
+        row: canonicalMatches[0],
+        method: 'ACCOUNT_LEADING_ZERO'
+      };
+    }
 
-    // Toleransi hanya untuk karakter/noise yang tidak bermakna.
-    // Contoh "ROSITA," atau "YUNITA TRIANA, N".
-    const cleanedName = normalizeName(
-      cleanInputName(
-        String(item.name || '')
-          .replace(/[.,;:]+$/g, '')
-      )
-    );
-
-    if (!cleanedName) return null;
-
-    return bankRows.find(r =>
-      normalizeAccount(r.account) === account &&
-      normalizeName(r.name) === cleanedName
-    ) || null;
+    return null;
   }
 
   function statusClass(status='') {
@@ -384,7 +400,15 @@
     }
 
     const items = pasteData.value.split(/\r?\n/).map(parseInputLine).filter(Boolean);
-    currentResults = items.map(item => ({ item, match: findMatch(item) }));
+    currentResults = items.map(item => {
+      const found = findMatch(item);
+
+      return {
+        item,
+        match: found?.row || null,
+        matchMethod: found?.method || ''
+      };
+    });
 
     checkCount.textContent = currentResults.length;
     const found = currentResults.filter(x => x.match).length;
@@ -401,12 +425,13 @@
       return;
     }
 
-    // BANK, NAMA dan NOMOR ditampilkan mengikuti data yang ditempel.
-    // STATUS diambil dari sheet BANK.
+    // BANK mengikuti data tempelan.
+    // Nama, nomor rekening dan status mengikuti sheet BANK.
+    // Jadi leading zero asli dari database tetap terlihat di hasil.
     resultBody.innerHTML = foundResults.map(({item, match}) => `<tr>
       <td><b>${escapeHtml(item.bank || '-')}</b></td>
-      <td><b>${escapeHtml(item.name)}</b></td>
-      <td class="mono">${escapeHtml(item.account)}</td>
+      <td><b>${escapeHtml(match.name || item.name)}</b></td>
+      <td class="mono">${escapeHtml(match.account || item.account)}</td>
       <td><span class="tag ${statusClass(match.status)}">${escapeHtml(match.status || 'TANPA KETERANGAN')}</span></td>
     </tr>`).join('');
   }
@@ -418,7 +443,9 @@
       return;
     }
 
-    const rows = foundResults.map(({item, match}) => `${item.bank || ''}\t${item.name}\t${item.account}\t${match.status}`);
+    const rows = foundResults.map(({item, match}) =>
+      `${item.bank || ''}\t${match.name || item.name}\t${match.account || item.account}\t${match.status}`
+    );
 
     const text = ['BANK\tNAMA REKENING\tNOMOR REKENING\tSTATUS', ...rows].join('\n');
     try {

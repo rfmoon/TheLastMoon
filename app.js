@@ -400,7 +400,7 @@ async function renderCheckerBankWorkspace(menu) {
 
         <iframe
           class="xpay-frame checker-bank-frame"
-          src="/checker-bank.html?v=48.0.0"
+          src="/checker-bank.html?v=65.0.0"
           title="Checker BANK"
           loading="eager"
           referrerpolicy="strict-origin-when-cross-origin">
@@ -584,7 +584,7 @@ async function renderHasilResultWorkspace(menu){
 
         <iframe
           class="xpay-frame hasil-result-frame"
-          src="/hasil-result.html?v=63.0.0"
+          src="/hasil-result.html?v=66.0.0"
           title="Hasil Result"
           loading="eager"
           referrerpolicy="same-origin">

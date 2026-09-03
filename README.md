@@ -128,3 +128,35 @@ v54-generate-bukti-csp-fix
 - RUN_TOKEN tidak ditampilkan di TheLastMoon.
 - Live stats tetap diperbarui setiap 5 detik.
 - Health: `v63-auto-result-worker-clean`.
+
+## V64 — Checker Leading Zero Fix
+
+- `31445468`, `031445468`, `0031445468` dianggap rekening yang sama untuk pencarian.
+- Exact Nama + Nomor tetap menjadi prioritas pertama.
+- Nomor rekening canonical unik menjadi fallback untuk noise kecil pada nama.
+- Zero-width character pada nama dibersihkan.
+- Hasil menampilkan Nama/Nomor/Status asli dari sheet BANK.
+- Kasus Tio Agustin dan leading-zero examples diuji.
+- Checker cache: 64.0.0.
+- Health: `v64-checker-leading-zero-fix`.
+
+## V65 — Checker Account Only
+
+- Checker MATCH hanya berdasarkan Nomor Rekening.
+- Nama rekening tidak lagi dipakai untuk menentukan cocok/tidak.
+- Leading zero tetap dianggap sama.
+- Exact nomor diprioritaskan, lalu canonical nomor tanpa leading zero.
+- Output Nama/Nomor/Status tetap mengikuti database BANK.
+- Checker cache: 65.0.0.
+- Health: `v65-checker-account-only`.
+
+## V66 — Hasil Result Logical Dedupe
+
+- Memperbaiki result tanggal lama yang tampil double.
+- Identitas result sekarang `Pasaran Tampilan + Tanggal + Periode` (fallback Waktu bila periode kosong).
+- `pool`, source, dan angka hadiah tidak lagi masuk primary logical key.
+- Browser Worker + Tampermonkey tidak dapat membuat dua baris untuk draw yang sama.
+- Jika angka result dikoreksi, baris lama di-update, bukan ditambah.
+- API membersihkan key legacy saat result yang sama dikirim ulang.
+- Query Hasil Result dan jumlah per tanggal melakukan dedupe saat baca, sehingga duplicate lama langsung tidak ditampilkan.
+- Health: `v66-result-logical-dedupe`.
