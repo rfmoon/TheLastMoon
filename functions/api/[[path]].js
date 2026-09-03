@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v63-auto-result-worker-clean";
+const VERSION = "v66-result-logical-dedupe";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -1622,15 +1622,20 @@ function normalizeLotteryRow(input) {
     throw new AppError(400, `Prize/Result 1 kosong untuk ${display}.`, "result-n1");
   }
 
+  const displayIdentity = display
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // V66: satu draw = satu logical key.
+  // Pool/source dan angka result TIDAK masuk key supaya:
+  // - Browser Worker + Tampermonkey tidak membuat row double.
+  // - jika hasil dikoreksi, row lama di-update, bukan ditambah.
   const resultKey = [
-    pool,
-    display,
+    "v2",
+    displayIdentity,
     date,
-    time,
-    periode,
-    n1,
-    n2,
-    n3
+    periode ? `P:${periode}` : `T:${time}`
   ].join("|");
 
   const row = {
@@ -1674,12 +1679,120 @@ async function externalUpsertLotteryResults(request, db, apiKey) {
     );
   }
 
-  const rows = inputRows.map(normalizeLotteryRow);
+  // Satu logical draw hanya boleh satu kali dalam batch.
+  // Jika batch berisi duplicate dari source berbeda, row terakhir menang.
+  const rowMap = new Map();
+
+  for (const input of inputRows) {
+    const row = normalizeLotteryRow(input);
+    rowMap.set(row.resultKey, row);
+  }
+
+  const rows = [...rowMap.values()];
   const now = Date.now();
 
-  const statements = rows.map(row =>
-    db.prepare(`
-      INSERT INTO lottery_results (
+  const statements = [];
+
+  for (const row of rows) {
+    const displayIdentity = row.display
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Bersihkan row legacy dengan key lama.
+    // Identitas logical:
+    // display + tanggal + periode.
+    // Jika periode kosong, gunakan waktu.
+    statements.push(
+      db.prepare(`
+        DELETE FROM lottery_results
+        WHERE
+          UPPER(TRIM(display_name)) = ?
+          AND result_date = ?
+          AND (
+            (? <> '' AND periode = ?)
+            OR
+            (? = '' AND result_time = ?)
+          )
+          AND result_key <> ?
+      `).bind(
+        displayIdentity,
+        row.date,
+        row.periode,
+        row.periode,
+        row.periode,
+        row.time,
+        row.resultKey
+      )
+    );
+
+    statements.push(
+      db.prepare(`
+        INSERT INTO lottery_results (
+          result_key,
+          pool,
+          display_name,
+          periode,
+          result_date,
+          result_time,
+          n1,
+          n2,
+          n3,
+          shio,
+          result_text,
+          source,
+          received_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(result_key) DO UPDATE SET
+          pool = excluded.pool,
+          display_name = excluded.display_name,
+          periode = excluded.periode,
+          result_date = excluded.result_date,
+          result_time = excluded.result_time,
+          n1 = excluded.n1,
+          n2 = excluded.n2,
+          n3 = excluded.n3,
+          shio = excluded.shio,
+          result_text = excluded.result_text,
+          source = excluded.source,
+          updated_at = excluded.updated_at
+      `).bind(
+        row.resultKey,
+        row.pool,
+        row.display,
+        row.periode,
+        row.date,
+        row.time,
+        row.n1,
+        row.n2,
+        row.n3,
+        row.shio,
+        row.resultText,
+        "luna-extension",
+        now,
+        now
+      )
+    );
+  }
+
+  await db.batch(statements);
+
+  return json({
+    ok: true,
+    received: inputRows.length,
+    saved: rows.length,
+    duplicatesIgnored: inputRows.length - rows.length,
+    apiKey: apiKey.name,
+    updatedAt: now
+  }, 200, externalCorsHeaders());
+}
+
+function lotteryResultSelectSql(whereClause = "") {
+  return `
+    WITH ranked_results AS (
+      SELECT
         result_key,
         pool,
         display_name,
@@ -1693,53 +1806,24 @@ async function externalUpsertLotteryResults(request, db, apiKey) {
         result_text,
         source,
         received_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(result_key) DO UPDATE SET
-        pool = excluded.pool,
-        display_name = excluded.display_name,
-        periode = excluded.periode,
-        result_date = excluded.result_date,
-        result_time = excluded.result_time,
-        n1 = excluded.n1,
-        n2 = excluded.n2,
-        n3 = excluded.n3,
-        shio = excluded.shio,
-        result_text = excluded.result_text,
-        source = excluded.source,
-        updated_at = excluded.updated_at
-    `).bind(
-      row.resultKey,
-      row.pool,
-      row.display,
-      row.periode,
-      row.date,
-      row.time,
-      row.n1,
-      row.n2,
-      row.n3,
-      row.shio,
-      row.resultText,
-      "luna-extension",
-      now,
-      now
+        updated_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            UPPER(TRIM(display_name)),
+            result_date,
+            CASE
+              WHEN TRIM(periode) <> ''
+                THEN 'P:' || TRIM(periode)
+              ELSE 'T:' || TRIM(result_time)
+            END
+          ORDER BY
+            updated_at DESC,
+            received_at DESC,
+            result_key DESC
+        ) AS logical_rank
+      FROM lottery_results
+      ${whereClause}
     )
-  );
-
-  await db.batch(statements);
-
-  return json({
-    ok: true,
-    received: inputRows.length,
-    saved: rows.length,
-    apiKey: apiKey.name,
-    updatedAt: now
-  }, 200, externalCorsHeaders());
-}
-
-function lotteryResultSelectSql(whereClause = "") {
-  return `
     SELECT
       result_key AS resultKey,
       pool,
@@ -1755,8 +1839,8 @@ function lotteryResultSelectSql(whereClause = "") {
       source,
       received_at AS receivedAt,
       updated_at AS updatedAt
-    FROM lottery_results
-    ${whereClause}
+    FROM ranked_results
+    WHERE logical_rank = 1
     ORDER BY result_date DESC, result_time DESC, display_name ASC
   `;
 }
@@ -1810,11 +1894,32 @@ async function getLotteryResults(db, url) {
 
 async function listLotteryResultDates(db) {
   const result = await db.prepare(`
+    WITH ranked_results AS (
+      SELECT
+        result_date,
+        updated_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            UPPER(TRIM(display_name)),
+            result_date,
+            CASE
+              WHEN TRIM(periode) <> ''
+                THEN 'P:' || TRIM(periode)
+              ELSE 'T:' || TRIM(result_time)
+            END
+          ORDER BY
+            updated_at DESC,
+            received_at DESC,
+            result_key DESC
+        ) AS logical_rank
+      FROM lottery_results
+    )
     SELECT
       result_date AS date,
       COUNT(*) AS total,
       MAX(updated_at) AS updatedAt
-    FROM lottery_results
+    FROM ranked_results
+    WHERE logical_rank = 1
     GROUP BY result_date
     ORDER BY result_date DESC
     LIMIT 90
