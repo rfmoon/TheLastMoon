@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v68-checker-bank-full-range";
+const VERSION = "v69-checker-link-state-fix";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -198,6 +198,11 @@ async function routeRequest(request, env, url) {
   if (url.pathname === "/api/checker-bank/config" && request.method === "PUT") {
     requireMaster(user);
     return updateCheckerBankConfig(request, env.DB, user);
+  }
+
+  if (url.pathname === "/api/checker-bank/config" && request.method === "DELETE") {
+    requireMaster(user);
+    return clearCheckerBankConfig(env.DB, user);
   }
 
   if (url.pathname === "/api/checker-bank/data" && request.method === "GET") {
@@ -3359,6 +3364,21 @@ async function updateCheckerBankConfig(request, db, user) {
     success: true,
     configured: true,
     url
+  });
+}
+
+async function clearCheckerBankConfig(db, user) {
+  await upsertAppSetting(
+    db,
+    "checker_bank_sheet_url",
+    "",
+    user.id
+  );
+
+  return json({
+    success: true,
+    configured: false,
+    url: ""
   });
 }
 
