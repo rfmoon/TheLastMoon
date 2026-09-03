@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v71-checker-canonical-fix";
+const VERSION = "v72-checker-bank-am-ao";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3401,9 +3401,9 @@ async function readCheckerBankData(db) {
   // V70:
   // SELALU baca sheet bernama BANK.
   // Struktur yang dipakai PERSIS:
-  //   A2:A = Nama Rekening
-  //   B2:B = Nomor Rekening
-  //   C2:C = Status
+  //   AM2:AM = Nama Rekening
+  //   AN2:AN = Nomor Rekening
+  //   AO2:AO = Status
   // Dibaca PER BLOK agar data setelah baris kosong tidak terpotong.
   const ranges = [];
   const CHUNK_SIZE = 500;
@@ -3418,7 +3418,7 @@ async function readCheckerBankData(db) {
     ranges.push({
       startRow,
       endRow,
-      a1: `A${startRow}:C${endRow}`
+      a1: `AM${startRow}:AO${endRow}`
     });
   }
 
@@ -3520,7 +3520,7 @@ async function readCheckerBankData(db) {
   if (!rows.length) {
     throw new AppError(
       422,
-      "Sheet BANK terbaca, tetapi BANK!B2:B5000 tidak mempunyai nomor rekening.",
+      "Sheet BANK terbaca, tetapi BANK!AN2:AN5000 tidak mempunyai nomor rekening.",
       "checker-bank-empty"
     );
   }
@@ -3533,13 +3533,13 @@ async function readCheckerBankData(db) {
     chunksWithData,
     chunksRead: chunks.length,
     sheet: "BANK",
-    range: "A2:C5000",
+    range: "AM2:AO5000",
     columns: {
-      A: "Nama Rekening",
-      B: "Nomor Rekening",
-      C: "Status"
+      AM: "Nama Rekening",
+      AN: "Nomor Rekening",
+      AO: "Status"
     },
-    sourceMode: "BANK-A2-C5000-chunked",
+    sourceMode: "BANK-AM2-AO5000-chunked",
     rows
   });
 }
