@@ -182,3 +182,15 @@ v54-generate-bukti-csp-fix
 - Matching Checker tetap nomor rekening saja seperti V67.
 - Leading zero tetap dianggap sama.
 - Health: `v68-checker-bank-full-range`.
+
+## V69 — Checker Link State Fix
+
+- Memperbaiki status lama seperti `Berhasil membaca 142 rekening` yang tetap tampil saat input link dikosongkan.
+- Master tidak lagi auto-load database jika server memang belum mempunyai link Checker.
+- Menambahkan tombol `HAPUS LINK` untuk benar-benar menghapus link lama dari server.
+- Mengosongkan link pada input tidak otomatis menghapus link server; UI sekarang menjelaskannya dengan jelas.
+- Setelah HAPUS LINK, bankRows, counter, hasil checker, dan status database langsung dikosongkan.
+- User biasa tetap dapat membaca BANK jika Master sudah menyimpan link.
+- Full range BANK A1:C5000 dari V68 tetap dipakai.
+- Matching tetap nomor rekening saja.
+- Health: `v69-checker-link-state-fix`.

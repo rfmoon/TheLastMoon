@@ -8,6 +8,7 @@
   const masterSheetConfig = $('masterSheetConfig');
   const userSheetInfo = $('userSheetInfo');
   const saveSheetBtn = $('saveSheetBtn');
+  const clearSheetBtn = $('clearSheetBtn');
   const saveSheetStatus = $('saveSheetStatus');
   const toggleSheetUrl = $('toggleSheetUrl');
   const pasteData = $('pasteData');
@@ -22,6 +23,7 @@
 
   let bankRows = [];
   let currentResults = [];
+  let serverSheetConfigured = false;
 
   const BANK_WORDS = [
     'BANK JAGO','ARTHA GRAHA','CIMB NIAGA','OCBC NISP','LINKAJA',
@@ -166,6 +168,21 @@
     saveSheetStatus.classList.remove('hidden');
   }
 
+  function clearLoadedBankState(message='Belum ada database BANK yang dimuat.') {
+    bankRows = [];
+    currentResults = [];
+
+    dbCount.textContent = '0';
+    checkCount.textContent = '0';
+    foundCount.textContent = '0';
+    notFoundCount.textContent = '0';
+
+    resultBody.innerHTML =
+      '<tr><td colspan="4" class="empty">Belum ada hasil pengecekan.</td></tr>';
+
+    setLoadStatus(message, '');
+  }
+
   async function initializeCheckerAccess() {
     try {
       const session = await api('/api/session');
@@ -180,32 +197,49 @@
 
         try {
           const config = await api('/api/checker-bank/config');
+
+          serverSheetConfigured = Boolean(config.configured);
           sheetUrl.value = config.url || '';
 
-          if (config.configured) {
+          if (serverSheetConfigured) {
             setSaveStatus(
               'Link spreadsheet tersimpan di server.',
               'ok'
             );
+
+            // Master hanya auto-load jika memang ada link aktif di server.
+            await loadBankSheet();
           } else {
             setSaveStatus(
               'Belum ada link spreadsheet. Masukkan link lalu klik SIMPAN LINK.',
               'wait'
             );
+
+            clearLoadedBankState(
+              'Belum ada database BANK karena link spreadsheet belum disimpan.'
+            );
           }
         } catch (error) {
+          serverSheetConfigured = false;
+          sheetUrl.value = '';
+
           setSaveStatus(error.message, 'err');
+
+          clearLoadedBankState(
+            'Database BANK belum dimuat karena konfigurasi link tidak dapat dibaca.'
+          );
         }
       } else {
         masterSheetConfig.classList.add('hidden');
         userSheetInfo.classList.remove('hidden');
-      }
 
-      // Otomatis baca BANK saat Checker dibuka.
-      // Tombol BACA SHEET BANK tetap tersedia untuk refresh manual.
-      await loadBankSheet();
+        // User biasa tidak melihat URL, jadi server yang menentukan
+        // apakah database BANK tersedia.
+        await loadBankSheet();
+      }
     } catch (error) {
-      setLoadStatus(error.message, 'err');
+      clearLoadedBankState(error.message);
+      loadStatus.className = 'status err';
       loadBtn.disabled = false;
     }
   }
@@ -215,13 +249,17 @@
 
     if (!url) {
       setSaveStatus(
-        'Masukkan Link Google Spreadsheet terlebih dahulu.',
+        serverSheetConfigured
+          ? 'Input kosong. Link lama masih tersimpan di server. Tekan HAPUS LINK jika ingin menghapusnya.'
+          : 'Masukkan Link Google Spreadsheet terlebih dahulu.',
         'err'
       );
       return;
     }
 
     saveSheetBtn.disabled = true;
+    if (clearSheetBtn) clearSheetBtn.disabled = true;
+
     setSaveStatus('Menyimpan link ke server...', 'wait');
 
     try {
@@ -230,18 +268,68 @@
         body: { url }
       });
 
+      serverSheetConfigured = true;
       sheetUrl.value = result.url || url;
+
       setSaveStatus(
-        'Link berhasil disimpan. User biasa tetap tidak dapat melihat link ini.',
+        'Link berhasil disimpan di server.',
         'ok'
       );
 
-      // Setelah link diganti, langsung refresh database BANK.
       await loadBankSheet();
     } catch (error) {
       setSaveStatus(error.message, 'err');
     } finally {
       saveSheetBtn.disabled = false;
+      if (clearSheetBtn) clearSheetBtn.disabled = false;
+    }
+  }
+
+  async function clearSheetConfig() {
+    if (!serverSheetConfigured) {
+      sheetUrl.value = '';
+      clearLoadedBankState(
+        'Belum ada database BANK karena link spreadsheet belum disimpan.'
+      );
+      setSaveStatus(
+        'Tidak ada link spreadsheet yang tersimpan di server.',
+        'wait'
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Hapus link Google Spreadsheet Checker dari server? Database BANK yang sedang dimuat juga akan dikosongkan.'
+    );
+
+    if (!confirmed) return;
+
+    saveSheetBtn.disabled = true;
+    if (clearSheetBtn) clearSheetBtn.disabled = true;
+
+    setSaveStatus('Menghapus link dari server...', 'wait');
+
+    try {
+      await api('/api/checker-bank/config', {
+        method: 'DELETE'
+      });
+
+      serverSheetConfigured = false;
+      sheetUrl.value = '';
+
+      clearLoadedBankState(
+        'Belum ada database BANK karena link spreadsheet sudah dihapus.'
+      );
+
+      setSaveStatus(
+        'Link spreadsheet berhasil dihapus dari server.',
+        'ok'
+      );
+    } catch (error) {
+      setSaveStatus(error.message, 'err');
+    } finally {
+      saveSheetBtn.disabled = false;
+      if (clearSheetBtn) clearSheetBtn.disabled = false;
     }
   }
 
@@ -554,12 +642,30 @@
     pasteData.focus();
   }
 
-  loadBtn.addEventListener('click', loadBankSheet);
+  loadBtn.addEventListener('click', () => {
+    if (
+      !masterSheetConfig.classList.contains('hidden') &&
+      !serverSheetConfigured
+    ) {
+      clearLoadedBankState(
+        'Belum ada database BANK. Simpan link Google Spreadsheet terlebih dahulu.'
+      );
+      loadStatus.className = 'status err';
+      return;
+    }
+
+    loadBankSheet();
+  });
   checkBtn.addEventListener('click', checkData);
   copyBtn.addEventListener('click', copyResults);
   clearBtn.addEventListener('click', clearInput);
 
   saveSheetBtn.addEventListener('click', saveSheetConfig);
+
+  clearSheetBtn?.addEventListener(
+    'click',
+    clearSheetConfig
+  );
 
   toggleSheetUrl.addEventListener('click', () => {
     const visible = sheetUrl.type === 'text';

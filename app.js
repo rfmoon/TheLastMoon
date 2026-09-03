@@ -400,7 +400,7 @@ async function renderCheckerBankWorkspace(menu) {
 
         <iframe
           class="xpay-frame checker-bank-frame"
-          src="/checker-bank.html?v=68.0.0"
+          src="/checker-bank.html?v=69.0.0"
           title="Checker BANK"
           loading="eager"
           referrerpolicy="strict-origin-when-cross-origin">

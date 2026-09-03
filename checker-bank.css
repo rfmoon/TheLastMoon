@@ -225,3 +225,18 @@ tbody tr:hover td {
     width: 100%;
   }
 }
+
+/* V69 — Checker saved-link state */
+.master-link-row{
+  grid-template-columns:minmax(0,1fr) auto auto;
+}
+
+@media(max-width:760px){
+  .master-link-row{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .master-link-row input{
+    grid-column:1/-1;
+  }
+}
