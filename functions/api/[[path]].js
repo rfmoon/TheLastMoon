@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v69-checker-link-state-fix";
+const VERSION = "v70-checker-bank-a2c-full-read";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3398,88 +3398,129 @@ async function readCheckerBankData(db) {
 
   const parsed = parseCheckerSheetUrl(sourceUrl);
 
-  // V68:
-  // Checker SELALU membaca tab bernama BANK.
-  // GID dari link sengaja diabaikan karena link bisa saja dicopy
-  // saat user sedang membuka tab lain.
-  //
-  // Range dibuat eksplisit supaya Google Visualization tidak hanya
-  // mengembalikan blok data pertama ketika terdapat baris kosong.
-  const targetParam =
-    `sheet=${encodeURIComponent("BANK")}`;
+  // V70:
+  // SELALU baca sheet bernama BANK.
+  // Struktur yang dipakai PERSIS:
+  //   A2:A = Nama Rekening
+  //   B2:B = Nomor Rekening
+  //   C2:C = Status
+  // Dibaca PER BLOK agar data setelah baris kosong tidak terpotong.
+  const ranges = [];
+  const CHUNK_SIZE = 500;
+  const MAX_ROW = 5000;
 
-  const gvizUrl =
-    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
-    `/gviz/tq?tqx=out:csv` +
-    `&${targetParam}` +
-    `&range=${encodeURIComponent("A1:C5000")}` +
-    `&tq=${encodeURIComponent("select A,B,C")}` +
-    `&_=${Date.now()}`;
+  for (let startRow = 2; startRow <= MAX_ROW; startRow += CHUNK_SIZE) {
+    const endRow = Math.min(
+      MAX_ROW,
+      startRow + CHUNK_SIZE - 1
+    );
 
-  let response;
-
-  try {
-    response = await fetch(gvizUrl, {
-      method: "GET",
-      redirect: "follow",
-      headers: {
-        "Accept": "text/csv,text/plain,*/*",
-        "User-Agent": "TheLastMoon-Checker/1.0"
-      }
+    ranges.push({
+      startRow,
+      endRow,
+      a1: `A${startRow}:C${endRow}`
     });
-  } catch (error) {
-    throw new AppError(
-      502,
-      `Tidak dapat terhubung ke Google Sheets: ${safeErrorMessage(error)}`,
-      "checker-bank-fetch"
-    );
   }
 
-  if (!response.ok) {
-    throw new AppError(
-      502,
-      `Google Sheets mengembalikan HTTP ${response.status}. Pastikan spreadsheet dapat dibaca oleh server.`,
-      "checker-bank-google-http"
+  const fetchChunk = async rangeInfo => {
+    const gvizUrl =
+      `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
+      `/gviz/tq?tqx=out:csv` +
+      `&sheet=${encodeURIComponent("BANK")}` +
+      `&range=${encodeURIComponent(rangeInfo.a1)}` +
+      `&_=${Date.now()}-${rangeInfo.startRow}`;
+
+    let response;
+
+    try {
+      response = await fetch(gvizUrl, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "Accept": "text/csv,text/plain,*/*",
+          "User-Agent": "TheLastMoon-Checker/1.0"
+        }
+      });
+    } catch (error) {
+      throw new AppError(
+        502,
+        `Tidak dapat membaca BANK!${rangeInfo.a1}: ${safeErrorMessage(error)}`,
+        "checker-bank-fetch"
+      );
+    }
+
+    if (!response.ok) {
+      throw new AppError(
+        502,
+        `Google Sheets HTTP ${response.status} saat membaca BANK!${rangeInfo.a1}.`,
+        "checker-bank-google-http"
+      );
+    }
+
+    const csv = await response.text();
+    const table = parseCsv(csv);
+
+    return {
+      ...rangeInfo,
+      table
+    };
+  };
+
+  const chunks = await Promise.all(
+    ranges.map(fetchChunk)
+  );
+
+  const collected = [];
+  let rawCsvRows = 0;
+  let chunksWithData = 0;
+
+  for (const chunk of chunks) {
+    const meaningful = chunk.table.filter(cells =>
+      (cells || []).some(cell => String(cell || "").trim() !== "")
     );
-  }
 
-  const csv = await response.text();
-  const table = parseCsv(csv);
+    rawCsvRows += meaningful.length;
 
-  const rows = table
-    .map((cells, index) => {
+    if (meaningful.length) {
+      chunksWithData += 1;
+    }
+
+    for (let index = 0; index < chunk.table.length; index += 1) {
+      const cells = chunk.table[index] || [];
       const name = String(cells[0] || "").trim();
       const account = normalizeCheckerAccount(
         cells[1] || ""
       );
       const status = String(cells[2] || "").trim();
 
-      return {
-        row: index + 1,
+      // Kolom B adalah sumber utama database Checker.
+      if (!account) continue;
+
+      collected.push({
+        row: chunk.startRow + index,
         name,
         account,
         status
-      };
-    })
-    .filter(row => row.name || row.account || row.status)
-    .filter(row => {
-      const name = normalizeCheckerName(row.name);
-      const account = normalizeCheckerName(row.account);
-      const status = normalizeCheckerName(row.status);
+      });
+    }
+  }
 
-      return !(
-        name.includes("NAMA") &&
-        (
-          account.includes("NOMOR") ||
-          status.includes("STATUS")
-        )
-      );
-    });
+  // Dedupe berdasarkan nomor rekening canonical.
+  const byAccount = new Map();
+
+  for (const row of collected) {
+    const key = canonicalCheckerAccount(row.account);
+    if (!key) continue;
+    byAccount.set(key, row);
+  }
+
+  const rows = [...byAccount.values()]
+    .sort((a, b) => a.row - b.row);
 
   if (!rows.length) {
     throw new AppError(
       422,
-      "Spreadsheet terbaca, tetapi data BANK A:B:C kosong atau formatnya tidak sesuai.",
+      "Sheet BANK terbaca, tetapi BANK!B2:B5000 tidak mempunyai nomor rekening.",
       "checker-bank-empty"
     );
   }
@@ -3487,9 +3528,18 @@ async function readCheckerBankData(db) {
   return json({
     ok: true,
     total: rows.length,
+    rawAccountRows: collected.length,
+    rawCsvRows,
+    chunksWithData,
+    chunksRead: chunks.length,
     sheet: "BANK",
-    range: "A1:C5000",
-    sourceMode: "sheet-name",
+    range: "A2:C5000",
+    columns: {
+      A: "Nama Rekening",
+      B: "Nomor Rekening",
+      C: "Status"
+    },
+    sourceMode: "BANK-A2-C5000-chunked",
     rows
   });
 }
