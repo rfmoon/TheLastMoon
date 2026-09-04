@@ -253,3 +253,14 @@ v54-generate-bukti-csp-fix
 - Semua row AN dimuat tanpa dedupe; unique/duplicate hanya statistik.
 - Matching Checker tetap hanya Nomor Rekening.
 - Health: `v74-checker-direct-csv-export`.
+
+## V75 — Checker Full Sheet CSV AM:AO
+
+- Download seluruh sheet BANK sebagai CSV langsung.
+- Tidak memakai GViz/QUERY dan tidak memakai parameter range Google.
+- Mengambil AM/AN/AO berdasarkan index kolom CSV: 38/39/40.
+- AM = Nama Rekening, AN = Nomor Rekening, AO = Status.
+- Semua row AN dimuat tanpa dedupe.
+- UI menampilkan jumlah AM, AN, AO, complete rows, dimuat, dan row terakhir.
+- Matching tetap hanya Nomor Rekening dan leading zero tetap sama.
+- Health: `v75-checker-fullsheet-csv-am-ao`.
