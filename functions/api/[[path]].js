@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v76-checker-dynamic-chunked-csv";
+const VERSION = "v75-checker-fullsheet-csv-am-ao";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3406,209 +3406,124 @@ async function readCheckerBankData(db) {
     );
   }
 
-  // V76
-  // DIRECT CSV EXPORT + RANGE PER BLOK.
+  // V75:
+  // Download SELURUH sheet sebagai CSV, lalu ambil kolom AM/AN/AO
+  // berdasarkan indeks kolom. Tidak memakai GViz/QUERY dan tidak
+  // bergantung pada parameter range Google.
   //
-  // Tidak ada patokan jumlah rekening.
-  // 227 / 300 / 1000 / dst semua mengikuti isi aktual sheet.
-  //
-  // Range yang dibaca:
-  // AM = Nama Rekening
-  // AN = Nomor Rekening
-  // AO = Status
-  //
-  // Kita paksa Google membaca per blok agar tidak bergantung
-  // pada "used range" full-sheet export.
-  //
-  // 30 request maksimum, masih di bawah batas 50 subrequest Worker.
-  const CHUNK_SIZE = 1000;
-  const MAX_ROW = 30000;
+  // A  = index 0
+  // AM = index 38
+  // AN = index 39
+  // AO = index 40
+  const COL_AM = 38;
+  const COL_AN = 39;
+  const COL_AO = 40;
 
-  const ranges = [];
+  const exportUrl =
+    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
+    `/export?format=csv` +
+    `&gid=${encodeURIComponent(parsed.gid)}` +
+    `&_=${Date.now()}`;
 
-  for (
-    let startRow = 2;
-    startRow <= MAX_ROW;
-    startRow += CHUNK_SIZE
-  ) {
-    const endRow = Math.min(
-      MAX_ROW,
-      startRow + CHUNK_SIZE - 1
-    );
+  let response;
 
-    ranges.push({
-      startRow,
-      endRow,
-      a1: `AM${startRow}:AO${endRow}`
+  try {
+    response = await fetch(exportUrl, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        "Accept": "text/csv,text/plain,*/*",
+        "User-Agent": "TheLastMoon-Checker/1.0"
+      }
     });
-  }
-
-  const fetchChunk = async rangeInfo => {
-    const exportUrl =
-      `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
-      `/export?format=csv` +
-      `&gid=${encodeURIComponent(parsed.gid)}` +
-      `&range=${encodeURIComponent(rangeInfo.a1)}` +
-      `&_=${Date.now()}-${rangeInfo.startRow}`;
-
-    let response;
-
-    try {
-      response = await fetch(exportUrl, {
-        method: "GET",
-        redirect: "follow",
-        headers: {
-          "Accept": "text/csv,text/plain,*/*",
-          "Cache-Control": "no-cache, no-store, max-age=0",
-          "Pragma": "no-cache",
-          "User-Agent": "TheLastMoon-Checker/1.0"
-        }
-      });
-    } catch (error) {
-      return {
-        ...rangeInfo,
-        ok: false,
-        error: safeErrorMessage(error),
-        table: []
-      };
-    }
-
-    if (!response.ok) {
-      return {
-        ...rangeInfo,
-        ok: false,
-        error: `HTTP ${response.status}`,
-        table: []
-      };
-    }
-
-    const csv = await response.text();
-
-    return {
-      ...rangeInfo,
-      ok: true,
-      error: "",
-      table: parseCsv(csv)
-    };
-  };
-
-  // Semua blok dibaca. Jadi data di row 5000, 10000, dst
-  // tetap ditemukan walaupun ada gap/baris kosong panjang.
-  const chunks = await Promise.all(
-    ranges.map(fetchChunk)
-  );
-
-  const failedChunks = chunks.filter(item => !item.ok);
-
-  if (failedChunks.length === chunks.length) {
+  } catch (error) {
     throw new AppError(
       502,
-      "Semua blok CSV Google Sheets gagal dibaca.",
-      "checker-bank-all-chunks-failed"
+      `Tidak dapat terhubung ke Google Sheets CSV Export: ${safeErrorMessage(error)}`,
+      "checker-bank-export-fetch"
+    );
+  }
+
+  if (!response.ok) {
+    throw new AppError(
+      502,
+      `Google Sheets CSV Export HTTP ${response.status}.`,
+      "checker-bank-export-http"
+    );
+  }
+
+  const csv = await response.text();
+  const table = parseCsv(csv);
+
+  if (!table.length) {
+    throw new AppError(
+      422,
+      "CSV sheet BANK kosong.",
+      "checker-bank-export-empty"
     );
   }
 
   const rows = [];
-
   let nameRows = 0;
   let accountRows = 0;
   let statusRows = 0;
   let completeRows = 0;
-  let chunksWithData = 0;
+  let missingNameRows = 0;
+  let missingAccountRows = 0;
+  let missingStatusRows = 0;
   let lastDataRow = 1;
 
-  for (const chunk of chunks) {
-    if (!chunk.ok) continue;
+  // Mulai row 2.
+  for (let index = 1; index < table.length; index += 1) {
+    const cells = table[index] || [];
 
-    let chunkHasData = false;
+    const name = String(cells[COL_AM] || "").trim();
+    const account = normalizeCheckerAccount(
+      cells[COL_AN] || ""
+    );
+    const status = String(cells[COL_AO] || "").trim();
 
-    for (
-      let index = 0;
-      index < chunk.table.length;
-      index += 1
-    ) {
-      const cells = chunk.table[index] || [];
+    const hasAny = Boolean(name || account || status);
+    if (!hasAny) continue;
 
-      // Karena range hanya AM:AO:
-      // cells[0] = AM
-      // cells[1] = AN
-      // cells[2] = AO
-      const name = String(
-        cells[0] || ""
-      ).trim();
+    lastDataRow = index + 1;
 
-      const account = normalizeCheckerAccount(
-        cells[1] || ""
-      );
+    if (name) nameRows += 1;
+    else missingNameRows += 1;
 
-      const status = String(
-        cells[2] || ""
-      ).trim();
+    if (account) accountRows += 1;
+    else missingAccountRows += 1;
 
-      const hasAny = Boolean(
-        name ||
-        account ||
-        status
-      );
+    if (status) statusRows += 1;
+    else missingStatusRows += 1;
 
-      if (!hasAny) continue;
-
-      chunkHasData = true;
-
-      const actualRow =
-        chunk.startRow + index;
-
-      lastDataRow = Math.max(
-        lastDataRow,
-        actualRow
-      );
-
-      if (name) nameRows += 1;
-      if (account) accountRows += 1;
-      if (status) statusRows += 1;
-
-      if (
-        name &&
-        account &&
-        status
-      ) {
-        completeRows += 1;
-      }
-
-      // Matching Checker hanya memakai nomor rekening AN.
-      // Semua baris AN dimuat TANPA dedupe.
-      if (!account) continue;
-
-      rows.push({
-        row: actualRow,
-        name,
-        account,
-        status
-      });
+    if (name && account && status) {
+      completeRows += 1;
     }
 
-    if (chunkHasData) {
-      chunksWithData += 1;
-    }
+    if (!account) continue;
+
+    rows.push({
+      row: index + 1,
+      name,
+      account,
+      status
+    });
   }
 
   if (!rows.length) {
     throw new AppError(
       422,
-      "Tidak ada nomor rekening yang terbaca dari BANK!AN2:AN30000.",
+      "Kolom AN pada sheet yang diexport tidak mempunyai nomor rekening. Pastikan URL yang disimpan memang tab BANK.",
       "checker-bank-account-empty"
     );
   }
 
-  // Statistik saja — tidak menghapus row duplicate.
   const seen = new Set();
   let duplicateAccounts = 0;
 
   for (const row of rows) {
-    const key = canonicalCheckerAccount(
-      row.account
-    );
-
+    const key = canonicalCheckerAccount(row.account);
     if (!key) continue;
 
     if (seen.has(key)) {
@@ -3623,22 +3538,22 @@ async function readCheckerBankData(db) {
     total: rows.length,
     sheet: "BANK",
     gid: parsed.gid,
-    range: "AM2:AO30000",
-    sourceMode: "DYNAMIC-CHUNKED-DIRECT-CSV",
+    range: "AM2:AO",
+    sourceMode: "FULL-SHEET-DIRECT-CSV",
     columns: {
       AM: "Nama Rekening",
       AN: "Nomor Rekening",
       AO: "Status"
     },
-    chunkSize: CHUNK_SIZE,
-    chunksRead: chunks.length,
-    chunksWithData,
-    failedChunks: failedChunks.length,
+    csvRows: Math.max(0, table.length - 1),
     lastDataRow,
     nameRows,
     accountRows,
     statusRows,
     completeRows,
+    missingNameRows,
+    missingAccountRows,
+    missingStatusRows,
     uniqueAccounts: seen.size,
     duplicateAccounts,
     rows
