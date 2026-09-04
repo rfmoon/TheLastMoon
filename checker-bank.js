@@ -360,7 +360,7 @@
 
       dbCount.textContent = bankRows.length;
       setLoadStatus(
-        `BANK!AM2:AO5000 • ${bankRows.length} baris rekening • AM nama: ${Number(data.nameRows || 0)} • AN nomor: ${Number(data.accountRows || 0)} • AO status: ${Number(data.statusRows || 0)} • unik: ${Number(data.uniqueAccounts || 0)} • duplikat nomor: ${Number(data.duplicateAccounts || 0)} • mode: ${String(data.sourceMode || '-')}.`,
+        `BANK CSV langsung • ${bankRows.length} baris rekening • AM: ${Number(data.nameRows || 0)} • AN: ${Number(data.accountRows || 0)} • AO: ${Number(data.statusRows || 0)} • unik: ${Number(data.uniqueAccounts || 0)} • duplikat: ${Number(data.duplicateAccounts || 0)}.`,
         'ok'
       );
     } catch (error) {

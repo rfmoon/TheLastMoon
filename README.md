@@ -240,3 +240,16 @@ v54-generate-bukti-csp-fix
 - Matching Checker tetap 100% hanya berdasarkan nomor rekening.
 - Leading zero tetap dianggap sama saat matching.
 - Health: `v73-checker-bank-am-ao-full-fix`.
+
+## V74 — Checker Direct CSV Export
+
+- Menghapus GViz/QUERY dari pembacaan Checker.
+- Membaca Google Sheets lewat endpoint `/export?format=csv`.
+- Range `BANK!AM1:AO5000`, data dimulai row 2.
+- AM = Nama Rekening, AN = Nomor Rekening, AO = Status.
+- CSV direct menghindari masalah mixed data type pada AN (angka + Plain Text/leading zero).
+- Link harus dicopy ketika tab BANK aktif agar URL menyertakan gid BANK.
+- Header AM1/AN1 diverifikasi agar gid salah tidak terbaca diam-diam.
+- Semua row AN dimuat tanpa dedupe; unique/duplicate hanya statistik.
+- Matching Checker tetap hanya Nomor Rekening.
+- Health: `v74-checker-direct-csv-export`.
