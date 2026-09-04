@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v74-checker-direct-csv-export";
+const VERSION = "v75-checker-fullsheet-csv-am-ao";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3398,29 +3398,31 @@ async function readCheckerBankData(db) {
 
   const parsed = parseCheckerSheetUrl(sourceUrl);
 
-  // V74:
-  // Jangan gunakan GViz/QUERY untuk database rekening.
-  // Kolom AN bisa berisi campuran angka + Plain Text (leading zero),
-  // dan engine Visualization dapat menganggap sebagian tipe sebagai NULL.
-  //
-  // Kita pakai DIRECT CSV EXPORT agar nilai yang tampil di sheet
-  // diterima apa adanya.
-  //
-  // Link wajib disimpan ketika tab BANK sedang aktif supaya gid BANK
-  // ikut tersimpan pada URL.
   if (!parsed.gid) {
     throw new AppError(
       409,
-      "Link Checker belum mempunyai gid tab BANK. Buka tab BANK di Google Sheets, copy URL lengkap yang ada #gid=..., lalu SIMPAN LINK lagi.",
+      "Link Checker belum mempunyai gid. Buka tab BANK di Google Sheets, copy URL lengkap dari address bar, lalu SIMPAN LINK lagi.",
       "checker-bank-gid-required"
     );
   }
+
+  // V75:
+  // Download SELURUH sheet sebagai CSV, lalu ambil kolom AM/AN/AO
+  // berdasarkan indeks kolom. Tidak memakai GViz/QUERY dan tidak
+  // bergantung pada parameter range Google.
+  //
+  // A  = index 0
+  // AM = index 38
+  // AN = index 39
+  // AO = index 40
+  const COL_AM = 38;
+  const COL_AN = 39;
+  const COL_AO = 40;
 
   const exportUrl =
     `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
     `/export?format=csv` +
     `&gid=${encodeURIComponent(parsed.gid)}` +
-    `&range=${encodeURIComponent("AM1:AO5000")}` +
     `&_=${Date.now()}`;
 
   let response;
@@ -3456,26 +3458,8 @@ async function readCheckerBankData(db) {
   if (!table.length) {
     throw new AppError(
       422,
-      "CSV BANK kosong.",
+      "CSV sheet BANK kosong.",
       "checker-bank-export-empty"
-    );
-  }
-
-  // Range dimulai AM1 agar kita bisa memastikan gid benar-benar tab BANK.
-  const header = table[0] || [];
-  const headerName = String(header[0] || "").trim().toUpperCase();
-  const headerAccount = String(header[1] || "").trim().toUpperCase();
-  const headerStatus = String(header[2] || "").trim().toUpperCase();
-
-  const headerLooksCorrect =
-    headerName.includes("NAMA") &&
-    headerAccount.includes("NOMOR");
-
-  if (!headerLooksCorrect) {
-    throw new AppError(
-      409,
-      "gid pada link tidak terlihat seperti tab BANK kolom AM:AO. Buka tab BANK, copy URL lengkap, lalu SIMPAN LINK lagi.",
-      "checker-bank-wrong-gid"
     );
   }
 
@@ -3483,23 +3467,40 @@ async function readCheckerBankData(db) {
   let nameRows = 0;
   let accountRows = 0;
   let statusRows = 0;
+  let completeRows = 0;
+  let missingNameRows = 0;
+  let missingAccountRows = 0;
+  let missingStatusRows = 0;
+  let lastDataRow = 1;
 
-  // index 0 = header AM1:AO1. Data dimulai row 2.
+  // Mulai row 2.
   for (let index = 1; index < table.length; index += 1) {
     const cells = table[index] || [];
 
-    const name = String(cells[0] || "").trim();
+    const name = String(cells[COL_AM] || "").trim();
     const account = normalizeCheckerAccount(
-      cells[1] || ""
+      cells[COL_AN] || ""
     );
-    const status = String(cells[2] || "").trim();
+    const status = String(cells[COL_AO] || "").trim();
+
+    const hasAny = Boolean(name || account || status);
+    if (!hasAny) continue;
+
+    lastDataRow = index + 1;
 
     if (name) nameRows += 1;
-    if (account) accountRows += 1;
-    if (status) statusRows += 1;
+    else missingNameRows += 1;
 
-    // Checker berbasis nomor rekening.
-    // Semua row yang punya AN dimuat tanpa dedupe.
+    if (account) accountRows += 1;
+    else missingAccountRows += 1;
+
+    if (status) statusRows += 1;
+    else missingStatusRows += 1;
+
+    if (name && account && status) {
+      completeRows += 1;
+    }
+
     if (!account) continue;
 
     rows.push({
@@ -3513,7 +3514,7 @@ async function readCheckerBankData(db) {
   if (!rows.length) {
     throw new AppError(
       422,
-      "BANK!AN2:AN5000 tidak mempunyai nomor rekening.",
+      "Kolom AN pada sheet yang diexport tidak mempunyai nomor rekening. Pastikan URL yang disimpan memang tab BANK.",
       "checker-bank-account-empty"
     );
   }
@@ -3523,7 +3524,6 @@ async function readCheckerBankData(db) {
 
   for (const row of rows) {
     const key = canonicalCheckerAccount(row.account);
-
     if (!key) continue;
 
     if (seen.has(key)) {
@@ -3538,23 +3538,24 @@ async function readCheckerBankData(db) {
     total: rows.length,
     sheet: "BANK",
     gid: parsed.gid,
-    range: "AM2:AO5000",
+    range: "AM2:AO",
+    sourceMode: "FULL-SHEET-DIRECT-CSV",
     columns: {
       AM: "Nama Rekening",
       AN: "Nomor Rekening",
       AO: "Status"
     },
-    sourceMode: "DIRECT-CSV-EXPORT",
+    csvRows: Math.max(0, table.length - 1),
+    lastDataRow,
     nameRows,
     accountRows,
     statusRows,
+    completeRows,
+    missingNameRows,
+    missingAccountRows,
+    missingStatusRows,
     uniqueAccounts: seen.size,
     duplicateAccounts,
-    header: {
-      AM: String(header[0] || "").trim(),
-      AN: String(header[1] || "").trim(),
-      AO: String(header[2] || "").trim()
-    },
     rows
   });
 }
