@@ -18,7 +18,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v72-checker-bank-am-ao";
+const VERSION = "v74-checker-direct-csv-export";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -3398,148 +3398,163 @@ async function readCheckerBankData(db) {
 
   const parsed = parseCheckerSheetUrl(sourceUrl);
 
-  // V70:
-  // SELALU baca sheet bernama BANK.
-  // Struktur yang dipakai PERSIS:
-  //   AM2:AM = Nama Rekening
-  //   AN2:AN = Nomor Rekening
-  //   AO2:AO = Status
-  // Dibaca PER BLOK agar data setelah baris kosong tidak terpotong.
-  const ranges = [];
-  const CHUNK_SIZE = 500;
-  const MAX_ROW = 5000;
-
-  for (let startRow = 2; startRow <= MAX_ROW; startRow += CHUNK_SIZE) {
-    const endRow = Math.min(
-      MAX_ROW,
-      startRow + CHUNK_SIZE - 1
+  // V74:
+  // Jangan gunakan GViz/QUERY untuk database rekening.
+  // Kolom AN bisa berisi campuran angka + Plain Text (leading zero),
+  // dan engine Visualization dapat menganggap sebagian tipe sebagai NULL.
+  //
+  // Kita pakai DIRECT CSV EXPORT agar nilai yang tampil di sheet
+  // diterima apa adanya.
+  //
+  // Link wajib disimpan ketika tab BANK sedang aktif supaya gid BANK
+  // ikut tersimpan pada URL.
+  if (!parsed.gid) {
+    throw new AppError(
+      409,
+      "Link Checker belum mempunyai gid tab BANK. Buka tab BANK di Google Sheets, copy URL lengkap yang ada #gid=..., lalu SIMPAN LINK lagi.",
+      "checker-bank-gid-required"
     );
+  }
 
-    ranges.push({
-      startRow,
-      endRow,
-      a1: `AM${startRow}:AO${endRow}`
+  const exportUrl =
+    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
+    `/export?format=csv` +
+    `&gid=${encodeURIComponent(parsed.gid)}` +
+    `&range=${encodeURIComponent("AM1:AO5000")}` +
+    `&_=${Date.now()}`;
+
+  let response;
+
+  try {
+    response = await fetch(exportUrl, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        "Accept": "text/csv,text/plain,*/*",
+        "User-Agent": "TheLastMoon-Checker/1.0"
+      }
+    });
+  } catch (error) {
+    throw new AppError(
+      502,
+      `Tidak dapat terhubung ke Google Sheets CSV Export: ${safeErrorMessage(error)}`,
+      "checker-bank-export-fetch"
+    );
+  }
+
+  if (!response.ok) {
+    throw new AppError(
+      502,
+      `Google Sheets CSV Export HTTP ${response.status}.`,
+      "checker-bank-export-http"
+    );
+  }
+
+  const csv = await response.text();
+  const table = parseCsv(csv);
+
+  if (!table.length) {
+    throw new AppError(
+      422,
+      "CSV BANK kosong.",
+      "checker-bank-export-empty"
+    );
+  }
+
+  // Range dimulai AM1 agar kita bisa memastikan gid benar-benar tab BANK.
+  const header = table[0] || [];
+  const headerName = String(header[0] || "").trim().toUpperCase();
+  const headerAccount = String(header[1] || "").trim().toUpperCase();
+  const headerStatus = String(header[2] || "").trim().toUpperCase();
+
+  const headerLooksCorrect =
+    headerName.includes("NAMA") &&
+    headerAccount.includes("NOMOR");
+
+  if (!headerLooksCorrect) {
+    throw new AppError(
+      409,
+      "gid pada link tidak terlihat seperti tab BANK kolom AM:AO. Buka tab BANK, copy URL lengkap, lalu SIMPAN LINK lagi.",
+      "checker-bank-wrong-gid"
+    );
+  }
+
+  const rows = [];
+  let nameRows = 0;
+  let accountRows = 0;
+  let statusRows = 0;
+
+  // index 0 = header AM1:AO1. Data dimulai row 2.
+  for (let index = 1; index < table.length; index += 1) {
+    const cells = table[index] || [];
+
+    const name = String(cells[0] || "").trim();
+    const account = normalizeCheckerAccount(
+      cells[1] || ""
+    );
+    const status = String(cells[2] || "").trim();
+
+    if (name) nameRows += 1;
+    if (account) accountRows += 1;
+    if (status) statusRows += 1;
+
+    // Checker berbasis nomor rekening.
+    // Semua row yang punya AN dimuat tanpa dedupe.
+    if (!account) continue;
+
+    rows.push({
+      row: index + 1,
+      name,
+      account,
+      status
     });
   }
-
-  const fetchChunk = async rangeInfo => {
-    const gvizUrl =
-      `https://docs.google.com/spreadsheets/d/${encodeURIComponent(parsed.id)}` +
-      `/gviz/tq?tqx=out:csv` +
-      `&sheet=${encodeURIComponent("BANK")}` +
-      `&range=${encodeURIComponent(rangeInfo.a1)}` +
-      `&_=${Date.now()}-${rangeInfo.startRow}`;
-
-    let response;
-
-    try {
-      response = await fetch(gvizUrl, {
-        method: "GET",
-        redirect: "follow",
-        headers: {
-          "Accept": "text/csv,text/plain,*/*",
-          "User-Agent": "TheLastMoon-Checker/1.0"
-        }
-      });
-    } catch (error) {
-      throw new AppError(
-        502,
-        `Tidak dapat membaca BANK!${rangeInfo.a1}: ${safeErrorMessage(error)}`,
-        "checker-bank-fetch"
-      );
-    }
-
-    if (!response.ok) {
-      throw new AppError(
-        502,
-        `Google Sheets HTTP ${response.status} saat membaca BANK!${rangeInfo.a1}.`,
-        "checker-bank-google-http"
-      );
-    }
-
-    const csv = await response.text();
-    const table = parseCsv(csv);
-
-    return {
-      ...rangeInfo,
-      table
-    };
-  };
-
-  const chunks = await Promise.all(
-    ranges.map(fetchChunk)
-  );
-
-  const collected = [];
-  let rawCsvRows = 0;
-  let chunksWithData = 0;
-
-  for (const chunk of chunks) {
-    const meaningful = chunk.table.filter(cells =>
-      (cells || []).some(cell => String(cell || "").trim() !== "")
-    );
-
-    rawCsvRows += meaningful.length;
-
-    if (meaningful.length) {
-      chunksWithData += 1;
-    }
-
-    for (let index = 0; index < chunk.table.length; index += 1) {
-      const cells = chunk.table[index] || [];
-      const name = String(cells[0] || "").trim();
-      const account = normalizeCheckerAccount(
-        cells[1] || ""
-      );
-      const status = String(cells[2] || "").trim();
-
-      // Kolom B adalah sumber utama database Checker.
-      if (!account) continue;
-
-      collected.push({
-        row: chunk.startRow + index,
-        name,
-        account,
-        status
-      });
-    }
-  }
-
-  // Dedupe berdasarkan nomor rekening canonical.
-  const byAccount = new Map();
-
-  for (const row of collected) {
-    const key = canonicalCheckerAccount(row.account);
-    if (!key) continue;
-    byAccount.set(key, row);
-  }
-
-  const rows = [...byAccount.values()]
-    .sort((a, b) => a.row - b.row);
 
   if (!rows.length) {
     throw new AppError(
       422,
-      "Sheet BANK terbaca, tetapi BANK!AN2:AN5000 tidak mempunyai nomor rekening.",
-      "checker-bank-empty"
+      "BANK!AN2:AN5000 tidak mempunyai nomor rekening.",
+      "checker-bank-account-empty"
     );
+  }
+
+  const seen = new Set();
+  let duplicateAccounts = 0;
+
+  for (const row of rows) {
+    const key = canonicalCheckerAccount(row.account);
+
+    if (!key) continue;
+
+    if (seen.has(key)) {
+      duplicateAccounts += 1;
+    } else {
+      seen.add(key);
+    }
   }
 
   return json({
     ok: true,
     total: rows.length,
-    rawAccountRows: collected.length,
-    rawCsvRows,
-    chunksWithData,
-    chunksRead: chunks.length,
     sheet: "BANK",
+    gid: parsed.gid,
     range: "AM2:AO5000",
     columns: {
       AM: "Nama Rekening",
       AN: "Nomor Rekening",
       AO: "Status"
     },
-    sourceMode: "BANK-AM2-AO5000-chunked",
+    sourceMode: "DIRECT-CSV-EXPORT",
+    nameRows,
+    accountRows,
+    statusRows,
+    uniqueAccounts: seen.size,
+    duplicateAccounts,
+    header: {
+      AM: String(header[0] || "").trim(),
+      AN: String(header[1] || "").trim(),
+      AO: String(header[2] || "").trim()
+    },
     rows
   });
 }
