@@ -638,68 +638,64 @@
         ta.style.position='fixed';ta.style.left='-9999px';ta.style.top='-9999px';ta.style.opacity='0';
     }
 
-    /* ========== SCREENSHOT HANYA AREA PREDIKSI ========== */
-    function waitForPredictionImages(area){
-        var images=Array.prototype.slice.call(
-            area.querySelectorAll('img')
-        );
+    /* ========== SCREENSHOT AREA PREDIKSI — STABIL ========== */
+    function prepareBackgroundForScreenshot(){
+        return new Promise(function(resolve){
+            var savedBg='';
 
-        var jobs=images.map(function(img){
-            if(img.complete) return Promise.resolve();
+            try{
+                savedBg=String(
+                    localStorage.getItem(BG_STORAGE_KEY)||''
+                ).trim();
+            }catch(e){}
 
-            return new Promise(function(resolve){
-                var done=function(){resolve();};
-                img.addEventListener('load',done,{once:true});
-                img.addEventListener('error',done,{once:true});
+            if(!savedBg){
+                resolve();
+                return;
+            }
 
-                // Jangan tahan screenshot terlalu lama jika CDN lambat.
-                setTimeout(done,5000);
-            });
+            var currentBg=String(
+                screenshotAreaEl.style.getPropertyValue(
+                    '--custom-bg-image'
+                )||''
+            );
+
+            // Kalau background sudah Data URL, langsung siap.
+            if(/data:image\//i.test(currentBg)){
+                resolve();
+                return;
+            }
+
+            var finished=false;
+
+            function done(){
+                if(finished) return;
+                finished=true;
+                resolve();
+            }
+
+            // Maksimal tunggu 8 detik, lalu tetap lanjut screenshot.
+            setTimeout(done,8000);
+
+            requestImageData(
+                savedBg,
+                function(dataUrl){
+                    screenshotAreaEl.style.setProperty(
+                        '--custom-bg-image',
+                        cssImageUrl(dataUrl)
+                    );
+                    screenshotAreaEl.classList.add(
+                        'has-custom-bg'
+                    );
+                    done();
+                },
+                function(){
+                    // Jika proxy gagal, background yang sedang tampil
+                    // tidak dihapus. Screenshot tetap dicoba.
+                    done();
+                }
+            );
         });
-
-        return Promise.all(jobs);
-    }
-
-    function cropCanvasExact(sourceCanvas,targetWidth,targetHeight){
-        targetWidth=Math.max(
-            1,
-            Math.min(
-                sourceCanvas.width,
-                Math.round(targetWidth)
-            )
-        );
-
-        targetHeight=Math.max(
-            1,
-            Math.min(
-                sourceCanvas.height,
-                Math.round(targetHeight)
-            )
-        );
-
-        // Kalau html2canvas sudah pas, pakai canvas asli.
-        if(
-            sourceCanvas.width===targetWidth &&
-            sourceCanvas.height===targetHeight
-        ){
-            return sourceCanvas;
-        }
-
-        var cropped=document.createElement('canvas');
-        cropped.width=targetWidth;
-        cropped.height=targetHeight;
-
-        var ctx=cropped.getContext('2d');
-
-        ctx.drawImage(
-            sourceCanvas,
-            0,0,
-            targetWidth,targetHeight,
-            0,0,
-            targetWidth,targetHeight
-        );
-
-        return cropped;
     }
 
     function takeScreenshot(){
@@ -711,30 +707,38 @@
             return;
         }
 
+        if(typeof html2canvas!=='function'){
+            showToast('Mesin screenshot belum termuat. Refresh halaman.');
+            return;
+        }
+
         btn.innerHTML=
             '<i class="fas fa-spinner fa-spin"></i> MEMPROSES ULTRA HD...';
         btn.disabled=true;
 
-        // Input tanggal tidak boleh ikut screenshot.
+        // Hanya #screenshotArea yang ditangkap.
+        // Header, input background, tombol, dan halaman luar tidak ikut.
         dateInputEl.style.display='none';
         dateDisplayEl.style.display='block';
-
-        // Ukuran PERSIS kotak #screenshotArea.
-        // Header, pengaturan background, tombol, dan bagian luar
-        // tidak akan ikut ke gambar.
-        var rect=area.getBoundingClientRect();
-        var captureWidth=Math.ceil(rect.width);
-        var captureHeight=Math.ceil(rect.height);
 
         var requestedScale=
             parseInt(qualitySelectEl.value,10)||4;
 
-        var basePixels=Math.max(
+        var areaWidth=Math.max(
             1,
-            captureWidth*captureHeight
+            area.scrollWidth
         );
 
-        // Tetap jaga batas canvas browser.
+        var areaHeight=Math.max(
+            1,
+            area.scrollHeight
+        );
+
+        var basePixels=Math.max(
+            1,
+            areaWidth*areaHeight
+        );
+
         var safeScale=Math.min(
             requestedScale,
             Math.sqrt(32000000/basePixels)
@@ -742,7 +746,10 @@
 
         safeScale=Math.max(
             2,
-            Math.min(requestedScale,safeScale)
+            Math.min(
+                requestedScale,
+                safeScale
+            )
         );
 
         var fontReady=
@@ -752,90 +759,49 @@
 
         Promise.all([
             fontReady,
-            waitForPredictionImages(area)
+            prepareBackgroundForScreenshot()
         ])
         .then(function(){
+            // Pakai konfigurasi sederhana/stabil seperti screenshot
+            // sebelumnya. Target tetap hanya #screenshotArea.
             return html2canvas(area,{
                 useCORS:true,
                 allowTaint:false,
-
-                // Background milik #screenshotArea sendiri yang dipakai.
-                // Jadi tidak mengambil warna/background halaman luar.
-                backgroundColor:null,
-
+                backgroundColor:'#120003',
                 scale:safeScale,
                 logging:false,
                 imageTimeout:25000,
                 removeContainer:true,
-
-                // PERSIS ukuran area Prediksi.
-                width:captureWidth,
-                height:captureHeight,
-
-                // Jangan menggunakan posisi scroll halaman sebagai crop.
+                width:areaWidth,
+                height:areaHeight,
                 scrollX:0,
-                scrollY:0,
-
-                windowWidth:Math.max(
-                    document.documentElement.clientWidth,
-                    captureWidth
-                ),
-                windowHeight:Math.max(
-                    document.documentElement.clientHeight,
-                    captureHeight
-                ),
-
-                onclone:function(clonedDoc){
-                    var clonedArea=
-                        clonedDoc.getElementById('screenshotArea');
-
-                    if(!clonedArea) return;
-
-                    // Bekukan ukuran agar hasil tidak berubah walaupun
-                    // iframe / browser sedang resize.
-                    clonedArea.style.width=
-                        captureWidth+'px';
-                    clonedArea.style.minWidth=
-                        captureWidth+'px';
-                    clonedArea.style.maxWidth=
-                        captureWidth+'px';
-
-                    // Hilangkan animasi/transisi saat canvas dibuat.
-                    clonedArea.style.transition='none';
-
-                    var clonedDateInput=
-                        clonedDoc.getElementById('dateInput');
-
-                    var clonedDateDisplay=
-                        clonedDoc.getElementById('dateDisplay');
-
-                    if(clonedDateInput){
-                        clonedDateInput.style.display='none';
-                    }
-
-                    if(clonedDateDisplay){
-                        clonedDateDisplay.style.display='block';
-                    }
-                }
+                scrollY:-window.scrollY
             });
         })
         .then(function(canvas){
-            var exactCanvas=cropCanvasExact(
-                canvas,
-                captureWidth*safeScale,
-                captureHeight*safeScale
-            );
-
             saveOrCopyCanvas(
-                exactCanvas,
+                canvas,
                 requestedScale
             );
         })
         .catch(function(err){
-            console.error(err);
-            showToast(
-                'Gagal membuat screenshot area Prediksi'
+            console.error(
+                'Screenshot Prediksi error:',
+                err
             );
+
+            var message=
+                err && err.message
+                ? String(err.message)
+                : 'unknown';
+
+            // Tampilkan detail singkat supaya kalau CDN tertentu gagal
+            // kita langsung tahu penyebabnya.
+            showToast(
+                'Gagal screenshot: '+
+                message.slice(0,90)
+            );
+
             resetSsBtn();
         });
     }
