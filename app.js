@@ -607,7 +607,7 @@ async function renderPrediksiWorkspace(menu) {
       <section class="prediksi-workspace">
         <iframe
           class="prediksi-frame"
-          src="/prediksi.html?v=77.0.0"
+          src="/tools/prediksi?v=78.0.0"
           title="Prediksi"
           loading="eager"
           referrerpolicy="same-origin">
