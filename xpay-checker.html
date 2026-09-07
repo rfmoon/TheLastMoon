@@ -14,7 +14,7 @@
     <section class="hero">
       <h1>Checker Selisih XPAY / ZonaMain / Coin Admin</h1>
       <p class="subtitle">
-        Upload file atau tempel data mentah. Sistem mendeteksi baris judul secara otomatis,
+        Pilih file untuk ketiga sumber data. Sistem mendeteksi baris judul secara otomatis,
         menormalisasi huruf besar-kecil, spasi, serta format nominal Indonesia.
       </p>
       <div class="privacy">🔒 Semua data diproses lokal di browser</div>
@@ -37,7 +37,7 @@
           <div class="file-row">
             <input id="fileXpay" type="file" accept=".csv,.txt,.xlsx,.xls" />
           </div>
-          <textarea id="textXpay" placeholder="Atau tempel data XPAY/LEONPAY di sini..."></textarea>
+          <textarea id="textXpay" placeholder="Atau tempel data XPAY/LEONPAY di sini..." hidden aria-hidden="true" tabindex="-1"></textarea>
           <div id="statusXpay" class="source-status">Belum ada data.</div>
         </div>
       </article>
@@ -58,7 +58,7 @@
           <div class="file-row">
             <input id="fileZona" type="file" accept=".csv,.txt,.xlsx,.xls" />
           </div>
-          <textarea id="textZona" placeholder="Atau tempel data ZonaMain di sini..."></textarea>
+          <textarea id="textZona" placeholder="Atau tempel data ZonaMain di sini..." hidden aria-hidden="true" tabindex="-1"></textarea>
           <div id="statusZona" class="source-status">Belum ada data.</div>
         </div>
       </article>
@@ -78,7 +78,7 @@
           <div class="file-row">
             <input id="fileAdmin" type="file" accept=".csv,.txt,.xlsx,.xls" />
           </div>
-          <textarea id="textAdmin" placeholder="Atau tempel data Coin Admin di sini..."></textarea>
+          <textarea id="textAdmin" placeholder="Atau tempel data Coin Admin di sini..." hidden aria-hidden="true" tabindex="-1"></textarea>
           <div id="statusAdmin" class="source-status">Belum ada data.</div>
         </div>
       </article>
