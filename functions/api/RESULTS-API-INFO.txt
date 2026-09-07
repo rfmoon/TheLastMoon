@@ -1,0 +1,24 @@
+V58 HASIL RESULT API
+
+Sekarang Result API punya file route KHUSUS:
+
+functions/api/results.js
+  -> GET /api/results
+
+functions/api/results/dates.js
+  -> GET /api/results/dates
+
+functions/api/external/results.js
+  -> GET/POST/OPTIONS /api/external/results
+
+functions/api/results-health.js
+  -> GET /api/results-health
+
+[[path]].js tetap memiliki route lama sebagai fallback.
+
+Setelah deploy:
+1. Ctrl + Shift + R
+2. Buka:
+   https://thelastmoon.pages.dev/api/health
+   harus version v58-result-dedicated-endpoints
+3. Login lalu buka Hasil Result.
