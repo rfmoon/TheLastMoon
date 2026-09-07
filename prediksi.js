@@ -249,23 +249,45 @@
         return result;
     }
 
-    /* ========== GAMBAR VIA CLOUDFLARE ========== */
+    /* ========== BACKGROUND TANPA APPS SCRIPT ========== */
     function normalizeImageUrl(url){
         url=String(url||'').trim();
         if(!url) return '';
 
-        var driveMatch=url.match(/drive\.google\.com\/file\/d\/([^/]+)/i) || url.match(/[?&]id=([^&]+)/i);
-        if(driveMatch) return 'https://drive.google.com/uc?export=download&id='+driveMatch[1];
+        // Google Drive share URL -> direct image URL.
+        var driveMatch=
+            url.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i) ||
+            url.match(/drive\.google\.com\/open\?id=([^&#]+)/i) ||
+            url.match(/[?&]id=([^&#]+)/i);
+
+        if(driveMatch){
+            return 'https://lh3.googleusercontent.com/d/'+driveMatch[1];
+        }
 
         if(/dropbox\.com/i.test(url)){
             url=url.replace('www.dropbox.com','dl.dropboxusercontent.com');
             url=url.replace(/[?&]dl=0/i,'');
         }
+
         return url;
+    }
+
+    function cssImageUrl(url){
+        return 'url('+JSON.stringify(String(url||''))+')';
+    }
+
+    function googleFileIdFromUrl(url){
+        var s=String(url||'').trim();
+        var m=
+            s.match(/lh\d*\.googleusercontent\.com\/d\/([^/?=#]+)/i) ||
+            s.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i) ||
+            s.match(/[?&]id=([^&#]+)/i);
+        return m ? m[1] : '';
     }
 
     function requestImageData(url,onSuccess,onError){
         url=normalizeImageUrl(url);
+
         if(!url){
             onError('Link gambar kosong');
             return;
@@ -281,7 +303,10 @@
             return;
         }
 
-        var proxyUrl='/tools/image-proxy?url='+encodeURIComponent(url)+'&_='+(Date.now());
+        var proxyUrl=
+            '/tools/image-proxy?url='+
+            encodeURIComponent(url)+
+            '&_='+(Date.now());
 
         fetch(proxyUrl,{
             method:'GET',
@@ -293,12 +318,14 @@
 
             return response.text().then(function(text){
                 var message='Cloudflare gagal mengambil gambar';
+
                 try{
                     var parsed=JSON.parse(text);
                     if(parsed && parsed.error) message=parsed.error;
                 }catch(e){
                     if(text) message=text.slice(0,180);
                 }
+
                 throw new Error(message);
             });
         })
@@ -315,6 +342,7 @@
 
             reader.onload=function(){
                 var dataUrl=String(reader.result||'');
+
                 if(!dataUrl){
                     onError('Gambar tidak dapat diproses');
                     return;
@@ -339,14 +367,73 @@
         });
     }
 
+    function previewBackgroundDirect(url,onLoaded,onFailed){
+        var normalized=normalizeImageUrl(url);
+        var candidates=[normalized];
+        var googleId=googleFileIdFromUrl(normalized);
+
+        if(googleId){
+            // Beberapa link Google membutuhkan varian URL berbeda.
+            candidates=[
+                'https://lh3.googleusercontent.com/d/'+googleId,
+                'https://lh3.googleusercontent.com/d/'+googleId+'=s0',
+                'https://drive.google.com/uc?export=view&id='+encodeURIComponent(googleId),
+                normalized
+            ];
+        }
+
+        // Hapus kandidat yang sama.
+        var uniqueCandidates=[];
+        candidates.forEach(function(item){
+            if(item && uniqueCandidates.indexOf(item)===-1){
+                uniqueCandidates.push(item);
+            }
+        });
+
+        var index=0;
+
+        function tryNext(){
+            if(index>=uniqueCandidates.length){
+                if(onFailed) onFailed();
+                return;
+            }
+
+            var candidate=uniqueCandidates[index++];
+            var probe=new Image();
+
+            probe.onload=function(){
+                screenshotAreaEl.style.setProperty(
+                    '--custom-bg-image',
+                    cssImageUrl(candidate)
+                );
+                screenshotAreaEl.classList.add('has-custom-bg');
+
+                if(onLoaded) onLoaded(candidate);
+            };
+
+            probe.onerror=function(){
+                tryNext();
+            };
+
+            // Untuk preview jangan pakai crossOrigin.
+            // Tujuannya agar CDN Google tetap boleh tampil sebagai background.
+            probe.src=candidate;
+        }
+
+        tryNext();
+    }
+
     function setBackground(url,save){
         url=normalizeImageUrl(url);
+
         if(!url){
             screenshotAreaEl.style.setProperty('--custom-bg-image','none');
             screenshotAreaEl.classList.remove('has-custom-bg');
+
             if(save){
                 try{localStorage.removeItem(BG_STORAGE_KEY);}catch(e){}
             }
+
             return;
         }
 
@@ -354,30 +441,80 @@
         applyBtn.disabled=true;
         applyBtn.innerHTML='<i class="fas fa-spinner fa-spin"></i> MEMUAT';
 
-        requestImageData(url,function(dataUrl,sourceUrl){
-            screenshotAreaEl.style.setProperty('--custom-bg-image','url("'+dataUrl+'")');
-            screenshotAreaEl.classList.add('has-custom-bg');
-            bgUrlInputEl.value=sourceUrl;
-            if(save){
-                try{localStorage.setItem(BG_STORAGE_KEY,sourceUrl);}catch(e){}
+        var finished=false;
+        var directWorked=false;
+
+        // LANGKAH 1:
+        // Tampilkan URL langsung dahulu. Jadi link Googleusercontent tetap
+        // terlihat meskipun server proxy Google sedang menolak request.
+        previewBackgroundDirect(
+            url,
+            function(displayUrl){
+                directWorked=true;
+
+                if(save){
+                    try{localStorage.setItem(BG_STORAGE_KEY,url);}catch(e){}
+                }
+
+                bgUrlInputEl.value=url;
+
+                if(!finished){
+                    showToast('Background tampil. Menyiapkan versi screenshot...');
+                }
+            },
+            function(){}
+        );
+
+        // LANGKAH 2:
+        // Ambil lewat Cloudflare dan ubah ke Data URL.
+        // Jika berhasil, background ini aman ikut html2canvas.
+        requestImageData(
+            url,
+            function(dataUrl,sourceUrl){
+                finished=true;
+
+                screenshotAreaEl.style.setProperty(
+                    '--custom-bg-image',
+                    cssImageUrl(dataUrl)
+                );
+                screenshotAreaEl.classList.add('has-custom-bg');
+
+                bgUrlInputEl.value=url;
+
+                if(save){
+                    try{localStorage.setItem(BG_STORAGE_KEY,url);}catch(e){}
+                }
+
+                applyBtn.disabled=false;
+                applyBtn.innerHTML='<i class="fas fa-image"></i> TERAPKAN';
+                showToast('Background berhasil diterapkan dan siap screenshot!');
+            },
+            function(message){
+                finished=true;
+                applyBtn.disabled=false;
+                applyBtn.innerHTML='<i class="fas fa-image"></i> TERAPKAN';
+
+                // Jika URL langsung berhasil tampil, JANGAN hapus background.
+                if(directWorked){
+                    showToast(
+                        'Background sudah tampil. Proxy screenshot: '+message
+                    );
+                }else{
+                    showToast(message);
+                }
             }
-            applyBtn.disabled=false;
-            applyBtn.innerHTML='<i class="fas fa-image"></i> TERAPKAN';
-            showToast('Background berhasil diterapkan!');
-        },function(message){
-            applyBtn.disabled=false;
-            applyBtn.innerHTML='<i class="fas fa-image"></i> TERAPKAN';
-            showToast(message);
-        });
+        );
     }
 
     function applyBackgroundFromInput(){
-        var url=bgUrlInputEl.value.trim();
+        var url=String(bgUrlInputEl.value||'').trim();
+
         if(!url){
             showToast('Masukkan link gambar terlebih dahulu');
             bgUrlInputEl.focus();
             return;
         }
+
         setBackground(url,true);
     }
 
