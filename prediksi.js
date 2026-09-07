@@ -638,252 +638,82 @@
         ta.style.position='fixed';ta.style.left='-9999px';ta.style.top='-9999px';ta.style.opacity='0';
     }
 
-    /* ========== SCREENSHOT AREA PREDIKSI — TANPA HTML2CANVAS ========== */
-    var predictionCssCache='';
-
-    function getPredictionCssText(){
-        if(predictionCssCache){
-            return Promise.resolve(predictionCssCache);
-        }
-
-        return fetch('/prediksi.css?v=82.0.0',{
-            method:'GET',
-            cache:'no-store',
-            credentials:'same-origin'
-        })
-        .then(function(response){
-            if(!response.ok){
-                throw new Error('CSS Prediksi gagal dibaca');
-            }
-            return response.text();
-        })
-        .then(function(css){
-            // Di dalam SVG foreignObject tidak ada document :root yang sama
-            // seperti halaman normal. Pindahkan CSS variables ke wrapper capture.
-            css=String(css||'').replace(
-                /:root\s*\{/g,
-                '.capture-svg-root{'
-            );
-
-            predictionCssCache=css;
-            return css;
-        });
-    }
-
-    function requestImageDataPromise(url){
+    /* ========== SCREENSHOT CURRENT TAB -> COPY CLIPBOARD ========== */
+    function waitFrame(){
         return new Promise(function(resolve){
-            url=String(url||'').trim();
-
-            if(!url){
-                resolve('');
-                return;
-            }
-
-            if(/^data:image\//i.test(url)){
-                resolve(url);
-                return;
-            }
-
-            requestImageData(
-                url,
-                function(dataUrl){
-                    resolve(String(dataUrl||''));
-                },
-                function(){
-                    // Jika satu logo gagal diproxy, jangan gagalkan screenshot.
-                    // Elemen gambar itu dikosongkan pada clone saja.
-                    resolve('');
-                }
-            );
-        });
-    }
-
-    function inlineCloneImages(sourceRoot,cloneRoot){
-        var sourceImages=Array.prototype.slice.call(
-            sourceRoot.querySelectorAll('img')
-        );
-
-        var cloneImages=Array.prototype.slice.call(
-            cloneRoot.querySelectorAll('img')
-        );
-
-        var jobs=sourceImages.map(function(sourceImg,index){
-            var cloneImg=cloneImages[index];
-            if(!cloneImg) return Promise.resolve();
-
-            var src=
-                sourceImg.currentSrc ||
-                sourceImg.getAttribute('src') ||
-                '';
-
-            return requestImageDataPromise(src)
-            .then(function(dataUrl){
-                if(dataUrl){
-                    cloneImg.setAttribute('src',dataUrl);
-                }else{
-                    cloneImg.removeAttribute('src');
-                    cloneImg.style.visibility='hidden';
-                }
-
-                cloneImg.removeAttribute('srcset');
-                cloneImg.removeAttribute('crossorigin');
+            requestAnimationFrame(function(){
+                requestAnimationFrame(resolve);
             });
         });
-
-        return Promise.all(jobs);
     }
 
-    function buildPredictionSvg(area,scale,bgDataUrl){
-        var areaWidth=Math.max(
-            1,
-            Math.ceil(area.getBoundingClientRect().width)
-        );
-
-        var areaHeight=Math.max(
-            1,
-            Math.ceil(area.getBoundingClientRect().height)
-        );
-
-        var clone=area.cloneNode(true);
-
-        // Hanya area Prediksi. Input tanggal editor tidak ikut.
-        var cloneDateInput=clone.querySelector('#dateInput');
-        var cloneDateDisplay=clone.querySelector('#dateDisplay');
-
-        if(cloneDateInput){
-            cloneDateInput.style.display='none';
-        }
-
-        if(cloneDateDisplay){
-            cloneDateDisplay.style.display='block';
-        }
-
-        // Bekukan ukuran sesuai tampilan aktual.
-        clone.style.width=areaWidth+'px';
-        clone.style.minWidth=areaWidth+'px';
-        clone.style.maxWidth=areaWidth+'px';
-        clone.style.height=areaHeight+'px';
-        clone.style.minHeight=areaHeight+'px';
-        clone.style.maxHeight=areaHeight+'px';
-        clone.style.margin='0';
-        clone.style.transition='none';
-        clone.style.boxSizing='border-box';
-
-        if(bgDataUrl){
-            clone.style.setProperty(
-                '--custom-bg-image',
-                cssImageUrl(bgDataUrl)
-            );
-            clone.classList.add('has-custom-bg');
-        }
-
-        return Promise.all([
-            getPredictionCssText(),
-            inlineCloneImages(area,clone)
-        ])
-        .then(function(results){
-            var css=results[0]||'';
-
-            var bodyStyle=getComputedStyle(document.body);
-            var bodyFont=bodyStyle.fontFamily||'sans-serif';
-            var bodyColor=bodyStyle.color||'#fff';
-
-            var wrapperStyle=[
-                'width:'+areaWidth+'px',
-                'height:'+areaHeight+'px',
-                'margin:0',
-                'padding:0',
-                'box-sizing:border-box',
-                'font-family:'+bodyFont,
-                'color:'+bodyColor
-            ].join(';');
-
-            var xhtml=
-                '<div xmlns="http://www.w3.org/1999/xhtml" '+
-                'class="capture-svg-root" style="'+
-                wrapperStyle.replace(/"/g,'&quot;')+
-                '">'+
-                '<style>'+css.replace(/<\/style/gi,'<\\/style')+'</style>'+
-                clone.outerHTML+
-                '</div>';
-
-            var svg=
-                '<svg xmlns="http://www.w3.org/2000/svg" '+
-                'width="'+areaWidth+'" height="'+areaHeight+'" '+
-                'viewBox="0 0 '+areaWidth+' '+areaHeight+'">'+
-                '<foreignObject x="0" y="0" '+
-                'width="'+areaWidth+'" height="'+areaHeight+'">'+
-                xhtml+
-                '</foreignObject>'+
-                '</svg>';
-
-            return {
-                svg:svg,
-                width:areaWidth,
-                height:areaHeight,
-                scale:scale
-            };
-        });
-    }
-
-    function renderSvgScreenshot(svgInfo){
+    function waitVideoReady(video){
         return new Promise(function(resolve,reject){
-            var blob=new Blob(
-                [svgInfo.svg],
-                {type:'image/svg+xml;charset=utf-8'}
-            );
+            var done=false;
 
-            var objectUrl=URL.createObjectURL(blob);
-            var image=new Image();
+            function finish(){
+                if(done) return;
+                done=true;
+                resolve();
+            }
 
-            image.onload=function(){
-                try{
-                    var canvas=document.createElement('canvas');
-                    canvas.width=Math.max(
-                        1,
-                        Math.round(svgInfo.width*svgInfo.scale)
-                    );
-                    canvas.height=Math.max(
-                        1,
-                        Math.round(svgInfo.height*svgInfo.scale)
-                    );
+            function fail(){
+                if(done) return;
+                done=true;
+                reject(new Error('Preview screenshot tidak siap'));
+            }
 
-                    var ctx=canvas.getContext('2d');
+            video.addEventListener('loadedmetadata',finish,{once:true});
+            video.addEventListener('canplay',finish,{once:true});
+            video.addEventListener('error',fail,{once:true});
 
-                    if(!ctx){
-                        throw new Error('Canvas tidak tersedia');
-                    }
-
-                    ctx.imageSmoothingEnabled=true;
-                    ctx.imageSmoothingQuality='high';
-
-                    ctx.drawImage(
-                        image,
-                        0,0,
-                        canvas.width,
-                        canvas.height
-                    );
-
-                    URL.revokeObjectURL(objectUrl);
-                    resolve(canvas);
-                }catch(error){
-                    URL.revokeObjectURL(objectUrl);
-                    reject(error);
+            setTimeout(function(){
+                if(video.videoWidth && video.videoHeight){
+                    finish();
+                }else{
+                    fail();
                 }
-            };
-
-            image.onerror=function(){
-                URL.revokeObjectURL(objectUrl);
-                reject(
-                    new Error('Browser gagal merender area Prediksi')
-                );
-            };
-
-            image.src=objectUrl;
+            },5000);
         });
     }
 
-    function takeScreenshot(){
+    function canvasToClipboard(canvas){
+        return new Promise(function(resolve,reject){
+            if(!navigator.clipboard || !window.ClipboardItem){
+                reject(
+                    new Error(
+                        'Browser tidak mendukung copy gambar ke clipboard'
+                    )
+                );
+                return;
+            }
+
+            canvas.toBlob(function(blob){
+                if(!blob){
+                    reject(
+                        new Error('Gambar screenshot tidak dapat dibuat')
+                    );
+                    return;
+                }
+
+                navigator.clipboard.write([
+                    new ClipboardItem({
+                        'image/png':blob
+                    })
+                ])
+                .then(resolve)
+                .catch(function(){
+                    reject(
+                        new Error(
+                            'Izin clipboard ditolak browser'
+                        )
+                    );
+                });
+            },'image/png',1);
+        });
+    }
+
+    async function takeScreenshot(){
         var btn=document.getElementById('btnSs');
         var area=document.getElementById('screenshotArea');
 
@@ -892,120 +722,163 @@
             return;
         }
 
+        if(
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getDisplayMedia
+        ){
+            showToast(
+                'Browser ini tidak mendukung screenshot tab'
+            );
+            return;
+        }
+
         btn.innerHTML=
-            '<i class="fas fa-spinner fa-spin"></i> MEMPROSES ULTRA HD...';
+            '<i class="fas fa-spinner fa-spin"></i> PILIH TAB INI...';
         btn.disabled=true;
 
         dateInputEl.style.display='none';
         dateDisplayEl.style.display='block';
 
-        var requestedScale=
-            parseInt(qualitySelectEl.value,10)||4;
+        var stream=null;
+        var video=null;
 
-        var rect=area.getBoundingClientRect();
-        var basePixels=Math.max(
-            1,
-            Math.ceil(rect.width)*
-            Math.ceil(rect.height)
-        );
+        try{
+            area.scrollIntoView({
+                behavior:'auto',
+                block:'center',
+                inline:'nearest'
+            });
 
-        // Jaga ukuran canvas browser, tapi tetap usahakan 4x.
-        var safeScale=Math.min(
-            requestedScale,
-            Math.sqrt(32000000/basePixels)
-        );
+            await waitFrame();
 
-        safeScale=Math.max(
-            2,
-            Math.min(requestedScale,safeScale)
-        );
+            stream=await navigator.mediaDevices.getDisplayMedia({
+                video:{
+                    frameRate:1
+                },
+                audio:false,
+                preferCurrentTab:true,
+                selfBrowserSurface:'include',
+                surfaceSwitching:'exclude'
+            });
 
-        var fontReady=
-            (document.fonts && document.fonts.ready)
-            ? document.fonts.ready
-            : Promise.resolve();
+            btn.innerHTML=
+                '<i class="fas fa-spinner fa-spin"></i> MENGAMBIL SCREENSHOT...';
 
-        Promise.all([
-            fontReady,
-            prepareBackgroundForScreenshot()
-        ])
-        .then(function(results){
-            var bgDataUrl=results[1]||'';
+            video=document.createElement('video');
+            video.muted=true;
+            video.autoplay=true;
+            video.playsInline=true;
+            video.srcObject=stream;
 
-            return buildPredictionSvg(
-                area,
-                safeScale,
-                bgDataUrl
+            await waitVideoReady(video);
+
+            try{
+                await video.play();
+            }catch(e){}
+
+            await waitFrame();
+
+            var rect=area.getBoundingClientRect();
+
+            if(
+                rect.bottom<=0 ||
+                rect.top>=window.innerHeight ||
+                rect.right<=0 ||
+                rect.left>=window.innerWidth
+            ){
+                throw new Error(
+                    'Area Prediksi tidak terlihat di layar'
+                );
+            }
+
+            var scaleX=
+                video.videoWidth /
+                Math.max(1,window.innerWidth);
+
+            var scaleY=
+                video.videoHeight /
+                Math.max(1,window.innerHeight);
+
+            var sx=Math.max(
+                0,
+                Math.round(rect.left*scaleX)
             );
-        })
-        .then(function(svgInfo){
-            return renderSvgScreenshot(svgInfo);
-        })
-        .then(function(canvas){
-            saveOrCopyCanvas(
-                canvas,
-                requestedScale
+
+            var sy=Math.max(
+                0,
+                Math.round(rect.top*scaleY)
             );
-        })
-        .catch(function(err){
+
+            var sw=Math.min(
+                video.videoWidth-sx,
+                Math.round(rect.width*scaleX)
+            );
+
+            var sh=Math.min(
+                video.videoHeight-sy,
+                Math.round(rect.height*scaleY)
+            );
+
+            if(sw<=0 || sh<=0){
+                throw new Error(
+                    'Ukuran screenshot tidak valid'
+                );
+            }
+
+            var canvas=document.createElement('canvas');
+            canvas.width=sw;
+            canvas.height=sh;
+
+            var ctx=canvas.getContext('2d');
+
+            if(!ctx){
+                throw new Error('Canvas screenshot tidak tersedia');
+            }
+
+            ctx.drawImage(
+                video,
+                sx,sy,sw,sh,
+                0,0,sw,sh
+            );
+
+            await canvasToClipboard(canvas);
+
+            showToast(
+                'Screenshot Prediksi tersalin ke clipboard!'
+            );
+        }catch(err){
             console.error(
-                'Screenshot Prediksi V91 error:',
+                'Screenshot Prediksi V92 error:',
                 err
             );
 
             var message=
-                err && err.message
-                ? String(err.message)
-                : 'unknown';
+                err && err.name==='NotAllowedError'
+                ? 'Pilih tab TheLastMoon lalu tekan Share'
+                : (
+                    err && err.message
+                    ? String(err.message)
+                    : 'Screenshot gagal'
+                );
 
-            showToast(
-                'Gagal screenshot V91: '+
-                message.slice(0,100)
-            );
+            showToast(message.slice(0,110));
+        }finally{
+            if(stream){
+                stream.getTracks().forEach(function(track){
+                    try{track.stop();}catch(e){}
+                });
+            }
+
+            if(video){
+                try{
+                    video.pause();
+                    video.srcObject=null;
+                    video.remove();
+                }catch(e){}
+            }
 
             resetSsBtn();
-        });
-    }
-
-    function saveOrCopyCanvas(canvas,requestedScale){
-        if(navigator.clipboard && window.ClipboardItem){
-            canvas.toBlob(function(blob){
-                if(!blob){downloadCanvas(canvas,requestedScale);return;}
-                navigator.clipboard.write([
-                    new ClipboardItem({'image/png':blob})
-                ]).then(function(){
-                    showToast('Screenshot HD disalin ke clipboard!');
-                    resetSsBtn();
-                }).catch(function(){
-                    downloadCanvas(canvas,requestedScale);
-                });
-            },'image/png',1);
-        }else{
-            downloadCanvas(canvas,requestedScale);
         }
-    }
-
-    function downloadCanvas(canvas,requestedScale){
-        try{
-            var datePart=dateDisplayEl.textContent.replace(/\s+/g,'-').toLowerCase();
-            var quality=requestedScale>=4?'ultra-hd':(requestedScale===3?'full-hd':'hd');
-            var fname='prediksi-'+(pred.market||'lunatogel').replace(/\s/g,'-').toLowerCase()+'-'+datePart+'-'+quality+'.png';
-            var a=document.createElement('a');
-            a.href=canvas.toDataURL('image/png',1);
-            a.download=fname;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            showToast('Screenshot '+quality.toUpperCase()+' berhasil didownload!');
-        }catch(e){
-            try{
-                window.open(canvas.toDataURL('image/png',1),'_blank');
-                showToast('Screenshot dibuka di tab baru');
-            }catch(e2){
-                showToast('Gagal menyimpan screenshot');
-            }
-        }
-        resetSsBtn();
     }
 
     function resetSsBtn(){
