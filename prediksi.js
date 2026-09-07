@@ -638,9 +638,30 @@
         ta.style.position='fixed';ta.style.left='-9999px';ta.style.top='-9999px';ta.style.opacity='0';
     }
 
-    /* ========== SCREENSHOT AREA PREDIKSI — STABIL ========== */
+    /* ========== SCREENSHOT AREA PREDIKSI — CANVAS COMPOSITE ========== */
+    function extractCssImageUrl(value){
+        value=String(value||'').trim();
+        if(!value || value==='none') return '';
+
+        var m=value.match(/^url\((['"]?)(.*?)\1\)$/i);
+        return m ? m[2] : value;
+    }
+
     function prepareBackgroundForScreenshot(){
         return new Promise(function(resolve){
+            var currentBg=extractCssImageUrl(
+                screenshotAreaEl.style.getPropertyValue(
+                    '--custom-bg-image'
+                )
+            );
+
+            // Kalau background yang sedang tampil sudah Data URL,
+            // langsung pakai untuk canvas final.
+            if(/^data:image\//i.test(currentBg)){
+                resolve(currentBg);
+                return;
+            }
+
             var savedBg='';
 
             try{
@@ -650,51 +671,144 @@
             }catch(e){}
 
             if(!savedBg){
-                resolve();
-                return;
-            }
-
-            var currentBg=String(
-                screenshotAreaEl.style.getPropertyValue(
-                    '--custom-bg-image'
-                )||''
-            );
-
-            // Kalau background sudah Data URL, langsung siap.
-            if(/data:image\//i.test(currentBg)){
-                resolve();
+                resolve('');
                 return;
             }
 
             var finished=false;
 
-            function done(){
+            function done(value){
                 if(finished) return;
                 finished=true;
-                resolve();
+                resolve(value||'');
             }
 
-            // Maksimal tunggu 8 detik, lalu tetap lanjut screenshot.
-            setTimeout(done,8000);
+            // Maksimal tunggu 10 detik.
+            setTimeout(function(){done('');},10000);
 
             requestImageData(
                 savedBg,
                 function(dataUrl){
+                    // Tetap pasang ke tampilan normal.
                     screenshotAreaEl.style.setProperty(
                         '--custom-bg-image',
                         cssImageUrl(dataUrl)
                     );
-                    screenshotAreaEl.classList.add(
-                        'has-custom-bg'
-                    );
-                    done();
+                    screenshotAreaEl.classList.add('has-custom-bg');
+                    done(dataUrl);
                 },
                 function(){
-                    // Jika proxy gagal, background yang sedang tampil
-                    // tidak dihapus. Screenshot tetap dicoba.
-                    done();
+                    // Screenshot masih bisa dibuat tanpa custom background.
+                    done('');
                 }
             );
+        });
+    }
+
+    function loadCanvasImage(src){
+        return new Promise(function(resolve,reject){
+            if(!src){
+                resolve(null);
+                return;
+            }
+
+            var img=new Image();
+
+            img.onload=function(){
+                resolve(img);
+            };
+
+            img.onerror=function(){
+                reject(new Error('Background screenshot tidak dapat dimuat'));
+            };
+
+            img.src=src;
+        });
+    }
+
+    function roundedRectPath(ctx,x,y,w,h,r){
+        r=Math.max(0,Math.min(r,w/2,h/2));
+
+        ctx.beginPath();
+        ctx.moveTo(x+r,y);
+        ctx.lineTo(x+w-r,y);
+        ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+        ctx.lineTo(x+w,y+h-r);
+        ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+        ctx.lineTo(x+r,y+h);
+        ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+        ctx.lineTo(x,y+r);
+        ctx.quadraticCurveTo(x,y,x+r,y);
+        ctx.closePath();
+    }
+
+    function drawImageCover(ctx,img,w,h){
+        if(!img || !img.naturalWidth || !img.naturalHeight) return;
+
+        var imageRatio=img.naturalWidth/img.naturalHeight;
+        var boxRatio=w/h;
+        var sx=0;
+        var sy=0;
+        var sw=img.naturalWidth;
+        var sh=img.naturalHeight;
+
+        if(imageRatio>boxRatio){
+            sw=img.naturalHeight*boxRatio;
+            sx=(img.naturalWidth-sw)/2;
+        }else{
+            sh=img.naturalWidth/boxRatio;
+            sy=(img.naturalHeight-sh)/2;
+        }
+
+        ctx.drawImage(
+            img,
+            sx,sy,sw,sh,
+            0,0,w,h
+        );
+    }
+
+    function composePredictionCanvas(contentCanvas,bgDataUrl,scale){
+        return loadCanvasImage(bgDataUrl)
+        .catch(function(){return null;})
+        .then(function(bgImg){
+            var finalCanvas=document.createElement('canvas');
+            finalCanvas.width=contentCanvas.width;
+            finalCanvas.height=contentCanvas.height;
+
+            var ctx=finalCanvas.getContext('2d');
+            var w=finalCanvas.width;
+            var h=finalCanvas.height;
+            var radius=14*Math.max(1,scale||1);
+
+            ctx.save();
+            roundedRectPath(ctx,0,0,w,h,radius);
+            ctx.clip();
+
+            if(bgImg){
+                // Background custom digambar langsung dengan Canvas API.
+                // Jadi html2canvas tidak perlu membuat CanvasPattern dari
+                // CSS background-image (sumber error createPattern sebelumnya).
+                drawImageCover(ctx,bgImg,w,h);
+
+                var overlay=ctx.createLinearGradient(0,0,0,h);
+                overlay.addColorStop(0,'rgba(10,0,2,.54)');
+                overlay.addColorStop(.55,'rgba(18,0,4,.72)');
+                overlay.addColorStop(1,'rgba(8,0,1,.82)');
+                ctx.fillStyle=overlay;
+                ctx.fillRect(0,0,w,h);
+            }else{
+                var base=ctx.createLinearGradient(0,0,0,h);
+                base.addColorStop(0,'rgba(23,0,4,.94)');
+                base.addColorStop(1,'rgba(13,0,2,.96)');
+                ctx.fillStyle=base;
+                ctx.fillRect(0,0,w,h);
+            }
+
+            // Konten Prediksi hasil html2canvas ditaruh di atas background.
+            ctx.drawImage(contentCanvas,0,0);
+            ctx.restore();
+
+            return finalCanvas;
         });
     }
 
@@ -716,28 +830,15 @@
             '<i class="fas fa-spinner fa-spin"></i> MEMPROSES ULTRA HD...';
         btn.disabled=true;
 
-        // Hanya #screenshotArea yang ditangkap.
-        // Header, input background, tombol, dan halaman luar tidak ikut.
         dateInputEl.style.display='none';
         dateDisplayEl.style.display='block';
 
         var requestedScale=
             parseInt(qualitySelectEl.value,10)||4;
 
-        var areaWidth=Math.max(
-            1,
-            area.scrollWidth
-        );
-
-        var areaHeight=Math.max(
-            1,
-            area.scrollHeight
-        );
-
-        var basePixels=Math.max(
-            1,
-            areaWidth*areaHeight
-        );
+        var areaWidth=Math.max(1,area.scrollWidth);
+        var areaHeight=Math.max(1,area.scrollHeight);
+        var basePixels=Math.max(1,areaWidth*areaHeight);
 
         var safeScale=Math.min(
             requestedScale,
@@ -746,10 +847,7 @@
 
         safeScale=Math.max(
             2,
-            Math.min(
-                requestedScale,
-                safeScale
-            )
+            Math.min(requestedScale,safeScale)
         );
 
         var fontReady=
@@ -757,17 +855,19 @@
             ? document.fonts.ready
             : Promise.resolve();
 
+        var preparedBg='';
+
         Promise.all([
             fontReady,
             prepareBackgroundForScreenshot()
         ])
-        .then(function(){
-            // Pakai konfigurasi sederhana/stabil seperti screenshot
-            // sebelumnya. Target tetap hanya #screenshotArea.
+        .then(function(results){
+            preparedBg=results[1]||'';
+
             return html2canvas(area,{
                 useCORS:true,
                 allowTaint:false,
-                backgroundColor:'#120003',
+                backgroundColor:null,
                 scale:safeScale,
                 logging:false,
                 imageTimeout:25000,
@@ -775,18 +875,45 @@
                 width:areaWidth,
                 height:areaHeight,
                 scrollX:0,
-                scrollY:-window.scrollY
+                scrollY:-window.scrollY,
+
+                onclone:function(clonedDoc){
+                    var clonedArea=
+                        clonedDoc.getElementById('screenshotArea');
+
+                    if(!clonedArea) return;
+
+                    // INI FIX UTAMA:
+                    // custom background CSS dihapus HANYA pada clone.
+                    // Kontennya dirender transparan, lalu background custom
+                    // digabung manual lewat Canvas setelah html2canvas selesai.
+                    clonedArea.style.setProperty(
+                        '--custom-bg-image',
+                        'none'
+                    );
+                    clonedArea.classList.remove('has-custom-bg');
+                    clonedArea.style.backgroundImage='none';
+                    clonedArea.style.backgroundColor='transparent';
+                    clonedArea.style.transition='none';
+                }
             });
         })
-        .then(function(canvas){
+        .then(function(contentCanvas){
+            return composePredictionCanvas(
+                contentCanvas,
+                preparedBg,
+                safeScale
+            );
+        })
+        .then(function(finalCanvas){
             saveOrCopyCanvas(
-                canvas,
+                finalCanvas,
                 requestedScale
             );
         })
         .catch(function(err){
             console.error(
-                'Screenshot Prediksi error:',
+                'Screenshot Prediksi V89 error:',
                 err
             );
 
@@ -795,11 +922,9 @@
                 ? String(err.message)
                 : 'unknown';
 
-            // Tampilkan detail singkat supaya kalau CDN tertentu gagal
-            // kita langsung tahu penyebabnya.
             showToast(
                 'Gagal screenshot: '+
-                message.slice(0,90)
+                message.slice(0,100)
             );
 
             resetSsBtn();
