@@ -8,12 +8,12 @@ const MENUS = Object.freeze([
   { id: "pencairan-xpay", label: "Pencairan XPAY", icon: "▤", parentId: "xpay", assignable: true },
 
   { id: "biaya", label: "Biaya", icon: "◈", assignable: true },
-  { id: "list-data", label: "Generate Bukti", icon: "▧", assignable: true },
   { id: "hasil-result", label: "Hasil Result", icon: "◎", assignable: true },
   { id: "event-scatter", label: "EVENT SCATTER", icon: "✺", assignable: true },
   { id: "ai-chat", label: "MEMO", icon: "📝", assignable: true },
 
   { id: "tools-harian", label: "Tools Harian", icon: "⇧", groupOnly: true },
+  { id: "list-data", label: "Generate Bukti", icon: "▧", parentId: "tools-harian", assignable: true },
   { id: "upload", label: "Prediksi", icon: "✦", parentId: "tools-harian", assignable: true },
 
   { id: "generate-api", label: "Generate API", icon: "⌘", masterOnly: true },
@@ -21,7 +21,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v78-prediksi-style-fix";
+const VERSION = "v84-tools-harian-generate-bukti";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
