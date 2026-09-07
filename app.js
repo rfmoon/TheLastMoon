@@ -337,6 +337,7 @@ async function navigate(menuId) {
   if (menuId === "ai-chat") return renderMemoWorkspace(menu);
   if (menuId === "list-data") return renderGenerateBuktiWorkspace(menu);
   if (menuId === "hasil-result") return renderHasilResultWorkspace(menu);
+  if (menuId === "upload") return renderPrediksiWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -400,7 +401,7 @@ async function renderCheckerBankWorkspace(menu) {
 
         <iframe
           class="xpay-frame checker-bank-frame"
-          src="/checker-bank.html?v=75.0.0"
+          src="/checker-bank.html?v=76.0.0"
           title="Checker BANK"
           loading="eager"
           referrerpolicy="strict-origin-when-cross-origin">
@@ -592,6 +593,28 @@ async function renderHasilResultWorkspace(menu){
       </section>`;
   }catch(error){
     $("#pageContent").innerHTML=errorHtml(error.message);
+  }
+}
+
+
+async function renderPrediksiWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="prediksi-workspace">
+        <iframe
+          class="prediksi-frame"
+          src="/prediksi.html?v=77.0.0"
+          title="Prediksi"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
   }
 }
 

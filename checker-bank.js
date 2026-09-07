@@ -360,7 +360,7 @@
 
       dbCount.textContent = bankRows.length;
       setLoadStatus(
-        `BANK CSV penuh • AM nama: ${Number(data.nameRows || 0)} • AN nomor: ${Number(data.accountRows || 0)} • AO status: ${Number(data.statusRows || 0)} • lengkap: ${Number(data.completeRows || 0)} • dimuat: ${bankRows.length} • row terakhir: ${Number(data.lastDataRow || 0)}.`,
+        `BANK dinamis • AM: ${Number(data.nameRows || 0)} • AN: ${Number(data.accountRows || 0)} • AO: ${Number(data.statusRows || 0)} • lengkap: ${Number(data.completeRows || 0)} • dimuat: ${bankRows.length} • row terakhir: ${Number(data.lastDataRow || 0)} • blok data: ${Number(data.chunksWithData || 0)}/${Number(data.chunksRead || 0)}.`,
         'ok'
       );
     } catch (error) {

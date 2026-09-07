@@ -264,3 +264,28 @@ v54-generate-bukti-csp-fix
 - UI menampilkan jumlah AM, AN, AO, complete rows, dimuat, dan row terakhir.
 - Matching tetap hanya Nomor Rekening dan leading zero tetap sama.
 - Health: `v75-checker-fullsheet-csv-am-ao`.
+
+## V76 — Checker Dynamic Chunked CSV
+
+- Tidak ada hardcode/patokan 227 rekening.
+- Sheet tetap BANK.
+- AM = Nama Rekening, AN = Nomor Rekening, AO = Status.
+- Direct CSV dibaca per blok 1000 row.
+- Memeriksa AM2:AO30000, jadi jumlah database mengikuti isi aktual.
+- Semua blok dibaca walaupun ada gap/baris kosong panjang.
+- Tidak memakai GViz/QUERY.
+- Tidak dedupe saat membaca database.
+- Matching tetap hanya Nomor Rekening.
+- Leading zero tetap dianggap sama saat matching.
+- Health: `v76-checker-dynamic-chunked-csv`.
+
+## V77 — Tools Harian > Prediksi
+
+- Menu `Upload` diganti menjadi dropdown `Tools Harian`.
+- Item pertama dropdown: `Prediksi`.
+- ID permission lama `upload` tetap dipakai untuk item Prediksi agar akses user lama tetap kompatibel.
+- File Prediksi disimpan sebagai `/prediksi.html`.
+- Isi file Prediksi disalin byte-for-byte dari file user; tidak ada perubahan isi.
+- Prediksi ditampilkan melalui iframe di dalam TheLastMoon.
+- CSP hanya dilepas khusus `/prediksi.html` agar inline CSS/JS asli file dapat berjalan tanpa mengubah file sumber.
+- Health: `v77-tools-harian-prediksi`.

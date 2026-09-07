@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Checker BANK</title>
-  <link rel="stylesheet" href="/checker-bank.css?v=75.0.0">
+  <link rel="stylesheet" href="/checker-bank.css?v=76.0.0">
 </head>
 <body>
 <div class="wrap">
   <h1>CEK STATUS REKENING</h1>
-  <div class="sub">Membaca <b>SELURUH sheet BANK lewat CSV langsung</b>, lalu mengambil kolom <b>AM = Nama Rekening</b>, <b>AN = Nomor Rekening</b>, <b>AO = Status</b>. Tidak memakai GViz/QUERY dan tidak bergantung pada parameter range Google.</div>
+  <div class="sub">Membaca <b>BANK secara dinamis lewat Direct CSV per blok</b>: <b>AM = Nama Rekening</b>, <b>AN = Nomor Rekening</b>, <b>AO = Status</b>. Tidak ada patokan jumlah rekening. Data sampai row 30000 diperiksa per blok agar data setelah baris kosong tetap ikut terbaca.</div>
 
   <section class="card checker-source-card">
     <div id="masterSheetConfig" class="master-sheet-config hidden">
@@ -96,6 +96,6 @@ BCA Muhammad Rama Rusyana 1790399273"></textarea>
     </div>
   </section>
 </div>
-<script src="/checker-bank.js?v=75.0.0" defer></script>
+<script src="/checker-bank.js?v=76.0.0" defer></script>
 </body>
 </html>

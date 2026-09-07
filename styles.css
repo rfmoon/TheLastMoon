@@ -883,3 +883,38 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
   min-height:calc(100vh - 180px) !important;
   background:transparent !important;
 }
+
+
+/* =========================================================
+   V77 — TOOLS HARIAN > PREDIKSI
+   File /prediksi.html tidak dimodifikasi.
+========================================================= */
+.prediksi-workspace{
+  width:100%;
+  min-height:calc(100vh - 105px);
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  border-radius:18px;
+}
+
+.prediksi-frame{
+  display:block;
+  width:100%;
+  height:calc(100vh - 105px);
+  min-height:980px;
+  border:0;
+  background:transparent;
+  border-radius:18px;
+}
+
+@media(max-width:760px){
+  .prediksi-workspace{
+    min-height:calc(100vh - 85px);
+  }
+
+  .prediksi-frame{
+    height:calc(100vh - 85px);
+    min-height:1050px;
+  }
+}
