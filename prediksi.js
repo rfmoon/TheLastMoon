@@ -638,245 +638,825 @@
         ta.style.position='fixed';ta.style.left='-9999px';ta.style.top='-9999px';ta.style.opacity='0';
     }
 
-    /* ========== SCREENSHOT CURRENT TAB -> COPY CLIPBOARD ========== */
-    function waitFrame(){
-        return new Promise(function(resolve){
-            requestAnimationFrame(function(){
-                requestAnimationFrame(resolve);
-            });
-        });
+    /* ========== SCREENSHOT LANGSUNG TANPA SHARE / HTML2CANVAS ========== */
+    function promiseTimeout(promise,ms,fallback){
+        return Promise.race([
+            promise,
+            new Promise(function(resolve){
+                setTimeout(function(){
+                    resolve(fallback);
+                },ms);
+            })
+        ]);
     }
 
-    function waitVideoReady(video){
-        return new Promise(function(resolve,reject){
-            var done=false;
+    function requestImageDataPromiseFast(url){
+        url=String(url||'').trim();
 
-            function finish(){
-                if(done) return;
-                done=true;
-                resolve();
-            }
+        if(!url){
+            return Promise.resolve('');
+        }
 
-            function fail(){
-                if(done) return;
-                done=true;
-                reject(new Error('Preview screenshot tidak siap'));
-            }
+        if(/^data:image\//i.test(url)){
+            return Promise.resolve(url);
+        }
 
-            video.addEventListener('loadedmetadata',finish,{once:true});
-            video.addEventListener('canplay',finish,{once:true});
-            video.addEventListener('error',fail,{once:true});
-
-            setTimeout(function(){
-                if(video.videoWidth && video.videoHeight){
-                    finish();
-                }else{
-                    fail();
-                }
-            },5000);
-        });
-    }
-
-    function canvasToClipboard(canvas){
-        return new Promise(function(resolve,reject){
-            if(!navigator.clipboard || !window.ClipboardItem){
-                reject(
-                    new Error(
-                        'Browser tidak mendukung copy gambar ke clipboard'
-                    )
+        return promiseTimeout(
+            new Promise(function(resolve){
+                requestImageData(
+                    url,
+                    function(dataUrl){
+                        resolve(String(dataUrl||''));
+                    },
+                    function(){
+                        resolve('');
+                    }
                 );
+            }),
+            4500,
+            ''
+        );
+    }
+
+    function loadImageForCanvas(src){
+        return new Promise(function(resolve){
+            if(!src){
+                resolve(null);
                 return;
             }
 
-            canvas.toBlob(function(blob){
-                if(!blob){
+            var image=new Image();
+
+            image.onload=function(){
+                resolve(image);
+            };
+
+            image.onerror=function(){
+                resolve(null);
+            };
+
+            image.src=src;
+        });
+    }
+
+    function drawImageCover(ctx,image,x,y,w,h){
+        if(!image || !image.naturalWidth || !image.naturalHeight){
+            return;
+        }
+
+        var scale=Math.max(
+            w/image.naturalWidth,
+            h/image.naturalHeight
+        );
+
+        var dw=image.naturalWidth*scale;
+        var dh=image.naturalHeight*scale;
+
+        var dx=x+(w-dw)/2;
+        var dy=y+(h-dh)/2;
+
+        ctx.drawImage(
+            image,
+            dx,dy,dw,dh
+        );
+    }
+
+    function cssPx(value){
+        var n=parseFloat(String(value||'0'));
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    function hasVisibleColor(value){
+        var s=String(value||'').trim().toLowerCase();
+
+        if(
+            !s ||
+            s==='transparent' ||
+            s==='rgba(0, 0, 0, 0)' ||
+            s==='rgba(0,0,0,0)'
+        ){
+            return false;
+        }
+
+        return true;
+    }
+
+    function roundedPath(ctx,x,y,w,h,r){
+        r=Math.max(
+            0,
+            Math.min(
+                r,
+                w/2,
+                h/2
+            )
+        );
+
+        ctx.beginPath();
+
+        if(typeof ctx.roundRect==='function'){
+            ctx.roundRect(x,y,w,h,r);
+            return;
+        }
+
+        ctx.moveTo(x+r,y);
+        ctx.lineTo(x+w-r,y);
+        ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+        ctx.lineTo(x+w,y+h-r);
+        ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+        ctx.lineTo(x+r,y+h);
+        ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+        ctx.lineTo(x,y+r);
+        ctx.quadraticCurveTo(x,y,x+r,y);
+    }
+
+    function transformVisibleText(text,style){
+        text=String(text||'');
+
+        var transform=String(
+            style.textTransform||''
+        ).toLowerCase();
+
+        if(transform==='uppercase'){
+            return text.toUpperCase();
+        }
+
+        if(transform==='lowercase'){
+            return text.toLowerCase();
+        }
+
+        return text;
+    }
+
+    function measureSpacedText(ctx,text,spacing){
+        var total=0;
+
+        for(var i=0;i<text.length;i++){
+            total+=ctx.measureText(text[i]).width;
+
+            if(i<text.length-1){
+                total+=spacing;
+            }
+        }
+
+        return total;
+    }
+
+    function drawSpacedText(
+        ctx,
+        text,
+        x,
+        y,
+        spacing,
+        align
+    ){
+        if(!text) return;
+
+        if(!spacing){
+            ctx.textAlign=align;
+            ctx.fillText(text,x,y);
+            return;
+        }
+
+        var width=measureSpacedText(
+            ctx,
+            text,
+            spacing
+        );
+
+        var cursor=x;
+
+        if(align==='center'){
+            cursor=x-width/2;
+        }else if(align==='right' || align==='end'){
+            cursor=x-width;
+        }
+
+        ctx.textAlign='left';
+
+        for(var i=0;i<text.length;i++){
+            var ch=text[i];
+
+            ctx.fillText(
+                ch,
+                cursor,
+                y
+            );
+
+            cursor+=
+                ctx.measureText(ch).width+
+                spacing;
+        }
+    }
+
+    function directTextNodes(element){
+        return Array.prototype.filter.call(
+            element.childNodes,
+            function(node){
+                return (
+                    node.nodeType===Node.TEXT_NODE &&
+                    String(node.nodeValue||'').trim()
+                );
+            }
+        );
+    }
+
+    function drawElementBackground(
+        ctx,
+        element,
+        rootRect
+    ){
+        var style=getComputedStyle(element);
+
+        if(
+            style.display==='none' ||
+            style.visibility==='hidden' ||
+            parseFloat(style.opacity||'1')===0
+        ){
+            return false;
+        }
+
+        var rect=element.getBoundingClientRect();
+
+        if(
+            rect.width<=0 ||
+            rect.height<=0
+        ){
+            return false;
+        }
+
+        var x=rect.left-rootRect.left;
+        var y=rect.top-rootRect.top;
+        var w=rect.width;
+        var h=rect.height;
+
+        var radius=cssPx(
+            style.borderTopLeftRadius
+        );
+
+        var bg=style.backgroundColor;
+
+        if(hasVisibleColor(bg)){
+            ctx.save();
+            roundedPath(
+                ctx,
+                x,y,w,h,radius
+            );
+            ctx.fillStyle=bg;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        var borderWidth=cssPx(
+            style.borderTopWidth
+        );
+
+        var borderColor=
+            style.borderTopColor;
+
+        if(
+            borderWidth>0 &&
+            hasVisibleColor(borderColor)
+        ){
+            ctx.save();
+            roundedPath(
+                ctx,
+                x+borderWidth/2,
+                y+borderWidth/2,
+                Math.max(0,w-borderWidth),
+                Math.max(0,h-borderWidth),
+                Math.max(0,radius-borderWidth/2)
+            );
+            ctx.lineWidth=borderWidth;
+            ctx.strokeStyle=borderColor;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Garis pemisah yang normalnya berupa gradient/pseudo element.
+        if(
+            element.classList.contains('sep') ||
+            element.classList.contains('sec-line')
+        ){
+            ctx.save();
+            ctx.strokeStyle='rgba(255,73,96,.28)';
+            ctx.lineWidth=1;
+            ctx.beginPath();
+            ctx.moveTo(x,y+h/2);
+            ctx.lineTo(x+w,y+h/2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        return true;
+    }
+
+    function drawElementText(
+        ctx,
+        element,
+        rootRect
+    ){
+        var nodes=directTextNodes(element);
+
+        if(!nodes.length){
+            return;
+        }
+
+        var style=getComputedStyle(element);
+
+        if(
+            style.display==='none' ||
+            style.visibility==='hidden' ||
+            parseFloat(style.opacity||'1')===0
+        ){
+            return;
+        }
+
+        var fontSize=cssPx(style.fontSize);
+
+        if(fontSize<=0){
+            return;
+        }
+
+        var fontStyle=
+            style.fontStyle &&
+            style.fontStyle!=='normal'
+            ? style.fontStyle+' '
+            : '';
+
+        var fontWeight=
+            style.fontWeight || '400';
+
+        var fontFamily=
+            style.fontFamily || 'sans-serif';
+
+        ctx.save();
+        ctx.font=
+            fontStyle+
+            fontWeight+' '+
+            fontSize+'px '+
+            fontFamily;
+
+        ctx.fillStyle=
+            hasVisibleColor(style.color)
+            ? style.color
+            : '#fff';
+
+        ctx.textBaseline='middle';
+
+        var spacing=cssPx(
+            style.letterSpacing
+        );
+
+        nodes.forEach(function(node){
+            var text=transformVisibleText(
+                String(node.nodeValue||'')
+                    .replace(/\s+/g,' ')
+                    .trim(),
+                style
+            );
+
+            if(!text) return;
+
+            var range=document.createRange();
+            range.selectNodeContents(node);
+
+            var rect=range.getBoundingClientRect();
+
+            if(
+                rect.width<=0 ||
+                rect.height<=0
+            ){
+                return;
+            }
+
+            var x;
+            var align='left';
+            var textAlign=String(
+                style.textAlign||''
+            ).toLowerCase();
+
+            if(textAlign==='center'){
+                x=
+                    rect.left-rootRect.left+
+                    rect.width/2;
+                align='center';
+            }else if(
+                textAlign==='right' ||
+                textAlign==='end'
+            ){
+                x=
+                    rect.right-rootRect.left;
+                align='right';
+            }else{
+                x=
+                    rect.left-rootRect.left;
+            }
+
+            var y=
+                rect.top-rootRect.top+
+                rect.height/2;
+
+            drawSpacedText(
+                ctx,
+                text,
+                x,y,
+                spacing,
+                align
+            );
+        });
+
+        ctx.restore();
+    }
+
+    function collectScreenshotAssets(area){
+        var imageElements=
+            Array.prototype.slice.call(
+                area.querySelectorAll('img')
+            );
+
+        var jobs=imageElements.map(
+            function(img,index){
+                var src=
+                    img.currentSrc ||
+                    img.getAttribute('src') ||
+                    '';
+
+                return requestImageDataPromiseFast(src)
+                    .then(function(dataUrl){
+                        return loadImageForCanvas(
+                            dataUrl
+                        );
+                    })
+                    .then(function(image){
+                        return {
+                            element:img,
+                            image:image,
+                            index:index
+                        };
+                    });
+            }
+        );
+
+        var savedBg='';
+
+        try{
+            savedBg=String(
+                localStorage.getItem(
+                    BG_STORAGE_KEY
+                )||''
+            ).trim();
+        }catch(e){}
+
+        var bgJob=
+            requestImageDataPromiseFast(savedBg)
+            .then(function(dataUrl){
+                return loadImageForCanvas(
+                    dataUrl
+                );
+            });
+
+        return Promise.all([
+            Promise.all(jobs),
+            bgJob
+        ])
+        .then(function(result){
+            return {
+                images:result[0],
+                background:result[1]
+            };
+        });
+    }
+
+    function renderPredictionCanvas(
+        area,
+        assets,
+        scale
+    ){
+        var rootRect=
+            area.getBoundingClientRect();
+
+        var width=Math.max(
+            1,
+            Math.ceil(rootRect.width)
+        );
+
+        var height=Math.max(
+            1,
+            Math.ceil(rootRect.height)
+        );
+
+        var canvas=
+            document.createElement('canvas');
+
+        canvas.width=
+            Math.round(width*scale);
+
+        canvas.height=
+            Math.round(height*scale);
+
+        var ctx=canvas.getContext('2d');
+
+        if(!ctx){
+            throw new Error(
+                'Canvas screenshot tidak tersedia'
+            );
+        }
+
+        ctx.scale(scale,scale);
+
+        // Background gambar custom.
+        if(assets.background){
+            drawImageCover(
+                ctx,
+                assets.background,
+                0,0,
+                width,height
+            );
+        }
+
+        // Overlay merah seperti tampilan Prediksi.
+        var overlay=
+            ctx.createLinearGradient(
+                0,0,0,height
+            );
+
+        if(
+            area.classList.contains(
+                'has-custom-bg'
+            )
+        ){
+            overlay.addColorStop(
+                0,
+                'rgba(10,0,2,.54)'
+            );
+            overlay.addColorStop(
+                .55,
+                'rgba(18,0,4,.72)'
+            );
+            overlay.addColorStop(
+                1,
+                'rgba(8,0,1,.82)'
+            );
+        }else{
+            overlay.addColorStop(
+                0,
+                'rgba(23,0,4,.94)'
+            );
+            overlay.addColorStop(
+                1,
+                'rgba(13,0,2,.96)'
+            );
+        }
+
+        ctx.fillStyle=overlay;
+        ctx.fillRect(
+            0,0,
+            width,height
+        );
+
+        var elements=
+            Array.prototype.slice.call(
+                area.querySelectorAll('*')
+            );
+
+        // Background / border elemen.
+        elements.forEach(function(el){
+            drawElementBackground(
+                ctx,
+                el,
+                rootRect
+            );
+        });
+
+        // Logo / gambar.
+        assets.images.forEach(
+            function(item){
+                if(!item.image){
+                    return;
+                }
+
+                var style=
+                    getComputedStyle(
+                        item.element
+                    );
+
+                if(
+                    style.display==='none' ||
+                    style.visibility==='hidden' ||
+                    parseFloat(
+                        style.opacity||'1'
+                    )===0
+                ){
+                    return;
+                }
+
+                var rect=
+                    item.element
+                        .getBoundingClientRect();
+
+                if(
+                    rect.width<=0 ||
+                    rect.height<=0
+                ){
+                    return;
+                }
+
+                var x=
+                    rect.left-
+                    rootRect.left;
+
+                var y=
+                    rect.top-
+                    rootRect.top;
+
+                var iw=
+                    item.image.naturalWidth;
+
+                var ih=
+                    item.image.naturalHeight;
+
+                if(!iw || !ih){
+                    return;
+                }
+
+                // object-fit: contain
+                var factor=Math.min(
+                    rect.width/iw,
+                    rect.height/ih
+                );
+
+                var dw=iw*factor;
+                var dh=ih*factor;
+
+                ctx.drawImage(
+                    item.image,
+                    x+(rect.width-dw)/2,
+                    y+(rect.height-dh)/2,
+                    dw,dh
+                );
+            }
+        );
+
+        // Tulisan.
+        elements.forEach(function(el){
+            drawElementText(
+                ctx,
+                el,
+                rootRect
+            );
+        });
+
+        return canvas;
+    }
+
+    function copyScreenshotCanvas(canvas){
+        return new Promise(
+            function(resolve,reject){
+                if(
+                    !navigator.clipboard ||
+                    !window.ClipboardItem
+                ){
                     reject(
-                        new Error('Gambar screenshot tidak dapat dibuat')
+                        new Error(
+                            'Browser tidak mendukung copy gambar'
+                        )
                     );
                     return;
                 }
 
-                navigator.clipboard.write([
-                    new ClipboardItem({
-                        'image/png':blob
-                    })
-                ])
-                .then(resolve)
-                .catch(function(){
-                    reject(
-                        new Error(
-                            'Izin clipboard ditolak browser'
-                        )
-                    );
-                });
-            },'image/png',1);
-        });
+                canvas.toBlob(
+                    function(blob){
+                        if(!blob){
+                            reject(
+                                new Error(
+                                    'Screenshot tidak dapat dibuat'
+                                )
+                            );
+                            return;
+                        }
+
+                        navigator.clipboard.write([
+                            new ClipboardItem({
+                                'image/png':blob
+                            })
+                        ])
+                        .then(resolve)
+                        .catch(function(){
+                            reject(
+                                new Error(
+                                    'Clipboard gambar ditolak browser'
+                                )
+                            );
+                        });
+                    },
+                    'image/png',
+                    1
+                );
+            }
+        );
     }
 
     async function takeScreenshot(){
-        var btn=document.getElementById('btnSs');
-        var area=document.getElementById('screenshotArea');
+        var btn=
+            document.getElementById('btnSs');
+
+        var area=
+            document.getElementById(
+                'screenshotArea'
+            );
 
         if(!area){
-            showToast('Area Prediksi tidak ditemukan');
-            return;
-        }
-
-        if(
-            !navigator.mediaDevices ||
-            !navigator.mediaDevices.getDisplayMedia
-        ){
             showToast(
-                'Browser ini tidak mendukung screenshot tab'
+                'Area Prediksi tidak ditemukan'
             );
             return;
         }
 
         btn.innerHTML=
-            '<i class="fas fa-spinner fa-spin"></i> PILIH TAB INI...';
+            '<i class="fas fa-spinner fa-spin"></i> MEMPROSES ULTRA HD...';
+
         btn.disabled=true;
 
         dateInputEl.style.display='none';
         dateDisplayEl.style.display='block';
 
-        var stream=null;
-        var video=null;
-
         try{
-            area.scrollIntoView({
-                behavior:'auto',
-                block:'center',
-                inline:'nearest'
-            });
-
-            await waitFrame();
-
-            stream=await navigator.mediaDevices.getDisplayMedia({
-                video:{
-                    frameRate:1
-                },
-                audio:false,
-                preferCurrentTab:true,
-                selfBrowserSurface:'include',
-                surfaceSwitching:'exclude'
-            });
-
-            btn.innerHTML=
-                '<i class="fas fa-spinner fa-spin"></i> MENGAMBIL SCREENSHOT...';
-
-            video=document.createElement('video');
-            video.muted=true;
-            video.autoplay=true;
-            video.playsInline=true;
-            video.srcObject=stream;
-
-            await waitVideoReady(video);
-
-            try{
-                await video.play();
-            }catch(e){}
-
-            await waitFrame();
-
-            var rect=area.getBoundingClientRect();
-
             if(
-                rect.bottom<=0 ||
-                rect.top>=window.innerHeight ||
-                rect.right<=0 ||
-                rect.left>=window.innerWidth
+                document.fonts &&
+                document.fonts.ready
             ){
-                throw new Error(
-                    'Area Prediksi tidak terlihat di layar'
+                await promiseTimeout(
+                    document.fonts.ready,
+                    2500,
+                    null
                 );
             }
 
-            var scaleX=
-                video.videoWidth /
-                Math.max(1,window.innerWidth);
+            var requestedScale=
+                parseInt(
+                    qualitySelectEl.value,
+                    10
+                )||4;
 
-            var scaleY=
-                video.videoHeight /
-                Math.max(1,window.innerHeight);
+            var rect=
+                area.getBoundingClientRect();
 
-            var sx=Math.max(
-                0,
-                Math.round(rect.left*scaleX)
+            var basePixels=Math.max(
+                1,
+                Math.ceil(rect.width)*
+                Math.ceil(rect.height)
             );
 
-            var sy=Math.max(
-                0,
-                Math.round(rect.top*scaleY)
+            var safeScale=Math.min(
+                requestedScale,
+                Math.sqrt(
+                    32000000/basePixels
+                )
             );
 
-            var sw=Math.min(
-                video.videoWidth-sx,
-                Math.round(rect.width*scaleX)
+            safeScale=Math.max(
+                2,
+                Math.min(
+                    requestedScale,
+                    safeScale
+                )
             );
 
-            var sh=Math.min(
-                video.videoHeight-sy,
-                Math.round(rect.height*scaleY)
-            );
-
-            if(sw<=0 || sh<=0){
-                throw new Error(
-                    'Ukuran screenshot tidak valid'
+            var assets=
+                await collectScreenshotAssets(
+                    area
                 );
-            }
 
-            var canvas=document.createElement('canvas');
-            canvas.width=sw;
-            canvas.height=sh;
+            var canvas=
+                renderPredictionCanvas(
+                    area,
+                    assets,
+                    safeScale
+                );
 
-            var ctx=canvas.getContext('2d');
-
-            if(!ctx){
-                throw new Error('Canvas screenshot tidak tersedia');
-            }
-
-            ctx.drawImage(
-                video,
-                sx,sy,sw,sh,
-                0,0,sw,sh
+            await copyScreenshotCanvas(
+                canvas
             );
-
-            await canvasToClipboard(canvas);
 
             showToast(
-                'Screenshot Prediksi tersalin ke clipboard!'
+                'Screenshot Prediksi tersalin!'
             );
         }catch(err){
             console.error(
-                'Screenshot Prediksi V92 error:',
+                'Screenshot Prediksi V93 error:',
                 err
             );
 
             var message=
-                err && err.name==='NotAllowedError'
-                ? 'Pilih tab TheLastMoon lalu tekan Share'
-                : (
-                    err && err.message
-                    ? String(err.message)
-                    : 'Screenshot gagal'
-                );
+                err && err.message
+                ? String(err.message)
+                : 'Screenshot gagal';
 
-            showToast(message.slice(0,110));
+            showToast(
+                'Gagal screenshot: '+
+                message.slice(0,100)
+            );
         }finally{
-            if(stream){
-                stream.getTracks().forEach(function(track){
-                    try{track.stop();}catch(e){}
-                });
-            }
-
-            if(video){
-                try{
-                    video.pause();
-                    video.srcObject=null;
-                    video.remove();
-                }catch(e){}
-            }
-
             resetSsBtn();
         }
     }
