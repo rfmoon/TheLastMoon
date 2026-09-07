@@ -380,7 +380,7 @@
             <button type="button" class="bg-action bg-apply" id="btnApplyBg"><i class="fas fa-image"></i> TERAPKAN</button>
             <button type="button" class="bg-action bg-reset" id="btnResetBg"><i class="fas fa-undo"></i> RESET</button>
         </div>
-        <div class="bg-help">Tempel link gambar. Apps Script akan mengambil gambar melalui server supaya background lebih stabil dan ikut masuk ke screenshot.</div>
+        <div class="bg-help">Tempel link gambar JPG / PNG / WEBP. TheLastMoon akan mengambil gambar melalui server Cloudflare supaya background tetap ikut masuk ke screenshot.</div>
         <div class="quality-row">
             <label for="qualitySelect">Kualitas Screenshot</label>
             <select id="qualitySelect" class="quality-select">
@@ -732,7 +732,7 @@
         return result;
     }
 
-    /* ========== GAMBAR VIA SERVER APPS SCRIPT ========== */
+    /* ========== GAMBAR VIA SERVER CLOUDFLARE ========== */
     function normalizeImageUrl(url){
         url=String(url||'').trim();
         if(!url) return '';
@@ -754,33 +754,85 @@
             return;
         }
 
+        if(/^data:image\//i.test(url)){
+            onSuccess(url,url);
+            return;
+        }
+
         if(imageDataCache[url]){
             onSuccess(imageDataCache[url],url);
             return;
         }
 
-        if(typeof google==='undefined' || !google.script || !google.script.run){
-            onError('Halaman harus dijalankan sebagai Web App Google Apps Script');
-            return;
-        }
+        var proxyUrl='/tools/image-proxy?url='+encodeURIComponent(url)+'&_='+(Date.now());
 
-        google.script.run
-            .withSuccessHandler(function(result){
-                if(result && result.ok && result.dataUrl){
-                    imageDataCache[url]=result.dataUrl;
-                    onSuccess(result.dataUrl,result.sourceUrl||url);
-                }else{
-                    onError((result&&result.message)||'Gambar tidak dapat diproses');
+        fetch(proxyUrl,{
+            method:'GET',
+            cache:'no-store',
+            credentials:'same-origin'
+        })
+        .then(function(response){
+            if(response.ok) return response.blob();
+
+            return response.text().then(function(text){
+                var message='Server Cloudflare gagal mengambil gambar';
+                try{
+                    var parsed=JSON.parse(text);
+                    if(parsed && parsed.error) message=parsed.error;
+                }catch(e){
+                    if(text) message=text.slice(0,180);
                 }
-            })
-            .withFailureHandler(function(err){
-                var message=err&&err.message ? err.message : 'Server gagal mengambil gambar';
-                if(/script\.external_request|UrlFetchApp\.fetch|tidak memiliki izin/i.test(message)){
-                    message='Izin gambar belum aktif. Jalankan setupAuthorization() dari editor Apps Script, izinkan akses, lalu deploy ulang.';
+                throw new Error(message);
+            });
+        })
+        .then(function(blob){
+            if(!blob || !blob.size){
+                throw new Error('Gambar kosong atau tidak dapat dibaca');
+            }
+
+            if(blob.type && !/^image\//i.test(blob.type)){
+                throw new Error('Link tersebut bukan file gambar');
+            }
+
+            var reader=new FileReader();
+
+            reader.onload=function(){
+                var dataUrl=String(reader.result||'');
+                if(!dataUrl){
+                    onError('Gambar tidak dapat diproses');
+                    return;
                 }
-                onError(message);
-            })
-            .getImageDataUrl(url);
+
+                imageDataCache[url]=dataUrl;
+                onSuccess(dataUrl,url);
+            };
+
+            reader.onerror=function(){
+                onError('Browser gagal membaca gambar');
+            };
+
+            reader.readAsDataURL(blob);
+        })
+        .catch(function(err){
+            // Fallback: tetap coba URL asli agar background masih bisa tampil
+            // jika CDN menolak proxy tetapi mengizinkan akses langsung browser.
+            var probe=new Image();
+            probe.crossOrigin='anonymous';
+
+            probe.onload=function(){
+                onSuccess(url,url);
+            };
+
+            probe.onerror=function(){
+                onError(
+                    (err && err.message) ?
+                    err.message :
+                    'Gambar tidak dapat diambil dari link tersebut'
+                );
+            };
+
+            probe.src=url;
+        });
     }
 
     function setBackground(url,save){
@@ -840,7 +892,7 @@
         }
 
         // Tampilkan URL asli dulu. Jadi logo tetap bisa terlihat meskipun
-        // UrlFetchApp / google.script.run sedang gagal atau CDN menolak proxy.
+        // server Cloudflare sedang gagal atau CDN menolak proxy.
         logoEl.className='market-logo hide';
         logoEl.onload=function(){
             logoEl.className='market-logo show';
@@ -850,30 +902,28 @@
         };
         logoEl.src=url;
 
-        // Jika dijalankan sebagai Web App Apps Script, coba ambil versi Data URL
-        // di belakang layar. Data URL lebih stabil untuk html2canvas/screenshot.
-        if(typeof google!=='undefined' && google.script && google.script.run){
-            requestImageData(url,function(dataUrl){
-                var selNow=document.getElementById('pasaranSelect');
-                if(!selNow || selNow.value!==name) return;
+        // Ambil versi Data URL melalui Cloudflare di belakang layar.
+        // Data URL lebih stabil untuk html2canvas/screenshot.
+        requestImageData(url,function(dataUrl){
+            var selNow=document.getElementById('pasaranSelect');
+            if(!selNow || selNow.value!==name) return;
 
-                var probe=new Image();
-                probe.onload=function(){
-                    if(selNow.value!==name) return;
+            var probe=new Image();
+            probe.onload=function(){
+                if(selNow.value!==name) return;
+                logoEl.onload=function(){logoEl.className='market-logo show';};
+                logoEl.onerror=function(){
+                    // Jika Data URL aneh/gagal, kembalikan ke URL asli.
                     logoEl.onload=function(){logoEl.className='market-logo show';};
-                    logoEl.onerror=function(){
-                        // Jika Data URL aneh/gagal, kembalikan ke URL asli.
-                        logoEl.onload=function(){logoEl.className='market-logo show';};
-                        logoEl.onerror=function(){logoEl.className='market-logo hide';};
-                        logoEl.src=url;
-                    };
-                    logoEl.src=dataUrl;
+                    logoEl.onerror=function(){logoEl.className='market-logo hide';};
+                    logoEl.src=url;
                 };
-                probe.src=dataUrl;
-            },function(){
-                // Abaikan kegagalan proxy: URL asli yang sudah dipasang tetap dipakai.
-            });
-        }
+                logoEl.src=dataUrl;
+            };
+            probe.src=dataUrl;
+        },function(){
+            // Abaikan kegagalan proxy: URL asli yang sudah dipasang tetap dipakai.
+        });
     }
 
     function gen(){
