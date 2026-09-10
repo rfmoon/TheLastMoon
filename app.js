@@ -8,7 +8,8 @@ const state = {
     backgroundUrl: "",
     overlay: 58,
     blur: 2,
-    slideSeconds: 8
+    slideSeconds: 8,
+    dashboardAnimationUrl: ""
   },
   pendingConfirm: null
 };
@@ -92,7 +93,8 @@ function normalizeAppearance(value = {}) {
     backgroundUrl: backgroundUrls[0] || "",
     overlay: Math.min(90, Math.max(20, Number(value.overlay ?? 58))),
     blur: Math.min(20, Math.max(0, Number(value.blur ?? 2))),
-    slideSeconds: Math.min(60, Math.max(3, Number(value.slideSeconds ?? 8)))
+    slideSeconds: Math.min(60, Math.max(3, Number(value.slideSeconds ?? 8))),
+    dashboardAnimationUrl: String(value.dashboardAnimationUrl || "").trim()
   };
 }
 
@@ -343,12 +345,32 @@ async function navigate(menuId) {
 }
 
 function renderDashboard() {
+  const animationUrl = String(
+    state.appearance.dashboardAnimationUrl || ""
+  ).trim();
+
   $("#pageContent").innerHTML = `
     <section class="hero glass dashboard-simple">
       <div>
         <span class="kicker">WELCOME BACK</span>
         <h1>Halo, ${escapeHtml(state.user.username)} 👋</h1>
       </div>
+    </section>
+
+    <section class="dashboard-animation-stage ${animationUrl ? "has-media" : "no-media"}">
+      ${
+        animationUrl
+          ? `<img
+              class="dashboard-animation-media"
+              src="${escapeAttribute(animationUrl)}"
+              alt="Dashboard animation"
+              referrerpolicy="no-referrer">`
+          : `<div class="dashboard-animation-empty">
+              <span>◐</span>
+              <strong>Dashboard Animation</strong>
+              <small>GIF / gambar dapat diatur oleh Master melalui Settings.</small>
+            </div>`
+      }
     </section>`;
 }
 
@@ -630,7 +652,7 @@ async function renderHadiahTogelWorkspace(menu) {
       <section class="prediksi-workspace">
         <iframe
           class="prediksi-frame"
-          src="/hadiah-togel.html?v=95.0.0"
+          src="/hadiah-togel.html?v=96.0.0"
           title="Hadiah Togel & Perhitungan"
           loading="eager"
           referrerpolicy="same-origin">
@@ -1249,6 +1271,63 @@ async function renderSettings() {
             <div class="help-item"><b>3</b><div><strong>Berlaku untuk semua</strong><small>Login page dan halaman dashboard seluruh akun ikut menggunakan tampilan ini.</small></div></div>
           </div>
         </article>
+
+        <article class="setting-card dashboard-animation-setting-card">
+          <span class="eyebrow">DASHBOARD ANIMATION</span>
+          <h3>GIF / Gambar Dashboard</h3>
+          <p>Media ini tampil pada area besar di bawah ucapan Halo pada Dashboard. GIF tetap bergerak. Bisa tempel link HTTPS atau upload file langsung.</p>
+
+          <form id="dashboardAnimationForm">
+            <label>Link GIF / gambar HTTPS
+              <input
+                id="dashboardAnimationLink"
+                type="url"
+                placeholder="https://domain.com/animasi.gif"
+                value="${escapeAttribute(state.appearance.dashboardAnimationUrl || "")}">
+            </label>
+
+            <div class="background-upload-box dashboard-animation-upload-box">
+              <div class="background-upload-copy">
+                <strong>Upload GIF / Gambar Dashboard</strong>
+                <small>GIF, JPG, PNG, WebP • maksimal 1.7 MB • tersimpan untuk seluruh akun</small>
+              </div>
+
+              <input
+                id="dashboardAnimationFile"
+                class="background-file-input"
+                type="file"
+                accept="image/gif,image/jpeg,image/png,image/webp">
+
+              <button
+                id="uploadDashboardAnimation"
+                class="btn btn-secondary"
+                type="button">
+                Upload File
+              </button>
+            </div>
+
+            <div id="dashboardAnimationUploadMessage" class="message hidden"></div>
+
+            <div class="dashboard-animation-preview">
+              <img
+                id="dashboardAnimationPreview"
+                alt="Preview Dashboard GIF"
+                referrerpolicy="no-referrer"
+                ${state.appearance.dashboardAnimationUrl ? `src="${escapeAttribute(state.appearance.dashboardAnimationUrl)}"` : ""}>
+              <div id="dashboardAnimationPreviewEmpty" class="${state.appearance.dashboardAnimationUrl ? "hidden" : ""}">
+                Belum ada GIF / gambar Dashboard.
+              </div>
+            </div>
+
+            <div class="setting-actions">
+              <button id="previewDashboardAnimation" class="btn btn-secondary" type="button">Preview</button>
+              <button id="saveDashboardAnimation" class="btn btn-primary" type="submit">Simpan Dashboard</button>
+              <button id="resetDashboardAnimation" class="btn btn-ghost" type="button">Hapus</button>
+            </div>
+
+            <div id="dashboardAnimationMessage" class="message hidden"></div>
+          </form>
+        </article>
       </section>`;
 
     $("#previewBackground").addEventListener("click", previewAppearance);
@@ -1259,6 +1338,14 @@ async function renderSettings() {
     $("#blurInput").addEventListener("input", updatePreviewControls);
     $("#slideInput").addEventListener("input", updatePreviewControls);
     $("#backgroundLinks").addEventListener("input", updatePreviewControls);
+
+    $("#dashboardAnimationForm").addEventListener("submit", saveDashboardAnimation);
+    $("#previewDashboardAnimation").addEventListener("click", previewDashboardAnimation);
+    $("#resetDashboardAnimation").addEventListener("click", resetDashboardAnimation);
+    $("#uploadDashboardAnimation").addEventListener("click", uploadDashboardAnimationFile);
+    $("#dashboardAnimationLink").addEventListener("input", () => {
+      hideMessage("#dashboardAnimationMessage");
+    });
   } catch (error) {
     $("#pageContent").innerHTML = errorHtml(error.message);
   }
@@ -1498,6 +1585,282 @@ async function resetAppearance() {
     showMessage("#backgroundMessage", error.message);
   }
 }
+
+
+function normalizeDashboardAnimationUrl(value) {
+  return String(value || "").trim();
+}
+
+function validateDashboardAnimationUrl(value) {
+  const raw = normalizeDashboardAnimationUrl(value);
+
+  if (!raw) return "";
+
+  if (raw.startsWith("/api/dashboard-media")) {
+    return raw;
+  }
+
+  let parsed;
+
+  try {
+    parsed = new URL(raw);
+  } catch (_) {
+    throw new Error("Link GIF / gambar Dashboard tidak valid.");
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error("Link Dashboard wajib menggunakan HTTPS.");
+  }
+
+  return raw;
+}
+
+function showDashboardAnimationPreview(url) {
+  const preview = $("#dashboardAnimationPreview");
+  const empty = $("#dashboardAnimationPreviewEmpty");
+
+  if (!preview || !empty) return;
+
+  if (!url) {
+    preview.removeAttribute("src");
+    preview.classList.remove("active");
+    empty.classList.remove("hidden");
+    return;
+  }
+
+  empty.classList.add("hidden");
+  preview.classList.remove("active");
+
+  preview.onload = () => {
+    preview.classList.add("active");
+    hideMessage("#dashboardAnimationMessage");
+  };
+
+  preview.onerror = () => {
+    preview.classList.remove("active");
+    showMessage(
+      "#dashboardAnimationMessage",
+      "Preview gagal dimuat. Pastikan link GIF / gambar dapat dibuka secara publik."
+    );
+  };
+
+  preview.src = url;
+}
+
+function previewDashboardAnimation() {
+  try {
+    const url = validateDashboardAnimationUrl(
+      $("#dashboardAnimationLink").value
+    );
+
+    showDashboardAnimationPreview(url);
+
+    if (url) {
+      showMessage(
+        "#dashboardAnimationMessage",
+        "Preview Dashboard aktif. Tekan Simpan Dashboard agar berlaku untuk semua akun.",
+        true
+      );
+    } else {
+      hideMessage("#dashboardAnimationMessage");
+    }
+  } catch (error) {
+    showMessage("#dashboardAnimationMessage", error.message);
+  }
+}
+
+async function uploadDashboardAnimationFile() {
+  const input = $("#dashboardAnimationFile");
+  const button = $("#uploadDashboardAnimation");
+  const file = input?.files?.[0];
+
+  hideMessage("#dashboardAnimationUploadMessage");
+
+  if (!file) {
+    showMessage(
+      "#dashboardAnimationUploadMessage",
+      "Pilih file GIF atau gambar terlebih dahulu."
+    );
+    return;
+  }
+
+  const allowed = new Set([
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ]);
+
+  if (!allowed.has(file.type)) {
+    showMessage(
+      "#dashboardAnimationUploadMessage",
+      "Format file harus GIF, JPG, PNG, atau WebP."
+    );
+    return;
+  }
+
+  if (file.size > 1700000) {
+    showMessage(
+      "#dashboardAnimationUploadMessage",
+      "Ukuran file maksimal 1.7 MB."
+    );
+    return;
+  }
+
+  setBusy(button, true, "Uploading...");
+
+  try {
+    const response = await fetch(
+      "/api/settings/dashboard-animation-upload",
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": file.type,
+          "X-Dashboard-Filename": encodeURIComponent(file.name)
+        },
+        body: file,
+        cache: "no-store"
+      }
+    );
+
+    const raw = await response.text();
+    let data = {};
+
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      data = {
+        error: `Upload tidak mengirim JSON (HTTP ${response.status}).`
+      };
+    }
+
+    if (response.status === 401) {
+      state.user = null;
+      showLogin(true);
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        `Upload gagal (HTTP ${response.status}).`
+      );
+    }
+
+    $("#dashboardAnimationLink").value = data.url || "";
+    input.value = "";
+
+    showDashboardAnimationPreview(data.url || "");
+
+    showMessage(
+      "#dashboardAnimationUploadMessage",
+      `${file.name} berhasil diupload. Tekan "Simpan Dashboard" agar berlaku untuk semua akun.`,
+      true
+    );
+  } catch (error) {
+    showMessage(
+      "#dashboardAnimationUploadMessage",
+      error.message
+    );
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+async function saveDashboardAnimation(event) {
+  event.preventDefault();
+
+  const button = $("#saveDashboardAnimation");
+  setBusy(button, true, "Menyimpan...");
+
+  try {
+    const dashboardAnimationUrl =
+      validateDashboardAnimationUrl(
+        $("#dashboardAnimationLink").value
+      );
+
+    const data = await api(
+      "/api/settings/dashboard-animation",
+      {
+        method: "PUT",
+        body: { dashboardAnimationUrl }
+      }
+    );
+
+    state.appearance.dashboardAnimationUrl =
+      String(data.dashboardAnimationUrl || "").trim();
+
+    $("#dashboardAnimationLink").value =
+      state.appearance.dashboardAnimationUrl;
+
+    showDashboardAnimationPreview(
+      state.appearance.dashboardAnimationUrl
+    );
+
+    showMessage(
+      "#dashboardAnimationMessage",
+      "GIF / gambar Dashboard berhasil disimpan untuk semua akun.",
+      true
+    );
+
+    toast(
+      "Animasi Dashboard berhasil diperbarui.",
+      "ok"
+    );
+  } catch (error) {
+    showMessage(
+      "#dashboardAnimationMessage",
+      error.message
+    );
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+async function resetDashboardAnimation() {
+  const button = $("#resetDashboardAnimation");
+
+  setBusy(button, true, "Menghapus...");
+
+  try {
+    const data = await api(
+      "/api/settings/dashboard-animation",
+      {
+        method: "PUT",
+        body: { dashboardAnimationUrl: "" }
+      }
+    );
+
+    state.appearance.dashboardAnimationUrl =
+      String(data.dashboardAnimationUrl || "");
+
+    $("#dashboardAnimationLink").value = "";
+    if ($("#dashboardAnimationFile")) {
+      $("#dashboardAnimationFile").value = "";
+    }
+
+    showDashboardAnimationPreview("");
+
+    showMessage(
+      "#dashboardAnimationMessage",
+      "Media Dashboard dihapus. Dashboard kembali tanpa animasi khusus.",
+      true
+    );
+
+    toast(
+      "Animasi Dashboard dihapus.",
+      "ok"
+    );
+  } catch (error) {
+    showMessage(
+      "#dashboardAnimationMessage",
+      error.message
+    );
+  } finally {
+    setBusy(button, false);
+  }
+}
+
 
 async function changePassword(event) {
   event.preventDefault();

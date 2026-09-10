@@ -918,3 +918,118 @@ h1,h2,h3,h4,.brand-text strong,.user-text strong,.menu-item,.stat-card strong,
     min-height:1050px;
   }
 }
+
+
+/* =========================================================
+   V97 — DASHBOARD GIF / IMAGE STAGE
+========================================================= */
+.dashboard-animation-stage{
+  position:relative;
+  width:100%;
+  min-height:clamp(420px,calc(100vh - 285px),760px);
+  margin-top:12px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.24);
+  border-radius:28px;
+  background:rgba(5,10,20,.16);
+  box-shadow:
+    0 18px 46px rgba(0,0,0,.14),
+    inset 0 1px 0 rgba(255,255,255,.17);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+
+.dashboard-animation-stage.has-media{
+  background:rgba(0,0,0,.18);
+}
+
+.dashboard-animation-media{
+  position:absolute;
+  inset:0;
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+}
+
+.dashboard-animation-empty{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-content:center;
+  gap:6px;
+  text-align:center;
+  color:rgba(255,255,255,.56);
+}
+
+.dashboard-animation-empty span{
+  font-size:42px;
+  opacity:.5;
+}
+
+.dashboard-animation-empty strong{
+  color:rgba(255,255,255,.72);
+  font-size:15px;
+}
+
+.dashboard-animation-empty small{
+  font-size:11px;
+  color:var(--muted);
+}
+
+.dashboard-animation-setting-card{
+  grid-column:1 / -1;
+}
+
+.dashboard-animation-preview{
+  position:relative;
+  min-height:300px;
+  margin:14px 0;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:22px;
+  background:rgba(0,0,0,.20);
+  display:grid;
+  place-items:center;
+}
+
+.dashboard-animation-preview img{
+  position:absolute;
+  inset:0;
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+  opacity:0;
+  transition:opacity .2s ease;
+}
+
+.dashboard-animation-preview img.active{
+  opacity:1;
+}
+
+.dashboard-animation-preview > div{
+  position:relative;
+  z-index:1;
+  color:var(--muted);
+  font-size:12px;
+  text-align:center;
+  padding:20px;
+}
+
+.dashboard-animation-upload-box{
+  margin-top:12px;
+}
+
+@media(max-width:760px){
+  .dashboard-animation-stage{
+    min-height:420px;
+    border-radius:20px;
+  }
+
+  .dashboard-animation-preview{
+    min-height:240px;
+  }
+}
