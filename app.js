@@ -1275,7 +1275,7 @@ async function renderSettings() {
         <article class="setting-card dashboard-animation-setting-card">
           <span class="eyebrow">DASHBOARD ANIMATION</span>
           <h3>GIF / Gambar Dashboard</h3>
-          <p>Media ini tampil pada area besar di bawah ucapan Halo pada Dashboard. GIF tetap bergerak. Bisa tempel link HTTPS atau upload file langsung.</p>
+          <p>Media ini tampil pada area besar di bawah ucapan Halo pada Dashboard. GIF tetap bergerak dan otomatis diperkecil/dibesarkan secara proporsional agar seluruh gambar terlihat penuh tanpa terpotong.</p>
 
           <form id="dashboardAnimationForm">
             <label>Link GIF / gambar HTTPS
@@ -1289,7 +1289,7 @@ async function renderSettings() {
             <div class="background-upload-box dashboard-animation-upload-box">
               <div class="background-upload-copy">
                 <strong>Upload GIF / Gambar Dashboard</strong>
-                <small>GIF, JPG, PNG, WebP • maksimal 1.7 MB • tersimpan untuk seluruh akun</small>
+                <small>GIF, JPG, PNG, WebP • maksimal 1.7 MB • ukuran otomatis menyesuaikan kolom Dashboard • tidak dipotong</small>
               </div>
 
               <input
