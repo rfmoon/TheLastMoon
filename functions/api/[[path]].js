@@ -15,13 +15,14 @@ const MENUS = Object.freeze([
   { id: "tools-harian", label: "Tools Harian", icon: "⇧", groupOnly: true },
   { id: "list-data", label: "Generate Bukti", icon: "▧", parentId: "tools-harian", assignable: true },
   { id: "upload", label: "Prediksi", icon: "✦", parentId: "tools-harian", assignable: true },
+  { id: "hadiah-togel", label: "Hadiah Togel & Perhitungan", icon: "✧", parentId: "tools-harian", assignable: true },
 
   { id: "generate-api", label: "Generate API", icon: "⌘", masterOnly: true },
   { id: "settings", label: "Settings", icon: "⚙", masterOnly: true },
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v85-checker-contiguous-fix";
+const VERSION = "v95-tools-harian-hadiah-togel";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
