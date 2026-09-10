@@ -22,7 +22,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v95-tools-harian-hadiah-togel";
+const VERSION = "v97-dashboard-gif-setting";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -114,6 +114,10 @@ async function routeRequest(request, env, url) {
 
   if (url.pathname === "/api/background-media" && request.method === "GET") {
     return serveBackgroundMedia(env.DB);
+  }
+
+  if (url.pathname === "/api/dashboard-media" && request.method === "GET") {
+    return serveDashboardMedia(env.DB);
   }
 
   if (url.pathname.startsWith("/api/external/") && request.method === "OPTIONS") {
@@ -309,6 +313,24 @@ async function routeRequest(request, env, url) {
   if (url.pathname === "/api/settings/background-upload" && request.method === "POST") {
     requireMaster(user);
     return uploadBackgroundMedia(request, env.DB, user);
+  }
+
+  if (url.pathname === "/api/settings/dashboard-animation" && request.method === "GET") {
+    requireMaster(user);
+    const appearance = await readAppearance(env.DB);
+    return json({
+      dashboardAnimationUrl: appearance.dashboardAnimationUrl || ""
+    });
+  }
+
+  if (url.pathname === "/api/settings/dashboard-animation" && request.method === "PUT") {
+    requireMaster(user);
+    return updateDashboardAnimation(request, env.DB, user);
+  }
+
+  if (url.pathname === "/api/settings/dashboard-animation-upload" && request.method === "POST") {
+    requireMaster(user);
+    return uploadDashboardMedia(request, env.DB, user);
   }
 
   if (url.pathname === "/api/pencairan-xpay/accounts" && request.method === "GET") {
@@ -962,7 +984,19 @@ async function updateBackground(request, db, user) {
   await upsertAppSetting(db, "appearance_blur", String(blur), user.id);
   await upsertAppSetting(db, "background_slide_seconds", String(slideSeconds), user.id);
 
-  return json({ success: true, backgroundUrls, backgroundUrl: backgroundUrls[0] || "", overlay, blur, slideSeconds });
+  const dashboardAnimationUrl = normalizeDashboardAnimationUrl(
+    await readAppSetting(db, "dashboard_animation_url")
+  );
+
+  return json({
+    success: true,
+    backgroundUrls,
+    backgroundUrl: backgroundUrls[0] || "",
+    overlay,
+    blur,
+    slideSeconds,
+    dashboardAnimationUrl
+  });
 }
 
 async function readAppearance(db) {
@@ -985,8 +1019,18 @@ async function readAppearance(db) {
   const overlay = clampInteger(await readAppSetting(db, "appearance_overlay"), 20, 90, 58);
   const blur = clampInteger(await readAppSetting(db, "appearance_blur"), 0, 20, 2);
   const slideSeconds = clampInteger(await readAppSetting(db, "background_slide_seconds"), 3, 60, 8);
+  const dashboardAnimationUrl = normalizeDashboardAnimationUrl(
+    await readAppSetting(db, "dashboard_animation_url")
+  );
 
-  return { backgroundUrls, backgroundUrl: backgroundUrls[0] || "", overlay, blur, slideSeconds };
+  return {
+    backgroundUrls,
+    backgroundUrl: backgroundUrls[0] || "",
+    overlay,
+    blur,
+    slideSeconds,
+    dashboardAnimationUrl
+  };
 }
 
 async function readAppSetting(db, name) {
@@ -1184,6 +1228,216 @@ async function serveBackgroundMedia(db){
     }
   });
 }
+
+
+function normalizeDashboardAnimationUrl(input) {
+  const value = String(input || "").trim();
+
+  if (!value) return "";
+
+  if (value.startsWith("/api/dashboard-media")) {
+    return value;
+  }
+
+  let parsed;
+
+  try {
+    parsed = new URL(value);
+  } catch (_) {
+    throw new AppError(
+      400,
+      "Format link GIF / gambar Dashboard tidak valid.",
+      "dashboard-animation-url"
+    );
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new AppError(
+      400,
+      "Link GIF / gambar Dashboard wajib menggunakan HTTPS.",
+      "dashboard-animation-protocol"
+    );
+  }
+
+  return value;
+}
+
+async function updateDashboardAnimation(request, db, user) {
+  const body = await readJson(request);
+
+  const dashboardAnimationUrl =
+    normalizeDashboardAnimationUrl(
+      body.dashboardAnimationUrl || ""
+    );
+
+  await upsertAppSetting(
+    db,
+    "dashboard_animation_url",
+    dashboardAnimationUrl,
+    user.id
+  );
+
+  return json({
+    success: true,
+    dashboardAnimationUrl
+  });
+}
+
+async function uploadDashboardMedia(
+  request,
+  db,
+  user
+) {
+  await ensureBackgroundMediaSchema(db);
+
+  const mime = String(
+    request.headers.get("Content-Type") || ""
+  ).split(";")[0].trim().toLowerCase();
+
+  const allowed = new Set([
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ]);
+
+  if (!allowed.has(mime)) {
+    throw new AppError(
+      400,
+      "Format file Dashboard harus GIF, JPG, PNG, atau WebP.",
+      "dashboard-upload-type"
+    );
+  }
+
+  const announcedSize = Number(
+    request.headers.get("Content-Length") || 0
+  );
+
+  if (
+    announcedSize &&
+    announcedSize > MAX_BACKGROUND_MEDIA_BYTES
+  ) {
+    throw new AppError(
+      413,
+      "Ukuran file Dashboard maksimal 1.7 MB.",
+      "dashboard-upload-size"
+    );
+  }
+
+  const buffer = await request.arrayBuffer();
+
+  if (
+    !buffer.byteLength ||
+    buffer.byteLength > MAX_BACKGROUND_MEDIA_BYTES
+  ) {
+    throw new AppError(
+      413,
+      "Ukuran file Dashboard maksimal 1.7 MB.",
+      "dashboard-upload-size"
+    );
+  }
+
+  let filename = "dashboard-animation";
+
+  try {
+    filename = decodeURIComponent(
+      String(
+        request.headers.get(
+          "X-Dashboard-Filename"
+        ) || "dashboard-animation"
+      )
+    ).slice(0, 180);
+  } catch (_) {
+    filename = "dashboard-animation";
+  }
+
+  const now = Date.now();
+
+  // Reuse background_media table:
+  // id=1 wallpaper, id=2 dashboard animation.
+  await db.prepare(`
+    INSERT INTO background_media (
+      id,
+      mime_type,
+      filename,
+      data,
+      size_bytes,
+      updated_at,
+      updated_by
+    )
+    VALUES (2, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      mime_type = excluded.mime_type,
+      filename = excluded.filename,
+      data = excluded.data,
+      size_bytes = excluded.size_bytes,
+      updated_at = excluded.updated_at,
+      updated_by = excluded.updated_by
+  `).bind(
+    mime,
+    filename,
+    new Uint8Array(buffer),
+    buffer.byteLength,
+    now,
+    user.id
+  ).run();
+
+  return json({
+    success: true,
+    filename,
+    mime,
+    size: buffer.byteLength,
+    url: `/api/dashboard-media?v=${now}`
+  });
+}
+
+async function serveDashboardMedia(db) {
+  await ensureBackgroundMediaSchema(db);
+
+  const row = await db.prepare(`
+    SELECT
+      mime_type AS mime,
+      filename,
+      data,
+      size_bytes AS size,
+      updated_at AS updatedAt
+    FROM background_media
+    WHERE id = 2
+    LIMIT 1
+  `).first();
+
+  if (!row || !row.data) {
+    throw new AppError(
+      404,
+      "GIF / gambar Dashboard belum tersedia.",
+      "dashboard-media-empty"
+    );
+  }
+
+  const body =
+    row.data instanceof ArrayBuffer
+      ? row.data
+      : row.data.buffer
+        ? row.data.buffer.slice(
+            row.data.byteOffset || 0,
+            (row.data.byteOffset || 0) +
+              (row.data.byteLength || row.data.length || 0)
+          )
+        : row.data;
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": String(
+        row.mime || "application/octet-stream"
+      ),
+      "Content-Length": String(Number(row.size || 0)),
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff"
+    }
+  });
+}
+
 
 function normalizeBackgroundUrls(input) {
   const values = Array.isArray(input)
