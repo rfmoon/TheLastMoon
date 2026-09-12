@@ -22,7 +22,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v99-dashboard-gif-full-contain";
+const VERSION = "v108-d1-daily-limit-fix";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -50,9 +50,33 @@ export async function onRequest(context) {
       }, error.status, externalHeaders);
     }
 
+    const safeDetail = safeErrorMessage(error);
+
+    if (
+      /exceeded D1's free tier daily row write limit/i.test(safeDetail) ||
+      /exceeded D1.*daily row write limit/i.test(safeDetail)
+    ) {
+      return json({
+        error: "Kuota tulis D1 harian Cloudflare sudah habis. Sistem tetap aman; kuota reset sekitar 07:00 WIB. V108 mengurangi write berulang agar kejadian ini tidak terulang.",
+        stage: "d1-daily-write-limit",
+        version: VERSION
+      }, 503, externalHeaders);
+    }
+
+    if (
+      /exceeded D1's free tier daily row read limit/i.test(safeDetail) ||
+      /exceeded D1.*daily row read limit/i.test(safeDetail)
+    ) {
+      return json({
+        error: "Kuota baca D1 harian Cloudflare sudah habis. Sistem tetap aman; kuota reset sekitar 07:00 WIB.",
+        stage: "d1-daily-read-limit",
+        version: VERSION
+      }, 503, externalHeaders);
+    }
+
     return json({
       error: "Terjadi kesalahan pada server.",
-      detail: safeErrorMessage(error),
+      detail: safeDetail,
       version: VERSION
     }, 500, externalHeaders);
   }
@@ -176,7 +200,7 @@ async function routeRequest(request, env, url) {
   }
 
   if (url.pathname === "/api/session" && request.method === "GET") {
-    const user = await getSessionUser(request, env.DB);
+    const user = await getSessionUser(request, env);
     return json({
       authenticated: Boolean(user),
       setupReady: true,
@@ -186,14 +210,14 @@ async function routeRequest(request, env, url) {
   }
 
   if (url.pathname === "/api/login" && request.method === "POST") {
-    return login(request, env.DB);
+    return login(request, env);
   }
 
   if (url.pathname === "/api/logout" && request.method === "POST") {
-    return logout(request, env.DB);
+    return logout(request, env);
   }
 
-  const user = await getSessionUser(request, env.DB);
+  const user = await getSessionUser(request, env);
   if (!user) {
     throw new AppError(401, "Sesi login habis. Silakan masuk kembali.", "session");
   }
@@ -704,7 +728,8 @@ async function runSetupStep(stage, operation) {
   }
 }
 
-async function login(request, db) {
+async function login(request, env) {
+  const db = env.DB;
   const body = await readJson(request);
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
@@ -727,46 +752,87 @@ async function login(request, db) {
     throw new AppError(401, "Username atau password salah.", "login-auth");
   }
 
-  const rawToken = randomToken(32);
-  const tokenHash = await sha256(rawToken);
-  const now = Date.now();
-  const expiresAt = now + SESSION_TTL_MS;
-
-  await db.prepare("DELETE FROM sessions WHERE expires_at <= ?")
-    .bind(now).run();
-
-  await db.prepare(`
-    INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
-    VALUES (?, ?, ?, ?)
-  `).bind(tokenHash, user.id, expiresAt, now).run();
+  const expiresAt = Date.now() + SESSION_TTL_MS;
+  const rawToken = await createSignedSessionToken(
+    env,
+    user.id,
+    expiresAt
+  );
 
   return json(
     { user: publicUser(user), menus: menusForUser(user) },
     200,
-    { "Set-Cookie": sessionCookie(rawToken, Math.floor(SESSION_TTL_MS / 1000)) }
+    {
+      "Set-Cookie": sessionCookie(
+        rawToken,
+        Math.floor(SESSION_TTL_MS / 1000)
+      )
+    }
   );
 }
 
-async function logout(request, db) {
-  const token = readCookie(request.headers.get("Cookie"), COOKIE_NAME);
+async function logout(request, env) {
+  // Session V108 stateless: logout cukup hapus cookie.
+  // Cookie legacy tetap dicoba dibersihkan, tapi kegagalan D1 tidak boleh
+  // membuat logout/login ikut error.
+  const token = readCookie(
+    request.headers.get("Cookie"),
+    COOKIE_NAME
+  );
 
-  if (token) {
-    await db.prepare("DELETE FROM sessions WHERE token_hash = ?")
-      .bind(await sha256(token)).run();
+  if (token && !token.startsWith("v108.")) {
+    try {
+      await env.DB.prepare(
+        "DELETE FROM sessions WHERE token_hash = ?"
+      ).bind(await sha256(token)).run();
+    } catch (_) {}
   }
 
   return json(
     { success: true },
     200,
-    { "Set-Cookie": `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0` }
+    {
+      "Set-Cookie":
+        `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`
+    }
   );
 }
 
-async function getSessionUser(request, db) {
-  const token = readCookie(request.headers.get("Cookie"), COOKIE_NAME);
+async function getSessionUser(request, env) {
+  const db = env.DB;
+  const token = readCookie(
+    request.headers.get("Cookie"),
+    COOKIE_NAME
+  );
+
   if (!token) return null;
 
-  return await db.prepare(`
+  // V108 signed stateless cookie.
+  if (token.startsWith("v108.")) {
+    const payload = await verifySignedSessionToken(
+      env,
+      token
+    );
+
+    if (!payload) return null;
+
+    const user = await db.prepare(`
+      SELECT *
+      FROM users
+      WHERE id = ?
+        AND active = 1
+      LIMIT 1
+    `).bind(payload.userId).first();
+
+    return user || null;
+  }
+
+  // Fallback untuk cookie session versi lama supaya user yang sudah login
+  // tidak langsung terputus saat deploy V108.
+  const now = Date.now();
+  const tokenHash = await sha256(token);
+
+  const row = await db.prepare(`
     SELECT u.*
     FROM sessions s
     JOIN users u ON u.id = s.user_id
@@ -774,7 +840,128 @@ async function getSessionUser(request, db) {
       AND s.expires_at > ?
       AND u.active = 1
     LIMIT 1
-  `).bind(await sha256(token), Date.now()).first();
+  `).bind(tokenHash, now).first();
+
+  return row || null;
+}
+
+function sessionSigningSecret(env) {
+  const secret = String(
+    env.SESSION_SECRET ||
+    env.MASTER_PASSWORD ||
+    ""
+  );
+
+  if (!secret) {
+    throw new AppError(
+      500,
+      "SESSION_SECRET/MASTER_PASSWORD belum tersedia untuk session.",
+      "session-secret"
+    );
+  }
+
+  return secret;
+}
+
+async function sessionHmac(secret, value) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    {
+      name: "HMAC",
+      hash: "SHA-256"
+    },
+    false,
+    ["sign", "verify"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(value)
+  );
+
+  return toBase64Url(
+    new Uint8Array(signature)
+  );
+}
+
+async function createSignedSessionToken(
+  env,
+  userId,
+  expiresAt
+) {
+  const nonce = randomToken(12);
+
+  const payload = [
+    "v108",
+    String(Number(userId)),
+    String(Number(expiresAt)),
+    nonce
+  ].join(".");
+
+  const signature = await sessionHmac(
+    sessionSigningSecret(env),
+    payload
+  );
+
+  return `${payload}.${signature}`;
+}
+
+async function verifySignedSessionToken(
+  env,
+  token
+) {
+  const parts = String(token || "").split(".");
+
+  if (
+    parts.length !== 5 ||
+    parts[0] !== "v108"
+  ) {
+    return null;
+  }
+
+  const userId = Number(parts[1]);
+  const expiresAt = Number(parts[2]);
+  const nonce = parts[3];
+  const suppliedSignature = parts[4];
+
+  if (
+    !Number.isInteger(userId) ||
+    userId <= 0 ||
+    !Number.isFinite(expiresAt) ||
+    expiresAt <= Date.now() ||
+    !nonce ||
+    !suppliedSignature
+  ) {
+    return null;
+  }
+
+  const payload = parts
+    .slice(0, 4)
+    .join(".");
+
+  const expectedSignature = await sessionHmac(
+    sessionSigningSecret(env),
+    payload
+  );
+
+  const left = new TextEncoder().encode(
+    suppliedSignature
+  );
+
+  const right = new TextEncoder().encode(
+    expectedSignature
+  );
+
+  if (!constantTimeEqual(left, right)) {
+    return null;
+  }
+
+  return {
+    userId,
+    expiresAt
+  };
 }
 
 async function changePassword(request, db, user) {
@@ -1673,7 +1860,8 @@ async function authenticateApiKey(request, db, requiredScope) {
       name,
       scopes,
       active,
-      expires_at AS expiresAt
+      expires_at AS expiresAt,
+      last_used_at AS lastUsedAt
     FROM api_keys
     WHERE token_hash = ?
     LIMIT 1
@@ -1715,11 +1903,28 @@ async function authenticateApiKey(request, db, requiredScope) {
     );
   }
 
-  await db.prepare(`
-    UPDATE api_keys
-    SET last_used_at = ?
-    WHERE id = ?
-  `).bind(Date.now(), row.id).run();
+  const now = Date.now();
+
+  // Hindari 1 write D1 pada SETIAP request eksternal.
+  // last_used_at cukup disentuh maksimal sekali per jam.
+  if (
+    !row.lastUsedAt ||
+    Number(row.lastUsedAt) < now - 60 * 60 * 1000
+  ) {
+    try {
+      await db.prepare(`
+        UPDATE api_keys
+        SET last_used_at = ?
+        WHERE id = ?
+      `).bind(now, row.id).run();
+    } catch (error) {
+      // Tracking last_used_at tidak boleh menjatuhkan result sync/login.
+      const msg = safeErrorMessage(error);
+      if (!/daily row write limit/i.test(msg)) {
+        throw error;
+      }
+    }
+  }
 
   return {
     id: row.id,
@@ -1921,15 +2126,103 @@ function normalizeLotteryRow(input) {
   return row;
 }
 
-async function externalUpsertLotteryResults(request, db, apiKey) {
+async function loadExistingLotteryRowsByKeys(
+  db,
+  keys
+) {
+  const map = new Map();
+  const CHUNK = 90;
+
+  for (
+    let offset = 0;
+    offset < keys.length;
+    offset += CHUNK
+  ) {
+    const chunk = keys.slice(
+      offset,
+      offset + CHUNK
+    );
+
+    if (!chunk.length) continue;
+
+    const placeholders = chunk
+      .map(() => "?")
+      .join(",");
+
+    const result = await db.prepare(`
+      SELECT
+        result_key AS resultKey,
+        pool,
+        display_name AS display,
+        periode,
+        result_date AS date,
+        result_time AS time,
+        n1,
+        n2,
+        n3,
+        shio,
+        result_text AS resultText,
+        source
+      FROM lottery_results
+      WHERE result_key IN (${placeholders})
+    `).bind(...chunk).all();
+
+    for (const row of result.results || []) {
+      map.set(
+        String(row.resultKey),
+        row
+      );
+    }
+  }
+
+  return map;
+}
+
+function sameLotteryStoredRow(existing, incoming) {
+  if (!existing) return false;
+
+  return (
+    String(existing.pool || "") ===
+      String(incoming.pool || "") &&
+    String(existing.display || "") ===
+      String(incoming.display || "") &&
+    String(existing.periode || "") ===
+      String(incoming.periode || "") &&
+    String(existing.date || "") ===
+      String(incoming.date || "") &&
+    String(existing.time || "") ===
+      String(incoming.time || "") &&
+    String(existing.n1 || "") ===
+      String(incoming.n1 || "") &&
+    String(existing.n2 || "") ===
+      String(incoming.n2 || "") &&
+    String(existing.n3 || "") ===
+      String(incoming.n3 || "") &&
+    String(existing.shio || "") ===
+      String(incoming.shio || "") &&
+    String(existing.resultText || "") ===
+      String(incoming.resultText || "") &&
+    String(existing.source || "") ===
+      "luna-extension"
+  );
+}
+
+async function externalUpsertLotteryResults(
+  request,
+  db,
+  apiKey
+) {
   const body = await readJson(request);
-  const inputRows = Array.isArray(body.rows) ? body.rows : [];
+  const inputRows = Array.isArray(body.rows)
+    ? body.rows
+    : [];
 
   if (!inputRows.length) {
     return json({
       ok: true,
       received: 0,
       saved: 0,
+      unchangedSkipped: 0,
       message: "Tidak ada result yang dikirim."
     }, 200, externalCorsHeaders());
   }
@@ -1942,8 +2235,7 @@ async function externalUpsertLotteryResults(request, db, apiKey) {
     );
   }
 
-  // Satu logical draw hanya boleh satu kali dalam batch.
-  // Jika batch berisi duplicate dari source berbeda, row terakhir menang.
+  // Satu logical resultKey hanya satu kali dalam batch.
   const rowMap = new Map();
 
   for (const input of inputRows) {
@@ -1952,20 +2244,53 @@ async function externalUpsertLotteryResults(request, db, apiKey) {
   }
 
   const rows = [...rowMap.values()];
-  const now = Date.now();
+  const existingMap =
+    await loadExistingLotteryRowsByKeys(
+      db,
+      rows.map(row => row.resultKey)
+    );
 
+  // V108:
+  // Data lama yang SAMA PERSIS tidak ditulis ulang.
+  // Ini yang sebelumnya membuat D1 cepat habis karena setiap sync
+  // 460 row selalu UPDATE walaupun tidak ada perubahan.
+  const changedRows = rows.filter(row => {
+    const existing = existingMap.get(
+      row.resultKey
+    );
+
+    return !sameLotteryStoredRow(
+      existing,
+      row
+    );
+  });
+
+  if (!changedRows.length) {
+    return json({
+      ok: true,
+      received: inputRows.length,
+      normalized: rows.length,
+      saved: 0,
+      unchangedSkipped: rows.length,
+      duplicatesIgnored:
+        inputRows.length - rows.length,
+      apiKey: apiKey.name,
+      optimized: true,
+      updatedAt: Date.now()
+    }, 200, externalCorsHeaders());
+  }
+
+  const now = Date.now();
   const statements = [];
 
-  for (const row of rows) {
+  for (const row of changedRows) {
     const displayIdentity = row.display
       .toUpperCase()
       .replace(/\s+/g, " ")
       .trim();
 
-    // Bersihkan row legacy dengan key lama.
-    // Identitas logical:
-    // display + tanggal + periode.
-    // Jika periode kosong, gunakan waktu.
+    // Cleanup legacy hanya dijalankan untuk row yang benar-benar BARU/BERUBAH,
+    // bukan untuk semua 460 row pada setiap sync.
     statements.push(
       db.prepare(`
         DELETE FROM lottery_results
@@ -2045,9 +2370,14 @@ async function externalUpsertLotteryResults(request, db, apiKey) {
   return json({
     ok: true,
     received: inputRows.length,
-    saved: rows.length,
-    duplicatesIgnored: inputRows.length - rows.length,
+    normalized: rows.length,
+    saved: changedRows.length,
+    unchangedSkipped:
+      rows.length - changedRows.length,
+    duplicatesIgnored:
+      inputRows.length - rows.length,
     apiKey: apiKey.name,
+    optimized: true,
     updatedAt: now
   }, 200, externalCorsHeaders());
 }
