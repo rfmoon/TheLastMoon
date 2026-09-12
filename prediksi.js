@@ -217,22 +217,26 @@
     }
 
     // Membuat nomor dengan digit yang tidak berulang di dalam satu nomor.
-    // Digit pertama selalu 1-9 supaya panjang 4D/3D/2D tetap utuh.
-    function uniqueDigitNumber(length){
-        var digits=[0,1,2,3,4,5,6,7,8,9];
-        var result='';
-
-        var firstIndex=1+Math.floor(Math.random()*9);
-        result+=digits.splice(firstIndex,1)[0];
+    // Digit di dalam SATU nomor BOLEH sama.
+    // Yang tidak boleh sama adalah NOMOR HASIL secara penuh dalam grup yang sama.
+    // Contoh:
+    // 58312 ✅
+    // 58311 ✅ jika hanya muncul sekali
+    // 58311 + 58311 ❌ karena nomor penuh duplikat
+    //
+    // Digit pertama tetap 1-9 supaya panjang 5D/4D/3D/2D tetap utuh.
+    function randomFixedLengthNumber(length){
+        var result=String(1+Math.floor(Math.random()*9));
 
         for(var i=1;i<length;i++){
-            var index=Math.floor(Math.random()*digits.length);
-            result+=digits.splice(index,1)[0];
+            result+=String(Math.floor(Math.random()*10));
         }
+
         return result;
     }
 
-    // Selain digit di dalam nomor unik, setiap pilihan dalam grup juga dijamin tidak sama.
+    // Setiap nomor penuh dalam grup harus berbeda.
+    // Digit di dalam nomor boleh berulang.
     function generateUniqueNumbers(length,count){
         var result=[];
         var used={};
@@ -240,13 +244,27 @@
 
         while(result.length<count && safety<5000){
             safety++;
-            var number=uniqueDigitNumber(length);
+            var number=randomFixedLengthNumber(length);
+
             if(!used[number]){
                 used[number]=true;
                 result.push(number);
             }
         }
+
         return result;
+    }
+
+    // Berlaku untuk SEMUA pasaran.
+    // Digit di dalam nomor boleh sama, tetapi nomor penuh dalam grup
+    // yang sama tidak boleh muncul dua kali.
+    function generatePredictionNumberGroups(include5D){
+        return {
+            d5: include5D ? generateUniqueNumbers(5,5) : [],
+            d4: generateUniqueNumbers(4,5),
+            d3: generateUniqueNumbers(3,6),
+            d2: generateUniqueNumbers(2,8)
+        };
     }
 
     /* ========== BACKGROUND TANPA APPS SCRIPT ========== */
@@ -573,12 +591,29 @@
 
         var bbfs=unique(7),ai=unique(5);
 
-        // Pilihan 4D / 3D / 2D tanpa angka double:
-        // - tidak ada digit yang berulang di dalam satu nomor
-        // - tidak ada nomor yang sama dalam grup yang sama
-        var d4=generateUniqueNumbers(4,5);
-        var d3=generateUniqueNumbers(3,6);
-        var d2=generateUniqueNumbers(2,8);
+        var isTotoMacau5D=(market==='TOTO MACAU 5D');
+
+        // ATURAN UNTUK SEMUA PASARAN:
+        // Digit di dalam satu nomor BOLEH kembar.
+        // Yang tidak boleh adalah nomor penuh yang sama muncul dua kali
+        // dalam grup 5D / 4D / 3D / 2D yang sama.
+        //
+        // Contoh:
+        // 58312 ✅
+        // 58311 ✅
+        // jika 58311 muncul lagi dalam grup yang sama -> duplikat, jangan dipakai.
+        //
+        // Khusus TOTO MACAU 5D ditambahkan grup 5D.
+        var numberGroups=generatePredictionNumberGroups(isTotoMacau5D);
+        var d5=numberGroups.d5;
+        var d4=numberGroups.d4;
+        var d3=numberGroups.d3;
+        var d2=numberGroups.d2;
+
+        var sec5d=document.getElementById('sec5d');
+        if(sec5d){
+            sec5d.style.display=isTotoMacau5D ? '' : 'none';
+        }
 
         var c1=Math.floor(Math.random()*10),c2=Math.floor(Math.random()*10);
         while(c2===c1) c2=Math.floor(Math.random()*10);
@@ -587,7 +622,7 @@
 
         pred={
             market:market,bbfs:bbfs,ai:ai,
-            d4:d4,d3:d3,d2:d2,
+            d5:d5,d4:d4,d3:d3,d2:d2,
             cb:c1+' / '+c2,
             tw:t1+''+t1+' / '+t2+''+t2,
             shio:shioList[Math.floor(Math.random()*12)]
@@ -598,6 +633,16 @@
         document.getElementById('vShio').textContent=pred.shio;
 
         var h='';
+
+        var g5d=document.getElementById('g5d');
+        if(g5d){
+            for(var i=0;i<d5.length;i++){
+                h+='<div class="chip">'+d5[i]+'</div>';
+            }
+            g5d.innerHTML=h;
+        }
+
+        h='';
         for(var i=0;i<d4.length;i++) h+='<div class="chip">'+d4[i]+'</div>';
         document.getElementById('g4d').innerHTML=h;
         h='';
@@ -621,6 +666,7 @@
             dateStr+'\n\n' +
             'BBFS KUAT : '+p.bbfs+'\n' +
             'ANGKA IKUT : '+p.ai+'\n\n' +
+            (p.market==='TOTO MACAU 5D' ? '5D : '+p.d5.join(' / ')+'\n' : '') +
             '4D : '+p.d4.join(' / ')+'\n' +
             '3D : '+p.d3.join(' / ')+'\n' +
             '2D : '+p.d2.join(' / ')+'\n\n' +
