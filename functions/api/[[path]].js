@@ -22,7 +22,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v109-emergency-master-login-no-d1";
+const VERSION = "v110-auth-kv-all-users";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -68,7 +68,7 @@ export async function onRequest(context) {
       /exceeded D1.*daily row read limit/i.test(safeDetail)
     ) {
       return json({
-        error: "Kuota baca D1 harian Cloudflare sudah habis. Master tetap bisa login lewat Emergency Login V109; fitur yang membutuhkan data D1 tetap menunggu quota tersedia.",
+        error: "Kuota baca D1 harian Cloudflare sudah habis. V110 tetap mengizinkan login user yang sudah tersimpan di AUTH_KV; fitur yang benar-benar membaca D1 tetap menunggu quota tersedia.",
         stage: "d1-daily-read-limit",
         version: VERSION
       }, 503, externalHeaders);
@@ -88,6 +88,7 @@ async function routeRequest(request, env, url) {
       ok: true,
       version: VERSION,
       dbBound: Boolean(env.DB),
+      authKvBound: Boolean(env.AUTH_KV),
       masterUsernameConfigured: Boolean(env.MASTER_USERNAME),
       masterPasswordConfigured: Boolean(env.MASTER_PASSWORD)
     });
@@ -128,7 +129,7 @@ async function routeRequest(request, env, url) {
           setupReady: true,
           d1Limited: true,
           message:
-            "D1 sedang limit. Master masih bisa login memakai akun Master.",
+            "D1 sedang limit. User yang sudah tersimpan di AUTH_KV tetap bisa login.",
           user: null,
           menus: []
         });
@@ -311,7 +312,7 @@ async function routeRequest(request, env, url) {
   }
 
   if (url.pathname === "/api/change-password" && request.method === "POST") {
-    return changePassword(request, env.DB, user);
+    return changePassword(request, env, user);
   }
 
   if (url.pathname === "/api/api-keys" && request.method === "GET") {
@@ -361,20 +362,25 @@ async function routeRequest(request, env, url) {
     );
   }
 
+  if (url.pathname === "/api/auth-cache/sync" && request.method === "POST") {
+    requireMaster(user);
+    return syncAuthCacheFromD1(env);
+  }
+
   if (url.pathname === "/api/users" && request.method === "GET") {
-    return listUsers(env.DB, user);
+    return listUsers(env, user);
   }
 
   if (url.pathname === "/api/users" && request.method === "POST") {
-    return createUser(request, env.DB, user);
+    return createUser(request, env, user);
   }
 
   const userMatch = url.pathname.match(/^\/api\/users\/(\d+)$/);
   if (userMatch && request.method === "PUT") {
-    return updateUser(request, env.DB, user, Number(userMatch[1]));
+    return updateUser(request, env, user, Number(userMatch[1]));
   }
   if (userMatch && request.method === "DELETE") {
-    return deleteUser(env.DB, user, Number(userMatch[1]));
+    return deleteUser(env, user, Number(userMatch[1]));
   }
 
   if (url.pathname === "/api/settings/background" && request.method === "GET") {
@@ -794,9 +800,7 @@ async function login(request, env) {
     );
   }
 
-  // V109 Emergency Master:
-  // validasi langsung dari Cloudflare Secret/Variable,
-  // tanpa membaca D1 sama sekali.
+  // Master tetap bisa login langsung dari Cloudflare Secret/Variable.
   if (masterCredentialsMatch(env, username, password)) {
     const user = emergencyMasterUser(env);
     const expiresAt = Date.now() + SESSION_TTL_MS;
@@ -810,7 +814,54 @@ async function login(request, env) {
         user: publicUser(user),
         menus: menusForUser(user),
         emergencyMode: true,
-        d1Limited: true
+        authSource: "master-secret"
+      },
+      200,
+      {
+        "Set-Cookie": sessionCookie(
+          rawToken,
+          Math.floor(SESSION_TTL_MS / 1000)
+        )
+      }
+    );
+  }
+
+  // V110: user biasa dicoba dari KV terlebih dahulu.
+  // Ini membuat login tidak menyentuh D1 ketika AUTH_KV tersedia.
+  const cachedUser = await readAuthCacheUser(
+    env,
+    username
+  );
+
+  if (cachedUser) {
+    const validCached = Boolean(
+      Number(cachedUser.active) === 1 &&
+      await verifyPassword(
+        password,
+        cachedUser.password_hash
+      )
+    );
+
+    if (!validCached) {
+      throw new AppError(
+        401,
+        "Username atau password salah.",
+        "login-auth-kv"
+      );
+    }
+
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    const rawToken = await createCachedUserSessionToken(
+      env,
+      cachedUser,
+      expiresAt
+    );
+
+    return json(
+      {
+        user: publicUser(cachedUser),
+        menus: menusForUser(cachedUser),
+        authSource: "auth-kv"
       },
       200,
       {
@@ -825,13 +876,11 @@ async function login(request, env) {
   if (!env.DB) {
     throw new AppError(
       503,
-      "Database sedang tidak tersedia. Login Master masih dapat digunakan.",
+      "Database sedang tidak tersedia dan akun ini belum ada di AUTH_KV.",
       "login-db-unavailable"
     );
   }
 
-  // User biasa masih memakai data akun dari D1.
-  // Jika read quota D1 habis, akun biasa memang belum bisa diverifikasi.
   let user;
 
   try {
@@ -847,7 +896,9 @@ async function login(request, env) {
     ) {
       throw new AppError(
         503,
-        "Kuota baca D1 sedang habis. Untuk sementara hanya akun Master yang bisa login tanpa D1.",
+        env.AUTH_KV
+          ? "Kuota baca D1 sedang habis dan akun ini belum tersimpan di AUTH_KV. Setelah D1 reset, buka User Admin sekali untuk menyinkronkan semua akun."
+          : "Kuota baca D1 sedang habis. Tambahkan KV binding AUTH_KV agar semua akun dapat login tanpa membaca D1.",
         "login-d1-read-limit"
       );
     }
@@ -869,17 +920,22 @@ async function login(request, env) {
     );
   }
 
+  // Setelah login normal berhasil, cache akun supaya login berikutnya
+  // tidak perlu membaca D1 lagi.
+  await safeWriteAuthCacheUser(env, user);
+
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  const rawToken = await createSignedSessionToken(
+  const rawToken = await createCachedUserSessionToken(
     env,
-    user.id,
+    user,
     expiresAt
   );
 
   return json(
     {
       user: publicUser(user),
-      menus: menusForUser(user)
+      menus: menusForUser(user),
+      authSource: "d1-fallback"
     },
     200,
     {
@@ -999,6 +1055,203 @@ async function verifyEmergencyMasterToken(
   return emergencyMasterUser(env);
 }
 
+function authCacheKey(username) {
+  return `user:${normalizeUsername(String(username || ""))}`;
+}
+
+function authCacheRecord(user) {
+  return {
+    id: Number(user.id),
+    username: String(user.username || ""),
+    username_norm: normalizeUsername(String(user.username || "")),
+    password_hash: String(user.password_hash || ""),
+    permissions: JSON.stringify(safePermissions(user.permissions)),
+    is_master: Number(user.is_master) === 1 ? 1 : 0,
+    active: Number(user.active) === 1 ? 1 : 0,
+    updated_at: Number(user.updated_at || Date.now())
+  };
+}
+
+async function readAuthCacheUser(env, username) {
+  if (!env.AUTH_KV) return null;
+
+  try {
+    const row = await env.AUTH_KV.get(
+      authCacheKey(username),
+      "json"
+    );
+
+    if (!row) return null;
+
+    return {
+      ...row,
+      permissions: JSON.stringify(
+        safePermissions(row.permissions)
+      )
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function safeWriteAuthCacheUser(env, user) {
+  if (!env.AUTH_KV || !user) return false;
+
+  try {
+    const record = authCacheRecord(user);
+    await env.AUTH_KV.put(
+      authCacheKey(record.username),
+      JSON.stringify(record)
+    );
+    return true;
+  } catch (error) {
+    console.error("AUTH_KV put failed:", error);
+    return false;
+  }
+}
+
+async function safeDeleteAuthCacheUser(env, username) {
+  if (!env.AUTH_KV || !username) return false;
+
+  try {
+    await env.AUTH_KV.delete(authCacheKey(username));
+    return true;
+  } catch (error) {
+    console.error("AUTH_KV delete failed:", error);
+    return false;
+  }
+}
+
+async function syncAuthCacheFromD1(env) {
+  if (!env.AUTH_KV) {
+    throw new AppError(
+      500,
+      "KV binding AUTH_KV belum dipasang.",
+      "auth-kv-binding"
+    );
+  }
+
+  const result = await env.DB.prepare(`
+    SELECT
+      id,
+      username,
+      username_norm,
+      password_hash,
+      permissions,
+      is_master,
+      active,
+      updated_at
+    FROM users
+    ORDER BY id ASC
+  `).all();
+
+  let cached = 0;
+
+  for (const user of result.results || []) {
+    if (Number(user.is_master) === 1) continue;
+    if (await safeWriteAuthCacheUser(env, user)) {
+      cached += 1;
+    }
+  }
+
+  return json({
+    success: true,
+    cached,
+    total: (result.results || []).length,
+    authKvBound: true
+  });
+}
+
+async function createCachedUserSessionToken(
+  env,
+  user,
+  expiresAt
+) {
+  const snapshot = {
+    id: Number(user.id),
+    username: String(user.username || ""),
+    permissions: safePermissions(user.permissions),
+    is_master: Number(user.is_master) === 1 ? 1 : 0,
+    active: Number(user.active) === 1 ? 1 : 0,
+    exp: Number(expiresAt)
+  };
+
+  const payload = toBase64Url(
+    new TextEncoder().encode(
+      JSON.stringify(snapshot)
+    )
+  );
+
+  const signedValue = `v110u.${payload}`;
+  const signature = await sessionHmac(
+    sessionSigningSecret(env),
+    signedValue
+  );
+
+  return `${signedValue}.${signature}`;
+}
+
+async function verifyCachedUserSessionToken(env, token) {
+  const parts = String(token || "").split(".");
+
+  if (
+    parts.length !== 3 ||
+    parts[0] !== "v110u"
+  ) {
+    return null;
+  }
+
+  const payload = parts[1];
+  const suppliedSignature = parts[2];
+  const signedValue = `v110u.${payload}`;
+  const expectedSignature = await sessionHmac(
+    sessionSigningSecret(env),
+    signedValue
+  );
+
+  const left = new TextEncoder().encode(
+    suppliedSignature
+  );
+  const right = new TextEncoder().encode(
+    expectedSignature
+  );
+
+  if (!constantTimeEqual(left, right)) {
+    return null;
+  }
+
+  try {
+    const snapshot = JSON.parse(
+      new TextDecoder().decode(
+        fromBase64Url(payload)
+      )
+    );
+
+    if (
+      !snapshot ||
+      !Number.isInteger(Number(snapshot.id)) ||
+      !snapshot.username ||
+      Number(snapshot.active) !== 1 ||
+      !Number.isFinite(Number(snapshot.exp)) ||
+      Number(snapshot.exp) <= Date.now()
+    ) {
+      return null;
+    }
+
+    return {
+      id: Number(snapshot.id),
+      username: String(snapshot.username),
+      permissions: JSON.stringify(
+        sanitizePermissions(snapshot.permissions)
+      ),
+      is_master: Number(snapshot.is_master) === 1 ? 1 : 0,
+      active: 1
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 async function logout(request, env) {
   // Session V108 stateless: logout cukup hapus cookie.
   // Cookie legacy tetap dicoba dibersihkan, tapi kegagalan D1 tidak boleh
@@ -1011,7 +1264,8 @@ async function logout(request, env) {
   if (
     token &&
     !token.startsWith("v108.") &&
-    !token.startsWith("v109m.")
+    !token.startsWith("v109m.") &&
+    !token.startsWith("v110u.")
   ) {
     try {
       await env.DB.prepare(
@@ -1041,6 +1295,15 @@ async function getSessionUser(request, env) {
   // V109 Master session: tidak menyentuh D1.
   if (token.startsWith("v109m.")) {
     return verifyEmergencyMasterToken(
+      env,
+      token
+    );
+  }
+
+  // V110 user session membawa snapshot akun yang sudah ditandatangani.
+  // Tidak ada read D1 dan tidak ada read KV pada setiap /api/session.
+  if (token.startsWith("v110u.")) {
+    return verifyCachedUserSessionToken(
       env,
       token
     );
@@ -1206,7 +1469,8 @@ async function verifySignedSessionToken(
   };
 }
 
-async function changePassword(request, db, user) {
+async function changePassword(request, env, user) {
+  const db = env.DB;
   const body = await readJson(request);
   const currentPassword = String(body.currentPassword || "");
   const newPassword = String(body.newPassword || "");
@@ -1215,25 +1479,61 @@ async function changePassword(request, db, user) {
     throw new AppError(400, "Password baru harus 8–128 karakter.", "password-input");
   }
 
-  if (!await verifyPassword(currentPassword, user.password_hash)) {
+  if (isMaster(user) && Number(user.id) === -1) {
+    throw new AppError(
+      400,
+      "Password Master memakai Cloudflare Secret MASTER_PASSWORD dan tidak diubah dari halaman ini.",
+      "master-password-secret"
+    );
+  }
+
+  let sourceUser = user;
+
+  if (!sourceUser.password_hash) {
+    sourceUser = await db.prepare(
+      "SELECT * FROM users WHERE id = ? LIMIT 1"
+    ).bind(user.id).first();
+  }
+
+  if (!sourceUser || !await verifyPassword(currentPassword, sourceUser.password_hash)) {
     throw new AppError(400, "Password sekarang salah.", "password-check");
   }
 
+  const newHash = await hashPassword(newPassword);
+  const now = Date.now();
+
   await db.prepare(
     "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?"
-  ).bind(await hashPassword(newPassword), Date.now(), user.id).run();
+  ).bind(newHash, now, user.id).run();
+
+  await safeWriteAuthCacheUser(env, {
+    ...sourceUser,
+    password_hash: newHash,
+    updated_at: now
+  });
 
   return json({ success: true });
 }
 
-async function listUsers(db, user) {
+async function listUsers(env, user) {
   requireMaster(user);
+  const db = env.DB;
 
   const result = await db.prepare(`
-    SELECT id, username, permissions, is_master, active, created_at, updated_at
+    SELECT id, username, username_norm, password_hash, permissions,
+           is_master, active, created_at, updated_at
     FROM users
     ORDER BY is_master DESC, username_norm ASC
   `).all();
+
+  // Membuka User Admin sekali saat D1 tersedia otomatis menyinkronkan
+  // seluruh user biasa ke AUTH_KV.
+  if (env.AUTH_KV) {
+    for (const row of result.results || []) {
+      if (Number(row.is_master) === 1) continue;
+      await safeWriteAuthCacheUser(env, row);
+    }
+  }
 
   return json({
     users: (result.results || []).map(row => ({
@@ -1244,12 +1544,15 @@ async function listUsers(db, user) {
       active: Number(row.active) === 1,
       createdAt: row.created_at,
       updatedAt: row.updated_at
-    }))
+    })),
+    authKvBound: Boolean(env.AUTH_KV),
+    authCacheSynced: Boolean(env.AUTH_KV)
   });
 }
 
-async function createUser(request, db, master) {
+async function createUser(request, env, master) {
   requireMaster(master);
+  const db = env.DB;
 
   const body = await readJson(request);
   const username = String(body.username || "").trim();
@@ -1270,6 +1573,7 @@ async function createUser(request, db, master) {
   }
 
   const now = Date.now();
+  const passwordHash = await hashPassword(password);
 
   try {
     const result = await db.prepare(`
@@ -1280,14 +1584,26 @@ async function createUser(request, db, master) {
     `).bind(
       username,
       normalizeUsername(username),
-      await hashPassword(password),
+      passwordHash,
       JSON.stringify(permissions),
       active,
       now,
       now
     ).run();
 
-    return json({ success: true, id: result.meta?.last_row_id }, 201);
+    const id = Number(result.meta?.last_row_id || 0);
+
+    await safeWriteAuthCacheUser(env, {
+      id,
+      username,
+      password_hash: passwordHash,
+      permissions: JSON.stringify(permissions),
+      is_master: 0,
+      active,
+      updated_at: now
+    });
+
+    return json({ success: true, id }, 201);
   } catch (error) {
     if (safeErrorMessage(error).toLowerCase().includes("unique")) {
       throw new AppError(409, "Username tersebut sudah digunakan.", "create-user-duplicate");
@@ -1296,8 +1612,9 @@ async function createUser(request, db, master) {
   }
 }
 
-async function updateUser(request, db, master, targetId) {
+async function updateUser(request, env, master, targetId) {
   requireMaster(master);
+  const db = env.DB;
 
   const target = await db.prepare(
     "SELECT * FROM users WHERE id = ? LIMIT 1"
@@ -1323,6 +1640,11 @@ async function updateUser(request, db, master, targetId) {
     throw new AppError(400, "Password harus 6–128 karakter.", "update-user-password");
   }
 
+  const passwordHash = password
+    ? await hashPassword(password)
+    : target.password_hash;
+  const now = Date.now();
+
   try {
     await db.prepare(`
       UPDATE users
@@ -1332,10 +1654,10 @@ async function updateUser(request, db, master, targetId) {
     `).bind(
       username,
       normalizeUsername(username),
-      password ? await hashPassword(password) : target.password_hash,
+      passwordHash,
       JSON.stringify(permissions),
       active,
-      Date.now(),
+      now,
       targetId
     ).run();
 
@@ -1343,6 +1665,22 @@ async function updateUser(request, db, master, targetId) {
       await db.prepare("DELETE FROM sessions WHERE user_id = ?")
         .bind(targetId).run();
     }
+
+    if (
+      normalizeUsername(target.username) !==
+      normalizeUsername(username)
+    ) {
+      await safeDeleteAuthCacheUser(env, target.username);
+    }
+
+    await safeWriteAuthCacheUser(env, {
+      ...target,
+      username,
+      password_hash: passwordHash,
+      permissions: JSON.stringify(permissions),
+      active,
+      updated_at: now
+    });
 
     return json({ success: true });
   } catch (error) {
@@ -1353,11 +1691,12 @@ async function updateUser(request, db, master, targetId) {
   }
 }
 
-async function deleteUser(db, master, targetId) {
+async function deleteUser(env, master, targetId) {
   requireMaster(master);
+  const db = env.DB;
 
   const target = await db.prepare(
-    "SELECT is_master FROM users WHERE id = ? LIMIT 1"
+    "SELECT * FROM users WHERE id = ? LIMIT 1"
   ).bind(targetId).first();
 
   if (!target) {
@@ -1371,6 +1710,8 @@ async function deleteUser(db, master, targetId) {
     .bind(targetId).run();
   await db.prepare("DELETE FROM users WHERE id = ?")
     .bind(targetId).run();
+
+  await safeDeleteAuthCacheUser(env, target.username);
 
   return json({ success: true });
 }
@@ -5088,6 +5429,18 @@ function toBase64Url(bytes) {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/g, "");
+}
+
+function fromBase64Url(value) {
+  let normalized = String(value || "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  while (normalized.length % 4) {
+    normalized += "=";
+  }
+
+  return fromBase64(normalized);
 }
 
 function readCookie(header, name) {
