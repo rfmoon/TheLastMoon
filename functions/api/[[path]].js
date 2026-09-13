@@ -22,7 +22,7 @@ const MENUS = Object.freeze([
   { id: "user-admin", label: "User Admin", icon: "♙", masterOnly: true }
 ]);
 
-const VERSION = "v108-d1-daily-limit-fix";
+const VERSION = "v109-emergency-master-login-no-d1";
 const COOKIE_NAME = "thelastmoon_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 60000;
@@ -68,7 +68,7 @@ export async function onRequest(context) {
       /exceeded D1.*daily row read limit/i.test(safeDetail)
     ) {
       return json({
-        error: "Kuota baca D1 harian Cloudflare sudah habis. Sistem tetap aman; kuota reset sekitar 07:00 WIB.",
+        error: "Kuota baca D1 harian Cloudflare sudah habis. Master tetap bisa login lewat Emergency Login V109; fitur yang membutuhkan data D1 tetap menunggu quota tersedia.",
         stage: "d1-daily-read-limit",
         version: VERSION
       }, 503, externalHeaders);
@@ -93,14 +93,6 @@ async function routeRequest(request, env, url) {
     });
   }
 
-  if (!env.DB) {
-    throw new AppError(
-      500,
-      "Binding database belum ditemukan. Tambahkan D1 binding dengan nama DB.",
-      "binding"
-    );
-  }
-
   if (
     ["POST", "PUT", "PATCH", "DELETE"].includes(request.method) &&
     !url.pathname.startsWith("/api/external/")
@@ -111,9 +103,80 @@ async function routeRequest(request, env, url) {
     }
   }
 
-  await initializeDatabase(env);
+  // V109: login/logout/session Master diproses sebelum D1.
+  // Jadi Master tetap bisa masuk walaupun daily read D1 sudah habis.
+  if (url.pathname === "/api/session" && request.method === "GET") {
+    try {
+      const user = await getSessionUser(request, env);
+
+      return json({
+        authenticated: Boolean(user),
+        setupReady: true,
+        d1Limited: false,
+        user: user ? publicUser(user) : null,
+        menus: user ? menusForUser(user) : []
+      });
+    } catch (error) {
+      const detail = safeErrorMessage(error);
+
+      if (
+        /daily row read limit/i.test(detail) ||
+        /exceeded D1/i.test(detail)
+      ) {
+        return json({
+          authenticated: false,
+          setupReady: true,
+          d1Limited: true,
+          message:
+            "D1 sedang limit. Master masih bisa login memakai akun Master.",
+          user: null,
+          menus: []
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  // Login screen tetap bisa mendapat tampilan dasar walau D1 limit.
+  if (url.pathname === "/api/public-settings" && request.method === "GET") {
+    if (!env.DB) {
+      return json(defaultAppearance());
+    }
+
+    try {
+      return json(await readAppearance(env.DB));
+    } catch (error) {
+      const detail = safeErrorMessage(error);
+
+      if (
+        /daily row read limit/i.test(detail) ||
+        /exceeded D1/i.test(detail)
+      ) {
+        return json({
+          ...defaultAppearance(),
+          d1Limited: true
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  if (!env.DB) {
+    throw new AppError(
+      500,
+      "Binding database belum ditemukan. Tambahkan D1 binding dengan nama DB.",
+      "binding"
+    );
+  }
+
+  // Database site ini sudah terbentuk. Jangan paksa schema bootstrap
+  // pada setiap isolate/request karena saat quota D1 habis itu justru
+  // memblokir seluruh route.
 
   if (url.pathname === "/api/diagnostics" && request.method === "GET") {
+    await initializeDatabase(env);
     const userCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM users").first();
     const master = await env.DB.prepare(
       "SELECT id, username, active FROM users WHERE is_master = 1 LIMIT 1"
@@ -197,16 +260,6 @@ async function routeRequest(request, env, url) {
       "results:read"
     );
     return externalLotteryResults(env.DB, apiKey, url);
-  }
-
-  if (url.pathname === "/api/session" && request.method === "GET") {
-    const user = await getSessionUser(request, env);
-    return json({
-      authenticated: Boolean(user),
-      setupReady: true,
-      user: user ? publicUser(user) : null,
-      menus: user ? menusForUser(user) : []
-    });
   }
 
   if (url.pathname === "/api/login" && request.method === "POST") {
@@ -729,18 +782,78 @@ async function runSetupStep(stage, operation) {
 }
 
 async function login(request, env) {
-  const db = env.DB;
   const body = await readJson(request);
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
 
   if (!username || !password) {
-    throw new AppError(400, "Username dan password wajib diisi.", "login-input");
+    throw new AppError(
+      400,
+      "Username dan password wajib diisi.",
+      "login-input"
+    );
   }
 
-  const user = await db.prepare(
-    "SELECT * FROM users WHERE username_norm = ? LIMIT 1"
-  ).bind(normalizeUsername(username)).first();
+  // V109 Emergency Master:
+  // validasi langsung dari Cloudflare Secret/Variable,
+  // tanpa membaca D1 sama sekali.
+  if (masterCredentialsMatch(env, username, password)) {
+    const user = emergencyMasterUser(env);
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    const rawToken = await createEmergencyMasterToken(
+      env,
+      expiresAt
+    );
+
+    return json(
+      {
+        user: publicUser(user),
+        menus: menusForUser(user),
+        emergencyMode: true,
+        d1Limited: true
+      },
+      200,
+      {
+        "Set-Cookie": sessionCookie(
+          rawToken,
+          Math.floor(SESSION_TTL_MS / 1000)
+        )
+      }
+    );
+  }
+
+  if (!env.DB) {
+    throw new AppError(
+      503,
+      "Database sedang tidak tersedia. Login Master masih dapat digunakan.",
+      "login-db-unavailable"
+    );
+  }
+
+  // User biasa masih memakai data akun dari D1.
+  // Jika read quota D1 habis, akun biasa memang belum bisa diverifikasi.
+  let user;
+
+  try {
+    user = await env.DB.prepare(
+      "SELECT * FROM users WHERE username_norm = ? LIMIT 1"
+    ).bind(normalizeUsername(username)).first();
+  } catch (error) {
+    const detail = safeErrorMessage(error);
+
+    if (
+      /daily row read limit/i.test(detail) ||
+      /exceeded D1/i.test(detail)
+    ) {
+      throw new AppError(
+        503,
+        "Kuota baca D1 sedang habis. Untuk sementara hanya akun Master yang bisa login tanpa D1.",
+        "login-d1-read-limit"
+      );
+    }
+
+    throw error;
+  }
 
   const valid = Boolean(
     user &&
@@ -749,7 +862,11 @@ async function login(request, env) {
   );
 
   if (!valid) {
-    throw new AppError(401, "Username atau password salah.", "login-auth");
+    throw new AppError(
+      401,
+      "Username atau password salah.",
+      "login-auth"
+    );
   }
 
   const expiresAt = Date.now() + SESSION_TTL_MS;
@@ -760,7 +877,10 @@ async function login(request, env) {
   );
 
   return json(
-    { user: publicUser(user), menus: menusForUser(user) },
+    {
+      user: publicUser(user),
+      menus: menusForUser(user)
+    },
     200,
     {
       "Set-Cookie": sessionCookie(
@@ -769,6 +889,114 @@ async function login(request, env) {
       )
     }
   );
+}
+
+function masterCredentialsMatch(
+  env,
+  username,
+  password
+) {
+  const masterUsername = String(
+    env.MASTER_USERNAME || ""
+  ).trim();
+
+  const masterPassword = String(
+    env.MASTER_PASSWORD || ""
+  );
+
+  if (
+    !masterUsername ||
+    !masterPassword ||
+    normalizeUsername(username) !==
+      normalizeUsername(masterUsername)
+  ) {
+    return false;
+  }
+
+  const left = new TextEncoder().encode(password);
+  const right = new TextEncoder().encode(masterPassword);
+
+  return constantTimeEqual(left, right);
+}
+
+function emergencyMasterUser(env) {
+  return {
+    id: -1,
+    username: String(
+      env.MASTER_USERNAME || "master"
+    ).trim() || "master",
+    permissions: JSON.stringify(
+      assignableMenuIds()
+    ),
+    is_master: 1,
+    active: 1
+  };
+}
+
+async function createEmergencyMasterToken(
+  env,
+  expiresAt
+) {
+  const nonce = randomToken(12);
+
+  const payload = [
+    "v109m",
+    String(Number(expiresAt)),
+    nonce
+  ].join(".");
+
+  const signature = await sessionHmac(
+    sessionSigningSecret(env),
+    payload
+  );
+
+  return `${payload}.${signature}`;
+}
+
+async function verifyEmergencyMasterToken(
+  env,
+  token
+) {
+  const parts = String(token || "").split(".");
+
+  if (
+    parts.length !== 4 ||
+    parts[0] !== "v109m"
+  ) {
+    return null;
+  }
+
+  const expiresAt = Number(parts[1]);
+  const nonce = parts[2];
+  const suppliedSignature = parts[3];
+
+  if (
+    !Number.isFinite(expiresAt) ||
+    expiresAt <= Date.now() ||
+    !nonce ||
+    !suppliedSignature
+  ) {
+    return null;
+  }
+
+  const payload = parts.slice(0, 3).join(".");
+  const expectedSignature = await sessionHmac(
+    sessionSigningSecret(env),
+    payload
+  );
+
+  const left = new TextEncoder().encode(
+    suppliedSignature
+  );
+  const right = new TextEncoder().encode(
+    expectedSignature
+  );
+
+  if (!constantTimeEqual(left, right)) {
+    return null;
+  }
+
+  return emergencyMasterUser(env);
 }
 
 async function logout(request, env) {
@@ -780,7 +1008,11 @@ async function logout(request, env) {
     COOKIE_NAME
   );
 
-  if (token && !token.startsWith("v108.")) {
+  if (
+    token &&
+    !token.startsWith("v108.") &&
+    !token.startsWith("v109m.")
+  ) {
     try {
       await env.DB.prepare(
         "DELETE FROM sessions WHERE token_hash = ?"
@@ -799,7 +1031,6 @@ async function logout(request, env) {
 }
 
 async function getSessionUser(request, env) {
-  const db = env.DB;
   const token = readCookie(
     request.headers.get("Cookie"),
     COOKIE_NAME
@@ -807,7 +1038,19 @@ async function getSessionUser(request, env) {
 
   if (!token) return null;
 
-  // V108 signed stateless cookie.
+  // V109 Master session: tidak menyentuh D1.
+  if (token.startsWith("v109m.")) {
+    return verifyEmergencyMasterToken(
+      env,
+      token
+    );
+  }
+
+  if (!env.DB) return null;
+  const db = env.DB;
+
+  // V108 signed stateless cookie lama.
+  // Masih butuh 1 read D1 karena token lama hanya menyimpan userId.
   if (token.startsWith("v108.")) {
     const payload = await verifySignedSessionToken(
       env,
@@ -827,8 +1070,7 @@ async function getSessionUser(request, env) {
     return user || null;
   }
 
-  // Fallback untuk cookie session versi lama supaya user yang sudah login
-  // tidak langsung terputus saat deploy V108.
+  // Fallback cookie versi lama.
   const now = Date.now();
   const tokenHash = await sha256(token);
 
@@ -1184,6 +1426,17 @@ async function updateBackground(request, db, user) {
     slideSeconds,
     dashboardAnimationUrl
   });
+}
+
+function defaultAppearance() {
+  return {
+    backgroundUrls: [],
+    backgroundUrl: "",
+    overlay: 58,
+    blur: 2,
+    slideSeconds: 8,
+    dashboardAnimationUrl: ""
+  };
 }
 
 async function readAppearance(db) {
