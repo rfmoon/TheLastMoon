@@ -8,8 +8,7 @@ const state = {
     backgroundUrl: "",
     overlay: 58,
     blur: 2,
-    slideSeconds: 8,
-    dashboardAnimationUrl: ""
+    slideSeconds: 8
   },
   pendingConfirm: null
 };
@@ -93,8 +92,7 @@ function normalizeAppearance(value = {}) {
     backgroundUrl: backgroundUrls[0] || "",
     overlay: Math.min(90, Math.max(20, Number(value.overlay ?? 58))),
     blur: Math.min(20, Math.max(0, Number(value.blur ?? 2))),
-    slideSeconds: Math.min(60, Math.max(3, Number(value.slideSeconds ?? 8))),
-    dashboardAnimationUrl: String(value.dashboardAnimationUrl || "").trim()
+    slideSeconds: Math.min(60, Math.max(3, Number(value.slideSeconds ?? 8)))
   };
 }
 
@@ -335,42 +333,20 @@ async function navigate(menuId) {
   if (menuId === "xpay-checker") return renderXpaySettlementCheckerWorkspace(menu);
   if (menuId === "xpay-diff") return renderXpayWorkspace(menu);
   if (menuId === "pencairan-xpay") return renderPencairanXpayWorkspace(menu);
+  if (menuId === "xpay-cutoff") return renderXpayCutoffWorkspace(menu);
   if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
   if (menuId === "ai-chat") return renderMemoWorkspace(menu);
   if (menuId === "list-data") return renderGenerateBuktiWorkspace(menu);
-  if (menuId === "hasil-result") return renderHasilResultWorkspace(menu);
-  if (menuId === "upload") return renderPrediksiWorkspace(menu);
-  if (menuId === "hadiah-togel") return renderHadiahTogelWorkspace(menu);
   return renderModule(menu);
 }
 
 function renderDashboard() {
-  const animationUrl = String(
-    state.appearance.dashboardAnimationUrl || ""
-  ).trim();
-
   $("#pageContent").innerHTML = `
     <section class="hero glass dashboard-simple">
       <div>
         <span class="kicker">WELCOME BACK</span>
         <h1>Halo, ${escapeHtml(state.user.username)} 👋</h1>
       </div>
-    </section>
-
-    <section class="dashboard-animation-stage ${animationUrl ? "has-media" : "no-media"}">
-      ${
-        animationUrl
-          ? `<img
-              class="dashboard-animation-media"
-              src="${escapeAttribute(animationUrl)}"
-              alt="Dashboard animation"
-              referrerpolicy="no-referrer">`
-          : `<div class="dashboard-animation-empty">
-              <span>◐</span>
-              <strong>Dashboard Animation</strong>
-              <small>GIF / gambar dapat diatur oleh Master melalui Settings.</small>
-            </div>`
-      }
     </section>`;
 }
 
@@ -424,7 +400,7 @@ async function renderCheckerBankWorkspace(menu) {
 
         <iframe
           class="xpay-frame checker-bank-frame"
-          src="/checker-bank.html?v=76.0.0"
+          src="/checker-bank.html?v=48.0.0"
           title="Checker BANK"
           loading="eager"
           referrerpolicy="strict-origin-when-cross-origin">
@@ -483,8 +459,40 @@ async function renderPencairanXpayWorkspace(menu) {
 
         <iframe
           class="xpay-frame pencairan-xpay-frame"
-          src="/pencairan-xpay.html?v=55.0.0"
+          src="/pencairan-xpay.html?v=47.0.0"
           title="Pencairan XPAY"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
+
+
+
+async function renderXpayCutoffWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    const data = await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="xpay-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">XPAY CUTOFF</span>
+            <h3>Xpay Cutoff</h3>
+            <p>${escapeHtml(data.message)} File diproses langsung di browser tanpa disimpan ke database.</p>
+          </div>
+          <span class="xpay-workspace-badge">PAYMENT • SUCCESS • CUTOFF</span>
+        </header>
+
+        <iframe
+          class="xpay-frame"
+          src="/xpay-cutoff.html?v=111.0.0"
+          title="Xpay Cutoff"
           loading="eager"
           referrerpolicy="same-origin">
         </iframe>
@@ -587,83 +595,6 @@ async function renderGenerateBuktiWorkspace(menu){
 }
 
 
-async function renderHasilResultWorkspace(menu){
-  $("#pageContent").innerHTML=loadingHtml();
-
-  try{
-    const data=await api(
-      `/api/module/${encodeURIComponent(menu.id)}`
-    );
-
-    $("#pageContent").innerHTML=`
-      <section class="xpay-workspace hasil-result-workspace">
-        <header class="xpay-workspace-head">
-          <div>
-            <span class="kicker">LIVE RESULT DATABASE</span>
-            <h3>Hasil Result</h3>
-            <p>${escapeHtml(data.message)} Data masuk dari Extension Luna melalui API khusus Result.</p>
-          </div>
-          <span class="xpay-workspace-badge">EXTENSION • API • D1</span>
-        </header>
-
-        <iframe
-          class="xpay-frame hasil-result-frame"
-          src="/hasil-result.html?v=66.0.0"
-          title="Hasil Result"
-          loading="eager"
-          referrerpolicy="same-origin">
-        </iframe>
-      </section>`;
-  }catch(error){
-    $("#pageContent").innerHTML=errorHtml(error.message);
-  }
-}
-
-
-async function renderPrediksiWorkspace(menu) {
-  $("#pageContent").innerHTML = loadingHtml();
-
-  try {
-    await api(`/api/module/${encodeURIComponent(menu.id)}`);
-
-    $("#pageContent").innerHTML = `
-      <section class="prediksi-workspace">
-        <iframe
-          class="prediksi-frame"
-          src="/prediksi.html?v=93.0.0"
-          title="Prediksi"
-          loading="eager"
-          referrerpolicy="same-origin">
-        </iframe>
-      </section>`;
-  } catch (error) {
-    $("#pageContent").innerHTML = errorHtml(error.message);
-  }
-}
-
-
-async function renderHadiahTogelWorkspace(menu) {
-  $("#pageContent").innerHTML = loadingHtml();
-
-  try {
-    await api(`/api/module/${encodeURIComponent(menu.id)}`);
-
-    $("#pageContent").innerHTML = `
-      <section class="prediksi-workspace">
-        <iframe
-          class="prediksi-frame"
-          src="/hadiah-togel.html?v=96.0.0"
-          title="Hadiah Togel & Perhitungan"
-          loading="eager"
-          referrerpolicy="same-origin">
-        </iframe>
-      </section>`;
-  } catch (error) {
-    $("#pageContent").innerHTML = errorHtml(error.message);
-  }
-}
-
-
 async function renderModule(menu) {
   $("#pageContent").innerHTML = loadingHtml();
 
@@ -746,10 +677,6 @@ async function renderGenerateApi() {
             <button id="generateApiButton" class="btn btn-primary btn-full" type="submit">
               ⌘ Generate Universal API Key
             </button>
-
-            <button id="generateResultApiButton" class="btn btn-secondary btn-full" type="button">
-              ◎ Generate API Extension Result
-            </button>
           </form>
 
           <div id="generatedApiBox" class="generated-api-box hidden">
@@ -781,14 +708,6 @@ async function renderGenerateApi() {
               <code>${escapeHtml(origin)}/api/external/all</code>
               <button class="row-btn" type="button"
                       data-copy-api="${escapeAttribute(origin)}/api/external/all">
-                ⧉
-              </button>
-            </div>
-            <div class="api-endpoint-row universal-endpoint">
-              <span class="api-method">POST</span>
-              <code>${escapeHtml(origin)}/api/external/results</code>
-              <button class="row-btn" type="button"
-                      data-copy-api="${escapeAttribute(origin)}/api/external/results">
                 ⧉
               </button>
             </div>
@@ -858,7 +777,6 @@ async function renderGenerateApi() {
       </section>`;
 
     $("#apiKeyForm").addEventListener("submit", generateApiKey);
-    $("#generateResultApiButton").addEventListener("click", generateResultApiKey);
     $("#refreshApiKeys").addEventListener("click", renderGenerateApi);
 
     $$("[data-copy-api]").forEach(button => {
@@ -889,19 +807,14 @@ function apiKeyRows(keys) {
     const expired = key.expiresAt && Number(key.expiresAt) <= Date.now();
     const active = key.active && !expired;
     const universal = (key.scopes || []).includes("all:read");
-    const resultWriter = (key.scopes || []).includes("results:write");
 
     return `
       <tr>
         <td><strong>${escapeHtml(key.name)}</strong></td>
         <td><code>${escapeHtml(key.tokenPrefix)}…</code></td>
         <td>
-          <span class="badge ${universal ? "green" : resultWriter ? "purple" : "purple"}">
-            ${universal
-              ? "SEMUA • READ ONLY"
-              : resultWriter
-                ? "HASIL RESULT • READ/WRITE"
-                : "LEGACY"}
+          <span class="badge ${universal ? "green" : "purple"}">
+            ${universal ? "SEMUA • READ ONLY" : "LEGACY"}
           </span>
         </td>
         <td>
@@ -962,71 +875,6 @@ async function generateApiKey(event) {
     setBusy(button, false);
   }
 }
-
-async function generateResultApiKey(){
-  const button=$("#generateResultApiButton");
-
-  setBusy(
-    button,
-    true,
-    "Membuat API Result..."
-  );
-
-  try{
-    const name=
-      $("#apiKeyName").value.trim() ||
-      "Luna Result Extension";
-
-    const data=await api(
-      "/api/api-keys",
-      {
-        method:"POST",
-        body:{
-          name,
-          expiresDays:
-            Number($("#apiKeyExpiry").value),
-          kind:"result-extension"
-        }
-      }
-    );
-
-    $("#generatedApiToken").textContent=
-      data.token;
-
-    $("#generatedApiBox").classList.remove(
-      "hidden"
-    );
-
-    $("#copyGeneratedApi").onclick=()=>{
-      copyApiText(data.token);
-    };
-
-    showMessage(
-      "#apiGeneratorMessage",
-      "API Extension Result berhasil dibuat. Tempel key ini di popup Extension Luna Result.",
-      true
-    );
-
-    const list=await api("/api/api-keys");
-    $("#apiKeyRows").innerHTML=
-      apiKeyRows(list.keys);
-
-    bindApiRevokeButtons();
-
-    toast(
-      "API Extension Result berhasil dibuat.",
-      "ok"
-    );
-  }catch(error){
-    showMessage(
-      "#apiGeneratorMessage",
-      error.message
-    );
-  }finally{
-    setBusy(button,false);
-  }
-}
-
 
 function bindApiRevokeButtons() {
   $$("[data-revoke-api]").forEach(button => {
@@ -1271,63 +1119,6 @@ async function renderSettings() {
             <div class="help-item"><b>3</b><div><strong>Berlaku untuk semua</strong><small>Login page dan halaman dashboard seluruh akun ikut menggunakan tampilan ini.</small></div></div>
           </div>
         </article>
-
-        <article class="setting-card dashboard-animation-setting-card">
-          <span class="eyebrow">DASHBOARD ANIMATION</span>
-          <h3>GIF / Gambar Dashboard</h3>
-          <p>Media ini tampil pada area besar di bawah ucapan Halo pada Dashboard. GIF tetap bergerak dan otomatis diperkecil/dibesarkan secara proporsional agar seluruh gambar terlihat penuh tanpa terpotong.</p>
-
-          <form id="dashboardAnimationForm">
-            <label>Link GIF / gambar HTTPS
-              <input
-                id="dashboardAnimationLink"
-                type="url"
-                placeholder="https://domain.com/animasi.gif"
-                value="${escapeAttribute(state.appearance.dashboardAnimationUrl || "")}">
-            </label>
-
-            <div class="background-upload-box dashboard-animation-upload-box">
-              <div class="background-upload-copy">
-                <strong>Upload GIF / Gambar Dashboard</strong>
-                <small>GIF, JPG, PNG, WebP • maksimal 1.7 MB • ukuran otomatis menyesuaikan kolom Dashboard • tidak dipotong</small>
-              </div>
-
-              <input
-                id="dashboardAnimationFile"
-                class="background-file-input"
-                type="file"
-                accept="image/gif,image/jpeg,image/png,image/webp">
-
-              <button
-                id="uploadDashboardAnimation"
-                class="btn btn-secondary"
-                type="button">
-                Upload File
-              </button>
-            </div>
-
-            <div id="dashboardAnimationUploadMessage" class="message hidden"></div>
-
-            <div class="dashboard-animation-preview">
-              <img
-                id="dashboardAnimationPreview"
-                alt="Preview Dashboard GIF"
-                referrerpolicy="no-referrer"
-                ${state.appearance.dashboardAnimationUrl ? `src="${escapeAttribute(state.appearance.dashboardAnimationUrl)}"` : ""}>
-              <div id="dashboardAnimationPreviewEmpty" class="${state.appearance.dashboardAnimationUrl ? "hidden" : ""}">
-                Belum ada GIF / gambar Dashboard.
-              </div>
-            </div>
-
-            <div class="setting-actions">
-              <button id="previewDashboardAnimation" class="btn btn-secondary" type="button">Preview</button>
-              <button id="saveDashboardAnimation" class="btn btn-primary" type="submit">Simpan Dashboard</button>
-              <button id="resetDashboardAnimation" class="btn btn-ghost" type="button">Hapus</button>
-            </div>
-
-            <div id="dashboardAnimationMessage" class="message hidden"></div>
-          </form>
-        </article>
       </section>`;
 
     $("#previewBackground").addEventListener("click", previewAppearance);
@@ -1338,14 +1129,6 @@ async function renderSettings() {
     $("#blurInput").addEventListener("input", updatePreviewControls);
     $("#slideInput").addEventListener("input", updatePreviewControls);
     $("#backgroundLinks").addEventListener("input", updatePreviewControls);
-
-    $("#dashboardAnimationForm").addEventListener("submit", saveDashboardAnimation);
-    $("#previewDashboardAnimation").addEventListener("click", previewDashboardAnimation);
-    $("#resetDashboardAnimation").addEventListener("click", resetDashboardAnimation);
-    $("#uploadDashboardAnimation").addEventListener("click", uploadDashboardAnimationFile);
-    $("#dashboardAnimationLink").addEventListener("input", () => {
-      hideMessage("#dashboardAnimationMessage");
-    });
   } catch (error) {
     $("#pageContent").innerHTML = errorHtml(error.message);
   }
@@ -1585,282 +1368,6 @@ async function resetAppearance() {
     showMessage("#backgroundMessage", error.message);
   }
 }
-
-
-function normalizeDashboardAnimationUrl(value) {
-  return String(value || "").trim();
-}
-
-function validateDashboardAnimationUrl(value) {
-  const raw = normalizeDashboardAnimationUrl(value);
-
-  if (!raw) return "";
-
-  if (raw.startsWith("/api/dashboard-media")) {
-    return raw;
-  }
-
-  let parsed;
-
-  try {
-    parsed = new URL(raw);
-  } catch (_) {
-    throw new Error("Link GIF / gambar Dashboard tidak valid.");
-  }
-
-  if (parsed.protocol !== "https:") {
-    throw new Error("Link Dashboard wajib menggunakan HTTPS.");
-  }
-
-  return raw;
-}
-
-function showDashboardAnimationPreview(url) {
-  const preview = $("#dashboardAnimationPreview");
-  const empty = $("#dashboardAnimationPreviewEmpty");
-
-  if (!preview || !empty) return;
-
-  if (!url) {
-    preview.removeAttribute("src");
-    preview.classList.remove("active");
-    empty.classList.remove("hidden");
-    return;
-  }
-
-  empty.classList.add("hidden");
-  preview.classList.remove("active");
-
-  preview.onload = () => {
-    preview.classList.add("active");
-    hideMessage("#dashboardAnimationMessage");
-  };
-
-  preview.onerror = () => {
-    preview.classList.remove("active");
-    showMessage(
-      "#dashboardAnimationMessage",
-      "Preview gagal dimuat. Pastikan link GIF / gambar dapat dibuka secara publik."
-    );
-  };
-
-  preview.src = url;
-}
-
-function previewDashboardAnimation() {
-  try {
-    const url = validateDashboardAnimationUrl(
-      $("#dashboardAnimationLink").value
-    );
-
-    showDashboardAnimationPreview(url);
-
-    if (url) {
-      showMessage(
-        "#dashboardAnimationMessage",
-        "Preview Dashboard aktif. Tekan Simpan Dashboard agar berlaku untuk semua akun.",
-        true
-      );
-    } else {
-      hideMessage("#dashboardAnimationMessage");
-    }
-  } catch (error) {
-    showMessage("#dashboardAnimationMessage", error.message);
-  }
-}
-
-async function uploadDashboardAnimationFile() {
-  const input = $("#dashboardAnimationFile");
-  const button = $("#uploadDashboardAnimation");
-  const file = input?.files?.[0];
-
-  hideMessage("#dashboardAnimationUploadMessage");
-
-  if (!file) {
-    showMessage(
-      "#dashboardAnimationUploadMessage",
-      "Pilih file GIF atau gambar terlebih dahulu."
-    );
-    return;
-  }
-
-  const allowed = new Set([
-    "image/gif",
-    "image/jpeg",
-    "image/png",
-    "image/webp"
-  ]);
-
-  if (!allowed.has(file.type)) {
-    showMessage(
-      "#dashboardAnimationUploadMessage",
-      "Format file harus GIF, JPG, PNG, atau WebP."
-    );
-    return;
-  }
-
-  if (file.size > 1700000) {
-    showMessage(
-      "#dashboardAnimationUploadMessage",
-      "Ukuran file maksimal 1.7 MB."
-    );
-    return;
-  }
-
-  setBusy(button, true, "Uploading...");
-
-  try {
-    const response = await fetch(
-      "/api/settings/dashboard-animation-upload",
-      {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": file.type,
-          "X-Dashboard-Filename": encodeURIComponent(file.name)
-        },
-        body: file,
-        cache: "no-store"
-      }
-    );
-
-    const raw = await response.text();
-    let data = {};
-
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      data = {
-        error: `Upload tidak mengirim JSON (HTTP ${response.status}).`
-      };
-    }
-
-    if (response.status === 401) {
-      state.user = null;
-      showLogin(true);
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        `Upload gagal (HTTP ${response.status}).`
-      );
-    }
-
-    $("#dashboardAnimationLink").value = data.url || "";
-    input.value = "";
-
-    showDashboardAnimationPreview(data.url || "");
-
-    showMessage(
-      "#dashboardAnimationUploadMessage",
-      `${file.name} berhasil diupload. Tekan "Simpan Dashboard" agar berlaku untuk semua akun.`,
-      true
-    );
-  } catch (error) {
-    showMessage(
-      "#dashboardAnimationUploadMessage",
-      error.message
-    );
-  } finally {
-    setBusy(button, false);
-  }
-}
-
-async function saveDashboardAnimation(event) {
-  event.preventDefault();
-
-  const button = $("#saveDashboardAnimation");
-  setBusy(button, true, "Menyimpan...");
-
-  try {
-    const dashboardAnimationUrl =
-      validateDashboardAnimationUrl(
-        $("#dashboardAnimationLink").value
-      );
-
-    const data = await api(
-      "/api/settings/dashboard-animation",
-      {
-        method: "PUT",
-        body: { dashboardAnimationUrl }
-      }
-    );
-
-    state.appearance.dashboardAnimationUrl =
-      String(data.dashboardAnimationUrl || "").trim();
-
-    $("#dashboardAnimationLink").value =
-      state.appearance.dashboardAnimationUrl;
-
-    showDashboardAnimationPreview(
-      state.appearance.dashboardAnimationUrl
-    );
-
-    showMessage(
-      "#dashboardAnimationMessage",
-      "GIF / gambar Dashboard berhasil disimpan untuk semua akun.",
-      true
-    );
-
-    toast(
-      "Animasi Dashboard berhasil diperbarui.",
-      "ok"
-    );
-  } catch (error) {
-    showMessage(
-      "#dashboardAnimationMessage",
-      error.message
-    );
-  } finally {
-    setBusy(button, false);
-  }
-}
-
-async function resetDashboardAnimation() {
-  const button = $("#resetDashboardAnimation");
-
-  setBusy(button, true, "Menghapus...");
-
-  try {
-    const data = await api(
-      "/api/settings/dashboard-animation",
-      {
-        method: "PUT",
-        body: { dashboardAnimationUrl: "" }
-      }
-    );
-
-    state.appearance.dashboardAnimationUrl =
-      String(data.dashboardAnimationUrl || "");
-
-    $("#dashboardAnimationLink").value = "";
-    if ($("#dashboardAnimationFile")) {
-      $("#dashboardAnimationFile").value = "";
-    }
-
-    showDashboardAnimationPreview("");
-
-    showMessage(
-      "#dashboardAnimationMessage",
-      "Media Dashboard dihapus. Dashboard kembali tanpa animasi khusus.",
-      true
-    );
-
-    toast(
-      "Animasi Dashboard dihapus.",
-      "ok"
-    );
-  } catch (error) {
-    showMessage(
-      "#dashboardAnimationMessage",
-      error.message
-    );
-  } finally {
-    setBusy(button, false);
-  }
-}
-
 
 async function changePassword(event) {
   event.preventDefault();
