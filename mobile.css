@@ -1,0 +1,423 @@
+/* =========================================================
+   TheLastMoon V112 — MOBILE RESPONSIVE
+   Berlaku otomatis di dashboard utama + semua iframe internal.
+   Desktop >= 901px tidak diubah.
+========================================================= */
+
+@media (max-width: 900px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    min-width: 0;
+  }
+
+  img,
+  svg,
+  canvas,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    max-width: 100%;
+    font-size: 16px;
+  }
+
+  input[type="file"] {
+    width: 100%;
+  }
+
+  button,
+  .btn,
+  .row-btn,
+  .menu-item,
+  .submenu-item,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ===== MAIN DASHBOARD SHELL ===== */
+  .app-main {
+    width: 100% !important;
+    margin-left: 0 !important;
+    padding: 8px !important;
+  }
+
+  .page-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 10px 0 18px !important;
+  }
+
+  .topbar {
+    width: 100% !important;
+    height: 64px !important;
+    padding: 0 10px !important;
+    gap: 8px !important;
+    border-radius: 18px !important;
+  }
+
+  .topbar h2 {
+    max-width: 52vw;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 17px !important;
+  }
+
+  .account-chip {
+    min-width: 42px !important;
+  }
+
+  .sidebar {
+    width: min(86vw, 310px) !important;
+    max-width: 310px !important;
+    inset: 6px auto 6px 6px !important;
+    border-radius: 22px !important;
+  }
+
+  .side-scroll {
+    padding-bottom: 96px !important;
+  }
+
+  .menu-item,
+  .submenu-item {
+    min-height: 44px !important;
+  }
+
+  .submenu {
+    margin-left: 14px !important;
+    padding-left: 9px !important;
+  }
+
+  .hero,
+  .dashboard-simple,
+  .module-card,
+  .content-card,
+  .setting-card,
+  .xpay-workspace {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px !important;
+  }
+
+  .hero,
+  .dashboard-simple {
+    min-height: 118px !important;
+    padding: 18px !important;
+  }
+
+  .hero h1,
+  .dashboard-simple h1 {
+    font-size: clamp(27px, 8vw, 38px) !important;
+    line-height: 1.08 !important;
+  }
+
+  .module-card,
+  .setting-card {
+    padding: 15px !important;
+  }
+
+  .module-head {
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .module-icon {
+    width: 52px !important;
+    height: 52px !important;
+    flex: 0 0 52px !important;
+  }
+
+  .module-head h3 {
+    font-size: 20px !important;
+  }
+
+  .stats-grid,
+  .quick-grid,
+  .settings-grid,
+  .form-grid,
+  .permission-grid,
+  .api-generator-grid,
+  .universal-api-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stats-grid,
+  .quick-grid {
+    gap: 9px !important;
+  }
+
+  .stat-card,
+  .quick-card {
+    min-height: auto !important;
+    padding: 15px !important;
+    border-radius: 18px !important;
+  }
+
+  .section-head,
+  .toolbar,
+  .permission-box > header,
+  .setting-actions,
+  .modal-actions,
+  .xpay-workspace-head,
+  .background-upload-box {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .section-head {
+    gap: 6px !important;
+  }
+
+  .toolbar {
+    gap: 9px !important;
+  }
+
+  .toolbar .btn,
+  .setting-actions .btn,
+  .modal-actions .btn,
+  .background-upload-box .btn {
+    width: 100% !important;
+  }
+
+  .xpay-workspace-head {
+    padding: 13px !important;
+  }
+
+  .xpay-workspace-badge {
+    width: 100%;
+    text-align: center;
+    white-space: normal !important;
+  }
+
+  .xpay-frame,
+  .generate-bukti-frame,
+  iframe {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    border: 0;
+  }
+
+  .xpay-frame {
+    height: calc(100dvh - 124px) !important;
+    min-height: 640px !important;
+  }
+
+  .generate-bukti-frame {
+    min-height: calc(100dvh - 150px) !important;
+  }
+
+  /* ===== FORMS ===== */
+  label {
+    max-width: 100%;
+  }
+
+  input,
+  textarea,
+  select {
+    width: 100% !important;
+  }
+
+  textarea {
+    min-height: 110px;
+  }
+
+  .actions,
+  .controls,
+  .filters,
+  .filter-row,
+  .button-row,
+  .form-actions,
+  .action-row,
+  .input-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .actions > button,
+  .controls > button,
+  .button-row > button,
+  .form-actions > button,
+  .action-row > button {
+    flex: 1 1 150px;
+    min-height: 44px;
+  }
+
+  /* ===== TABLES ===== */
+  .table-wrap,
+  .tablebox,
+  .table-box,
+  .table-container,
+  .table-responsive,
+  .results-table,
+  .result-table-wrap,
+  .list-wrap,
+  .data-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    max-width: none !important;
+    font-size: 11px !important;
+  }
+
+  th,
+  td {
+    padding: 9px 8px !important;
+    white-space: nowrap;
+  }
+
+  /* ===== MODALS ===== */
+  .modal {
+    align-items: flex-end !important;
+    padding: 8px !important;
+  }
+
+  .modal-card,
+  .modal-card.wide,
+  .modal-card.compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88dvh !important;
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+
+  .toast-area {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+  }
+
+  .toast {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* ===== GENERIC INTERNAL TOOL PAGES / IFRAMES ===== */
+  .wrap,
+  .container,
+  .main,
+  .content,
+  .page,
+  .workspace,
+  .app,
+  .shell {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .wrap,
+  .container {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .panel,
+  .card,
+  .box,
+  .result-box,
+  .upload-box,
+  .input-box,
+  .calculator,
+  .editor-card {
+    max-width: 100% !important;
+  }
+
+  .cards,
+  .grid,
+  .card-grid,
+  .result-grid,
+  .summary-grid,
+  .stats,
+  .stats-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  pre,
+  code {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-main {
+    padding: 5px !important;
+  }
+
+  .topbar {
+    height: 58px !important;
+    border-radius: 15px !important;
+  }
+
+  .topbar h2 {
+    max-width: 48vw;
+    font-size: 15px !important;
+  }
+
+  .hero,
+  .dashboard-simple,
+  .module-card,
+  .setting-card,
+  .xpay-workspace {
+    border-radius: 17px !important;
+  }
+
+  .hero,
+  .dashboard-simple,
+  .module-card,
+  .setting-card {
+    padding: 13px !important;
+  }
+
+  .stat-card strong {
+    font-size: 24px !important;
+  }
+
+  .btn {
+    min-height: 44px !important;
+  }
+
+  .row-actions {
+    flex-wrap: wrap;
+  }
+
+  .row-btn {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .xpay-frame {
+    min-height: 610px !important;
+  }
+}

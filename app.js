@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", boot);
 
 async function boot() {
   bindEvents();
+  installMobileDashboardSupport();
   await loadPublicSettings();
   await restoreSession();
 }
@@ -69,6 +70,58 @@ function bindEvents() {
     });
   });
 }
+
+
+function installMobileDashboardSupport() {
+  const root = document.getElementById("pageContent") || document.body;
+
+  const enhanceFrame = frame => {
+    if (!frame || frame.dataset.mobileReady === "1") return;
+    frame.dataset.mobileReady = "1";
+
+    const apply = () => {
+      try {
+        const doc = frame.contentDocument;
+        if (!doc || !doc.head) return;
+
+        if (!doc.querySelector('meta[name="viewport"]')) {
+          const meta = doc.createElement("meta");
+          meta.name = "viewport";
+          meta.content = "width=device-width, initial-scale=1, viewport-fit=cover";
+          doc.head.appendChild(meta);
+        }
+
+        if (!doc.querySelector('link[data-tlm-mobile="1"]')) {
+          const link = doc.createElement("link");
+          link.rel = "stylesheet";
+          link.href = "/mobile.css?v=112.0.0";
+          link.dataset.tlmMobile = "1";
+          doc.head.appendChild(link);
+        }
+
+        doc.documentElement.classList.add("tlm-mobile-ready");
+      } catch (_) {
+        // Iframe eksternal/cross-origin dibiarkan apa adanya.
+      }
+    };
+
+    frame.addEventListener("load", apply);
+    apply();
+  };
+
+  const scan = () => {
+    root.querySelectorAll("iframe").forEach(enhanceFrame);
+  };
+
+  scan();
+
+  const observer = new MutationObserver(scan);
+  observer.observe(root, {
+    childList: true,
+    subtree: true
+  });
+}
+
 
 async function loadPublicSettings() {
   try {
