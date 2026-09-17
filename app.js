@@ -544,7 +544,7 @@ async function renderXpayCutoffWorkspace(menu) {
 
         <iframe
           class="xpay-frame"
-          src="/xpay-cutoff.html?v=111.0.0"
+          src="/xpay-cutoff.html?v=113.0.0"
           title="Xpay Cutoff"
           loading="eager"
           referrerpolicy="same-origin">

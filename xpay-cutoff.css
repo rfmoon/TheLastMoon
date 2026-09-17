@@ -1,0 +1,69 @@
+:root{
+    --bg:#0b1020; --panel:#131a2d; --panel2:#0f1628; --line:#26324d;
+    --text:#eef3ff; --muted:#9eabc7; --accent:#7c9cff; --ok:#56d39b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.45 Arial,Helvetica,sans-serif
+  }
+  .wrap{max-width:1180px;margin:24px auto;padding:0 16px}
+  h1{font-size:23px;margin:0 0 6px}
+  .sub{color:var(--muted);margin-bottom:16px}
+  .panel{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:14px;margin-bottom:14px
+  }
+  label{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}
+  input,button{font:inherit}
+  input[type="file"]{
+    width:100%;background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);border-radius:10px;padding:12px
+  }
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button{
+    border:0;border-radius:9px;padding:10px 14px;
+    font-weight:700;cursor:pointer
+  }
+  .primary{background:var(--accent);color:white}
+  .secondary{background:#24314e;color:#eaf1ff}
+  .danger{background:#3a2430;color:#ffd8e3}
+  .cards{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    gap:10px;margin:14px 0
+  }
+  .card{
+    background:var(--panel2);border:1px solid var(--line);
+    border-radius:12px;padding:14px
+  }
+  .card small{display:block;color:var(--muted);margin-bottom:4px}
+  .card strong{font-size:21px}
+  .ok{color:var(--ok)}
+  .note{color:var(--muted);font-size:12px}
+  .statusline{margin-top:9px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{
+    border-bottom:1px solid var(--line);
+    padding:8px 7px;text-align:left;white-space:nowrap
+  }
+  th{position:sticky;top:0;background:#18223a}
+  .tablebox{
+    max-height:430px;overflow:auto;
+    border:1px solid var(--line);border-radius:10px
+  }
+  .empty{padding:22px;color:var(--muted);text-align:center}
+  @media(max-width:800px){.cards{grid-template-columns:1fr}}
+
+.table-head{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  margin-bottom:10px;
+}
+@media(max-width:800px){
+  .table-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
