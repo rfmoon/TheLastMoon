@@ -14,12 +14,46 @@ function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function migrateLainnyaDigitLabels(overrides) {
+  if (!overrides || typeof overrides !== "object") return overrides || {};
+
+  const rename = {
+    "COLOK BEBAS (2)": "COLOK BEBAS (2 Digit)",
+    "COLOK BEBAS (3)": "COLOK BEBAS (3 Digit)",
+    "COLOK BEBAS (4)": "COLOK BEBAS (4 Digit)",
+
+    "COLOK BEBAS 2D (2)": "COLOK BEBAS 2D (2 Digit)",
+    "COLOK BEBAS 2D (3)": "COLOK BEBAS 2D (3 Digit)",
+    "COLOK BEBAS 2D (4)": "COLOK BEBAS 2D (4 Digit)",
+
+    "COLOK NAGA (3)": "COLOK NAGA (3 Digit)",
+    "COLOK NAGA (4)": "COLOK NAGA (4 Digit)"
+  };
+
+  Object.values(overrides).forEach(sections => {
+    const lainnya = sections && Array.isArray(sections.Lainnya)
+      ? sections.Lainnya
+      : [];
+
+    lainnya.forEach(item => {
+      if (!item || typeof item !== "object") return;
+      const oldName = String(item.name || "");
+      if (rename[oldName]) item.name = rename[oldName];
+    });
+  });
+
+  return overrides;
+}
+
 function loadMarketOverrides() {
   try {
     const raw = localStorage.getItem(MARKET_OVERRIDE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
+
+    if (!parsed || typeof parsed !== "object") return {};
+
+    return migrateLainnyaDigitLabels(parsed);
   } catch (err) {
     return {};
   }

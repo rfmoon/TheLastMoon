@@ -390,6 +390,9 @@ async function navigate(menuId) {
   if (menuId === "event-scatter") return renderEventScatterWorkspace(menu);
   if (menuId === "ai-chat") return renderMemoWorkspace(menu);
   if (menuId === "list-data") return renderGenerateBuktiWorkspace(menu);
+  if (menuId === "hasil-result") return renderHasilResultWorkspace(menu);
+  if (menuId === "upload") return renderPrediksiWorkspace(menu);
+  if (menuId === "hadiah-togel") return renderHadiahTogelWorkspace(menu);
   return renderModule(menu);
 }
 
@@ -644,6 +647,84 @@ async function renderGenerateBuktiWorkspace(menu){
       </section>`;
   }catch(error){
     $("#pageContent").innerHTML=errorHtml(error.message);
+  }
+}
+
+
+
+async function renderHasilResultWorkspace(menu){
+  $("#pageContent").innerHTML=loadingHtml();
+
+  try{
+    const data=await api(
+      `/api/module/${encodeURIComponent(menu.id)}`
+    );
+
+    $("#pageContent").innerHTML=`
+      <section class="xpay-workspace hasil-result-workspace">
+        <header class="xpay-workspace-head">
+          <div>
+            <span class="kicker">LIVE RESULT DATABASE</span>
+            <h3>Hasil Result</h3>
+            <p>${escapeHtml(data.message)}</p>
+          </div>
+          <span class="xpay-workspace-badge">HASIL RESULT</span>
+        </header>
+
+        <iframe
+          class="xpay-frame hasil-result-frame"
+          src="/hasil-result.html?v=114.0.0"
+          title="Hasil Result"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  }catch(error){
+    $("#pageContent").innerHTML=errorHtml(error.message);
+  }
+}
+
+
+async function renderPrediksiWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="prediksi-workspace">
+        <iframe
+          class="prediksi-frame"
+          src="/prediksi.html?v=114.0.0"
+          title="Prediksi"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
+  }
+}
+
+
+async function renderHadiahTogelWorkspace(menu) {
+  $("#pageContent").innerHTML = loadingHtml();
+
+  try {
+    await api(`/api/module/${encodeURIComponent(menu.id)}`);
+
+    $("#pageContent").innerHTML = `
+      <section class="prediksi-workspace">
+        <iframe
+          class="prediksi-frame"
+          src="/hadiah-togel.html?v=114.0.0"
+          title="Hadiah Togel & Perhitungan"
+          loading="eager"
+          referrerpolicy="same-origin">
+        </iframe>
+      </section>`;
+  } catch (error) {
+    $("#pageContent").innerHTML = errorHtml(error.message);
   }
 }
 
